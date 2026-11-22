@@ -145,20 +145,19 @@ export class KosPanel {
         this._movedDateMenu = false;
     }
 
-    // Reposition panelBox — full-width bottom bar, letting CSS own the exact
-    // height so panelBox never exceeds Main.panel and leaves a gap below it.
+    // Reposition panelBox — full-width 72px bottom bar, flush to the bottom edge.
     _movePanelToBottom() {
         const box = Main.layoutManager.panelBox;
         const monitor = Main.layoutManager.primaryMonitor;
         if (!box || !monitor)
             return;
-        if (box.width !== monitor.width)
-            box.set_size(monitor.width, -1);
-        const height = Math.ceil(Main.panel.height || box.height || PANEL_HEIGHT);
+        const height = PANEL_HEIGHT;
         const x = monitor.x;
         const y = monitor.y + monitor.height - height;
         if (box.x !== x || box.y !== y)
             box.set_position(x, y);
+        if (box.width !== monitor.width || box.height !== height)
+            box.set_size(monitor.width, height);
         this._disableHotCorners();
     }
 
