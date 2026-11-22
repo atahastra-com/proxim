@@ -23,15 +23,15 @@
     color: #ffffff;
 }
 
-/* Pinned-app "dock" in the middle of the bar — like a macOS Dock pill. */
+/* Pinned-app icons sit directly on the full-width bar — no pill behind them. */
 .kos-dock {
     spacing: 4px;
-    padding: 4px 10px;
-    margin: 4px 0;
-    background-color: rgba(20, 28, 48, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 18px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    padding: 0 6px;
+    margin: 0;
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .kos-dock-item {
@@ -68,37 +68,6 @@
 /* Dimmer sitting over the wallpaper so icons read clearly, without a wordmark. */
 .kos-launchpad-dim {
     background-color: rgba(6, 10, 20, 0.38);
-}
-
-/* Small rounded search field, centered at the top — like macOS Launchpad. */
-.kos-search {
-    width: 240px;
-    height: 28px;
-    padding: 2px 14px;
-    border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.18);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    color: #f8fafc;
-    font-size: 13px;
-    font-weight: 500;
-    caret-color: #eef2ff;
-    selected-color: #0b1020;
-    selection-background-color: rgba(59, 130, 246, 0.85);
-}
-
-.kos-search:focus,
-.kos-search:hover {
-    background-color: rgba(255, 255, 255, 0.26);
-    border-color: rgba(255, 255, 255, 0.28);
-}
-
-.kos-search StLabel,
-.kos-search StEntry {
-    color: #f8fafc;
-}
-
-.kos-search-hint {
-    color: rgba(255, 255, 255, 0.62);
 }
 
 /* App icon + label. No dark tile box — the icon sits on its own, like a Mac. */

@@ -1,7 +1,6 @@
-// Launchpad-style home screen: a 7-column grid of large app icons with
-// labels, a rounded search field at the top, and page dots when the apps
-// don't fit on one page. Icons sit directly on a dimmed (and, when the
-// GPU allows, blurred) wallpaper — no tile boxes, no wordmark behind them.
+// Home screen: a 7-column grid of large app icons with labels, and page
+// dots when the apps don't fit on one page. Icons sit on a dimmed
+// wallpaper — no tile boxes, no wordmark, no search field.
 //
 // The grid lives in the wallpaper group, behind open windows (like
 // position:absolute icons on a <body> background). The full-width bottom
@@ -22,9 +21,7 @@ export const ICON_SIZE = 80;
 export const LABEL_HEIGHT = 22;
 export const CELL_HEIGHT = 118;
 export const SIDE_PAD = 48;
-export const SEARCH_TOP = 28;
-export const SEARCH_HEIGHT = 28;
-export const SEARCH_TO_GRID = 28;
+export const GRID_PAD_Y = 32;
 export const DOTS_HEIGHT = 24;
 export const DOTS_BOTTOM = 16;
 
@@ -34,12 +31,10 @@ export class KosDesktopGrid {
         this._signals = [];
         this._actor = null;
         this._backdrop = null;
-        this._search = null;
         this._dots = null;
         this._stageId = 0;
         this._keyId = 0;
         this._page = 0;
-        this._filter = '';
         this._apps = [];
         this.iconBounds = [];
     }
@@ -50,9 +45,8 @@ export class KosDesktopGrid {
             style_class: 'kos-desktop-grid',
             layout_manager: new Clutter.BinLayout(),
             // The container itself is not reactive — a fullscreen reactive
-            // actor (especially one with a blur effect) can end up painted
-            // and picked above application windows. Icons and the search
-            // field opt into clicks individually.
+            // actor can end up painted and picked above application windows.
+            // Icons opt into clicks individually.
             reactive: false,
             x_expand: true,
             y_expand: true,
@@ -65,22 +59,6 @@ export class KosDesktopGrid {
             y_expand: true,
         });
         this._actor.add_child(this._backdrop);
-
-        this._search = new St.Entry({
-            style_class: 'kos-search',
-            hint_text: 'Search',
-            can_focus: true,
-            reactive: true,
-            track_hover: true,
-            x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.START,
-        });
-        this._search.clutter_text.connect('text-changed', () => {
-            this._filter = this._search.get_text().trim().toLowerCase();
-            this._page = 0;
-            this._layoutIcons();
-        });
-        this._actor.add_child(this._search);
 
         this._dots = new St.BoxLayout({
             style_class: 'kos-page-dots',
@@ -121,7 +99,6 @@ export class KosDesktopGrid {
             this._actor = null;
         }
         this._backdrop = null;
-        this._search = null;
         this._dots = null;
         this.iconBounds = [];
     }
@@ -158,36 +135,30 @@ export class KosDesktopGrid {
         this._backdrop.set_position(0, 0);
         this._backdrop.set_size(wa.w, wa.h);
 
-        this._search.set_size(240, SEARCH_HEIGHT);
-        this._search.set_position(Math.round((wa.w - 240) / 2), SEARCH_TOP);
-
         this._layoutIcons();
     }
 
-    _filteredApps() {
-        if (!this._filter)
-            return this._apps;
-        return this._apps.filter(app => {
-            const name = (app.get_name() || '').toLowerCase();
-            return name.includes(this._filter);
-        });
-    }
-
-    _pageMetrics(wa) {
-        const gridTop = SEARCH_TOP + SEARCH_HEIGHT + SEARCH_TO_GRID;
-        const gridBottom = wa.h - DOTS_BOTTOM - DOTS_HEIGHT;
-        const gridH = Math.max(CELL_HEIGHT, gridBottom - gridTop);
-        const rows = Math.max(1, Math.floor(gridH / CELL_HEIGHT));
-        const perPage = GRID_COLS * rows;
-        return {gridTop, gridBottom, rows, perPage};
+    _pageMetrics(wa, appCount) {
+        // Leave room for page dots; center the used rows in the leftover band.
+        const topLimit = GRID_PAD_Y;
+        const bottomLimit = wa.h - DOTS_BOTTOM - DOTS_HEIGHT;
+        const band = Math.max(CELL_HEIGHT, bottomLimit - topLimit);
+        const rowsFit = Math.max(1, Math.floor(band / CELL_HEIGHT));
+        const perPage = GRID_COLS * rowsFit;
+        const count = appCount !== undefined ? appCount : this._apps.length;
+        const onPage = Math.min(perPage, Math.max(0, count));
+        const usedRows = Math.max(1, Math.ceil(onPage / GRID_COLS) || 1);
+        const usedH = usedRows * CELL_HEIGHT;
+        const gridTop = topLimit + Math.max(0, Math.floor((band - usedH) / 2));
+        return {gridTop, rows: rowsFit, perPage, usedRows};
     }
 
     _layoutIcons() {
         if (!this._actor)
             return;
 
-        // Drop previous icon actors; keep backdrop, search, and dots.
-        const keep = new Set([this._backdrop, this._search, this._dots]);
+        // Drop previous icon actors; keep backdrop and dots.
+        const keep = new Set([this._backdrop, this._dots]);
         for (const child of this._actor.get_children()) {
             if (!keep.has(child))
                 child.destroy();
@@ -195,8 +166,8 @@ export class KosDesktopGrid {
         this.iconBounds = [];
 
         const wa = this._workArea();
-        const apps = this._filteredApps();
-        const {gridTop, rows, perPage} = this._pageMetrics(wa);
+        const apps = this._apps;
+        const {gridTop, rows, perPage} = this._pageMetrics(wa, apps.length);
         const pages = Math.max(1, Math.ceil(apps.length / perPage));
         if (this._page >= pages)
             this._page = pages - 1;
@@ -294,8 +265,8 @@ export class KosDesktopGrid {
     }
 
     _setPage(page) {
-        const apps = this._filteredApps();
-        const {perPage} = this._pageMetrics(this._workArea());
+        const apps = this._apps;
+        const {perPage} = this._pageMetrics(this._workArea(), apps.length);
         const pages = Math.max(1, Math.ceil(apps.length / perPage));
         const next = Math.max(0, Math.min(pages - 1, page));
         if (next === this._page)
@@ -333,15 +304,6 @@ export class KosDesktopGrid {
         return null;
     }
 
-    _inSearch(x, y) {
-        if (!this._search)
-            return false;
-        const [sx, sy] = this._search.get_transformed_position();
-        const sw = this._search.width;
-        const sh = this._search.height;
-        return x >= sx && x <= sx + sw && y >= sy && y <= sy + sh;
-    }
-
     _onStageClick(_stage, event) {
         const [x, y] = event.get_coords();
         if (this._frontWindowAt(x, y))
@@ -349,8 +311,6 @@ export class KosDesktopGrid {
         if (Main.overview && Main.overview.visible)
             return Clutter.EVENT_PROPAGATE;
         if (Main.panel && y >= Main.layoutManager.primaryMonitor.height - (Main.panel.height || 56))
-            return Clutter.EVENT_PROPAGATE;
-        if (this._inSearch(x, y))
             return Clutter.EVENT_PROPAGATE;
 
         for (const b of this.iconBounds) {
@@ -362,25 +322,13 @@ export class KosDesktopGrid {
         return Clutter.EVENT_PROPAGATE;
     }
 
-    // When the desktop is in front, typing goes into the search field
-    // (Launchpad-style filter-as-you-type). Leave keys alone if a window
-    // or the overview has the user's attention.
     _onStageKey(_stage, event) {
         if (Main.overview && Main.overview.visible)
             return Clutter.EVENT_PROPAGATE;
-
         const focusWin = global.display.focus_window;
         if (focusWin && focusWin.get_window_type() === Meta.WindowType.NORMAL)
             return Clutter.EVENT_PROPAGATE;
-
         const symbol = event.get_key_symbol();
-        if (symbol === Clutter.KEY_Escape) {
-            if (this._filter) {
-                this._search.set_text('');
-                return Clutter.EVENT_STOP;
-            }
-            return Clutter.EVENT_PROPAGATE;
-        }
         if (symbol === Clutter.KEY_Left) {
             this._setPage(this._page - 1);
             return Clutter.EVENT_STOP;
@@ -389,18 +337,7 @@ export class KosDesktopGrid {
             this._setPage(this._page + 1);
             return Clutter.EVENT_STOP;
         }
-
-        const clutterText = this._search.clutter_text;
-        if (global.stage.get_key_focus() === clutterText)
-            return Clutter.EVENT_PROPAGATE;
-
-        const ch = String.fromCodePoint(event.get_key_unicode());
-        if (!ch || !ch.trim())
-            return Clutter.EVENT_PROPAGATE;
-
-        global.stage.set_key_focus(clutterText);
-        this._search.set_text((this._search.get_text() || '') + ch);
-        return Clutter.EVENT_STOP;
+        return Clutter.EVENT_PROPAGATE;
     }
 }
 
