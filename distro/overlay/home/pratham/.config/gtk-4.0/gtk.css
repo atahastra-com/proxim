@@ -1,6 +1,31 @@
-/* Apple macOS System Settings–inspired dark theme for GTK4 / libadwaita apps
- * (gnome-control-center, Files, Text Editor, etc.). */
+/* Apple macOS System Settings–inspired dark theme for GTK4 / libadwaita 1.7
+ * (GNOME 48 Settings, Files, Text Editor, etc.). */
 
+/* libadwaita 1.6+ / 1.7 uses CSS custom properties on :root */
+:root {
+    --accent-bg-color: #0a84ff;
+    --accent-fg-color: #ffffff;
+    --accent-color: #409cff;
+    --window-bg-color: #1e1e22;
+    --window-fg-color: #f5f5f7;
+    --view-bg-color: #1e1e22;
+    --view-fg-color: #f5f5f7;
+    --headerbar-bg-color: #1e1e22;
+    --headerbar-fg-color: #f5f5f7;
+    --headerbar-border-color: rgba(255, 255, 255, 0.06);
+    --sidebar-bg-color: #26262c;
+    --sidebar-fg-color: #f5f5f7;
+    --sidebar-border-color: rgba(255, 255, 255, 0.06);
+    --secondary-sidebar-bg-color: #26262c;
+    --card-bg-color: rgba(255, 255, 255, 0.06);
+    --card-fg-color: #f5f5f7;
+    --popover-bg-color: #282930;
+    --popover-fg-color: #f5f5f7;
+    --dialog-bg-color: #25262c;
+    --dialog-fg-color: #f5f5f7;
+}
+
+/* Fallback @define-color for older GTK4 widgets */
 @define-color accent_bg_color #0a84ff;
 @define-color accent_fg_color #ffffff;
 @define-color accent_color #409cff;
@@ -12,87 +37,50 @@
 @define-color headerbar_fg_color #f5f5f7;
 @define-color sidebar_bg_color #26262c;
 @define-color sidebar_fg_color #f5f5f7;
-@define-color card_bg_color rgba(255, 255, 255, 0.055);
+@define-color card_bg_color rgba(255, 255, 255, 0.06);
 @define-color card_fg_color #f5f5f7;
-@define-color popover_bg_color #282930;
-@define-color popover_fg_color #f5f5f7;
 
-window.csd,
-window.background {
-    background-color: #1e1e22;
-    color: #f5f5f7;
+window.csd {
     border-radius: 14px;
 }
 
-headerbar {
+headerbar,
+.titlebar {
     background-color: transparent;
     background-image: none;
     border-bottom: none;
     box-shadow: none;
-    min-height: 44px;
 }
 
 /* macOS System Settings left sidebar */
-.navigation-sidebar,
-leaflet > box.sidebar,
-navigation-split-view > .sidebar-pane {
+.sidebar-pane,
+.navigation-sidebar {
     background-color: #25252b;
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.navigation-sidebar row {
+.navigation-sidebar > row {
     border-radius: 8px;
     margin: 2px 10px;
     padding: 4px 8px;
-    color: rgba(245, 245, 247, 0.88);
 }
 
-.navigation-sidebar row:hover {
-    background-color: rgba(255, 255, 255, 0.07);
-}
-
-.navigation-sidebar row:selected,
-.navigation-sidebar row:selected:hover {
+.navigation-sidebar > row:selected,
+.navigation-sidebar > row:selected:hover {
     background-color: #0a84ff;
     color: #ffffff;
 }
 
-/* Inset grouped cards (like macOS System Settings sections) */
+/* Inset grouped cards */
 list.boxed-list,
 list.boxed-list-separate > row,
 .card {
-    background-color: rgba(255, 255, 255, 0.055);
-    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 12px;
-    box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-list.boxed-list > row {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-list.boxed-list > row:last-child {
-    border-bottom: none;
-}
-
-/* Search & text inputs */
-entry,
-searchentry {
-    background-color: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
-    color: #f5f5f7;
-}
-
-entry:focus-within,
-searchentry:focus-within {
-    border-color: #0a84ff;
-}
-
-/* Apple-style switches */
+/* Apple green toggle switches */
 switch {
     background-color: rgba(255, 255, 255, 0.22);
-    border-radius: 99px;
     border: none;
 }
 
@@ -102,54 +90,46 @@ switch:checked {
 
 switch > slider {
     background-color: #ffffff;
-    border-radius: 99px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-}
-
-/* Buttons */
-button {
-    border-radius: 8px;
-}
-
-button.suggested-action {
-    background-color: #0a84ff;
-    color: #ffffff;
-}
-
-button.suggested-action:hover {
-    background-color: #2b95ff;
 }
 
 /* macOS traffic-light window controls */
-windowcontrols > button {
-    min-width: 13px;
-    min-height: 13px;
+windowcontrols button {
+    min-width: 14px;
+    min-height: 14px;
     padding: 0;
     margin: 0 4px;
     border-radius: 99px;
     border: none;
     box-shadow: none;
-    color: transparent;
 }
 
-windowcontrols > button > image {
+windowcontrols button > image {
     opacity: 0;
-    -gtk-icon-size: 9px;
+    -gtk-icon-size: 10px;
+    color: rgba(0, 0, 0, 0.8);
 }
 
-windowcontrols:hover > button > image {
-    opacity: 0.75;
-    color: rgba(0, 0, 0, 0.75);
+windowcontrols:hover button > image {
+    opacity: 0.85;
 }
 
-windowcontrols > button.close {
+windowcontrols button.close,
+windowcontrols button.close:hover,
+windowcontrols button.close:active {
     background-color: #ff5f57;
+    background-image: none;
 }
 
-windowcontrols > button.minimize {
+windowcontrols button.minimize,
+windowcontrols button.minimize:hover,
+windowcontrols button.minimize:active {
     background-color: #febc2e;
+    background-image: none;
 }
 
-windowcontrols > button.maximize {
+windowcontrols button.maximize,
+windowcontrols button.maximize:hover,
+windowcontrols button.maximize:active {
     background-color: #28c840;
+    background-image: none;
 }
