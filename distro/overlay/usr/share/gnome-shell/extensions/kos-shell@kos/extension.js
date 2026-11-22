@@ -133,6 +133,7 @@ export default class KosShellExtension extends Extension {
         wm.set_int('num-workspaces', 1);
 
         const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+        iface.set_string('icon-theme', 'Deepin2022');
         if (iface.list_keys().includes('enable-hot-corners'))
             iface.set_boolean('enable-hot-corners', false);
         iface.set_boolean('clock-show-date', true);
