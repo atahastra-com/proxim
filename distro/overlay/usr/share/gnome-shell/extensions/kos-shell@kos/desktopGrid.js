@@ -44,10 +44,12 @@ export class KosDesktopGrid {
         this._actor = new St.Widget({
             name: 'kos-desktop-grid',
             style_class: 'kos-desktop-grid',
-            layout_manager: new Clutter.BinLayout(),
-            // The container itself is not reactive — a fullscreen reactive
-            // actor can end up painted and picked above application windows.
-            // Icons opt into clicks individually.
+            layout_manager: new Clutter.FixedLayout(),
+            // Full-screen container stays non-reactive so it can never be
+            // picked above application windows. Icons are also non-reactive:
+            // background-group actors are often missed by the pointe
+            // picker, so launches go through a stage fallback that must
+            // never steal clicks already aimed at an app window.
             reactive: false,
             x_expand: true,
             y_expand: true,
@@ -70,6 +72,9 @@ export class KosDesktopGrid {
         this._actor.add_child(this._dots);
 
         Main.layoutManager._backgroundGroup.add_child(this._actor);
+        // Do not lower_bottom(): that puts the grid behind the wallpape
+        // actor and hides it. New children of _backgroundGroup already
+        // stack above the wallpaper and still below the window group.
 
         this._rebuild();
 
@@ -78,8 +83,11 @@ export class KosDesktopGrid {
         this._connect(Main.layoutManager, 'monitors-changed', () => this._rebuild());
         this._connect(Main.layoutManager, 'startup-complete', () => this._rebuild());
 
+        // Stage clicks are a fallback because the pointer picker often
+        // misses icons in _backgroundGroup. They must NEVER steal events
+        // meant for an app window, a modal, or the panel: returning STOP
+        // prevents mutter from delivering the click to the client.
         this._stageId = global.stage.connect('button-press-event', this._onStageClick.bind(this));
-        this._keyId = global.stage.connect('key-press-event', this._onStageKey.bind(this));
         this._actor.connect('scroll-event', this._onScroll.bind(this));
     }
 
@@ -184,6 +192,7 @@ export class KosDesktopGrid {
             const y = gridTop + row * CELL_HEIGHT;
             const icon = this._makeIcon(app, Math.round(slotW));
             icon.set_position(x, y);
+            icon.set_size(Math.round(slotW), CELL_HEIGHT);
             this._actor.add_child(icon);
 
             // Use the work area, not get_transformed_position(): at layout
@@ -207,27 +216,29 @@ export class KosDesktopGrid {
     _makeIcon(app, width) {
         const box = new St.BoxLayout({
             vertical: true,
-            reactive: true,
-            track_hover: true,
-            can_focus: true,
+            reactive: false,
+            track_hover: false,
+            can_focus: false,
+            x_expand: false,
+            y_expand: false,
             style_class: 'kos-desktop-icon',
             x_align: Clutter.ActorAlign.CENTER,
             width,
         });
 
         // No tile box: icon and label are both centered in the cell.
+        // No x_expand — expand on a child of the full-screen grid can
+        // inflate its pick region to the whole desktop.
         const gicon = new St.Icon({
             gicon: app.get_icon(),
             icon_size: ICON_SIZE,
             style_class: 'kos-desktop-icon-app',
             x_align: Clutter.ActorAlign.CENTER,
-            x_expand: true,
         });
         const label = new St.Label({
             text: app.get_name(),
             style_class: 'kos-desktop-icon-label',
             x_align: Clutter.ActorAlign.CENTER,
-            x_expand: true,
         });
         // St.Label x_align centers the actor; the text inside a full-width
         // label still defaults to left, so set Pango alignment explicitly.
@@ -294,7 +305,22 @@ export class KosDesktopGrid {
         return Clutter.EVENT_STOP;
     }
 
+    _windowTypes() {
+        const types = [
+            Meta.WindowType.NORMAL,
+            Meta.WindowType.DIALOG,
+            Meta.WindowType.MODAL_DIALOG,
+            Meta.WindowType.UTILITY,
+        ];
+        return types;
+    }
+
+    // Use the window frame, not Clutter actor x/y — those can be 0 o
+    // otherwise not match the visible window, which made us treat clicks
+    // on Settings (and any other app) as desktop-icon clicks and swallow
+    // them. Icon cells cover most of the screen, so a miss is total.
     _frontWindowAt(x, y) {
+        const types = this._windowTypes();
         const windows = global.get_window_actors();
         for (let i = windows.length - 1; i >= 0; i--) {
             const actor = windows[i];
@@ -303,20 +329,73 @@ export class KosDesktopGrid {
             const win = actor.meta_window;
             if (!win || win.minimized)
                 continue;
-            if (win.get_window_type() !== Meta.WindowType.NORMAL)
+            if (!types.includes(win.get_window_type()))
                 continue;
-            if (x >= actor.x && x <= actor.x + actor.width &&
-                y >= actor.y && y <= actor.y + actor.height)
+            let r = null;
+            try {
+                r = win.get_frame_rect();
+            } catch (_e) {
+                r = null;
+            }
+            if (!r || typeof r.x !== 'number' || typeof r.width !== 'number') {
+                r = {x: actor.x, y: actor.y, width: actor.width, height: actor.height};
+            }
+            if (typeof r.x !== 'number' || typeof r.width !== 'number')
+                continue;
+            if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height)
                 return win;
         }
         return null;
     }
 
+    _shellIsModal() {
+        try {
+            if (typeof Main.modalCount === 'number' && Main.modalCount > 0)
+                return true;
+        } catch (_e) {
+            // ignore
+        }
+        return !!(Main.overview && Main.overview.visible);
+    }
+
+    _hasVisibleAppWindow() {
+        const types = this._windowTypes();
+        const windows = global.get_window_actors();
+        for (let i = 0; i < windows.length; i++) {
+            const actor = windows[i];
+            if (!actor.visible)
+                continue;
+            const win = actor.meta_window;
+            if (!win || win.minimized)
+                continue;
+            if (types.includes(win.get_window_type()))
+                return true;
+        }
+        return false;
+    }
+
     _onStageClick(_stage, event) {
-        const [x, y] = event.get_coords();
-        if (this._frontWindowAt(x, y))
+        try {
+            return this._onStageClickImpl(event);
+        } catch (_e) {
+            // A throw here would swallow the click for the client window.
             return Clutter.EVENT_PROPAGATE;
-        if (Main.overview && Main.overview.visible)
+        }
+    }
+
+    _onStageClickImpl(event) {
+        const [x, y] = event.get_coords();
+        // Stage handlers see every click on the desktop, including those
+        // already aimed at an app window. Returning STOP prevents mutte
+        // from delivering the event to the client. Icon cells cover most
+        // of the screen, so a missed hit-test (wrong rect fields, acto
+        // x/y, dialog types) makes Settings and every other window ignore
+        // clicks and keys. While any app window is visible, never steal.
+        if (this._shellIsModal())
+            return Clutter.EVENT_PROPAGATE;
+        if (this._hasVisibleAppWindow())
+            return Clutter.EVENT_PROPAGATE;
+        if (this._frontWindowAt(x, y))
             return Clutter.EVENT_PROPAGATE;
         if (Main.panel && y >= Main.layoutManager.primaryMonitor.height - (Main.panel.height || 56))
             return Clutter.EVENT_PROPAGATE;
@@ -326,24 +405,6 @@ export class KosDesktopGrid {
                 launchApp(b.app);
                 return Clutter.EVENT_STOP;
             }
-        }
-        return Clutter.EVENT_PROPAGATE;
-    }
-
-    _onStageKey(_stage, event) {
-        if (Main.overview && Main.overview.visible)
-            return Clutter.EVENT_PROPAGATE;
-        const focusWin = global.display.focus_window;
-        if (focusWin && focusWin.get_window_type() === Meta.WindowType.NORMAL)
-            return Clutter.EVENT_PROPAGATE;
-        const symbol = event.get_key_symbol();
-        if (symbol === Clutter.KEY_Left) {
-            this._setPage(this._page - 1);
-            return Clutter.EVENT_STOP;
-        }
-        if (symbol === Clutter.KEY_Right) {
-            this._setPage(this._page + 1);
-            return Clutter.EVENT_STOP;
         }
         return Clutter.EVENT_PROPAGATE;
     }

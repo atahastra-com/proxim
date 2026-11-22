@@ -19,14 +19,8 @@ if [[ ! -f "$IMG" ]]; then
 fi
 
 if pgrep -af 'qemu-system-x86_64' | grep -q 'kos.qcow2'; then
-  echo "QEMU is using the image. Stopping it so we can mount the disk..."
-  pkill -f 'qemu-system-x86_64.*kos.qcow2' || true
-  # Wait until the file is released
-  for _ in $(seq 1 20); do
-    pgrep -af 'qemu-system-x86_64' | grep -q 'kos.qcow2' || break
-    sleep 0.5
-  done
-  sleep 1
+  echo "QEMU is using the image. Close that window first; this script will not kill it." >&2
+  exit 3
 fi
 
 if [[ "$(id -u)" -eq 0 ]]; then

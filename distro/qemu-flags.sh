@@ -45,7 +45,8 @@ kos_qemu_detect() {
 # this QEMU build's GL module fails ("OpenGL is not supported by the
 # display" / undefined symbol qemu_egl_display), which would refuse to boot.
 kos_qemu_window_display() {
-  KOS_QEMU_DISPLAY=(-device virtio-vga -display gtk)
+  # show-menubar=off so the QEMU Machine/View menu cannot steal keys/clicks.
+  KOS_QEMU_DISPLAY=(-device virtio-vga -display gtk,show-menubar=off)
 }
 
 kos_qemu_headless_display() {
