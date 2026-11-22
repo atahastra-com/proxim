@@ -69,6 +69,17 @@ for _ in $(seq 1 20); do
 done
 [[ -e ${NBD}p1 ]] || { echo "FAIL: no ${NBD}p1" >&2; exit 1; }
 
+# WSL/udev/udisks may auto-mount the just-attached partition, which
+# makes e2fsck refuse to run.
+if command -v findmnt >/dev/null; then
+  while read -r mp; do
+    [[ -n "$mp" ]] || continue
+    echo "Unmounting auto-mount ${mp}"
+    "${SUDO[@]}" umount "$mp" || true
+  done < <(findmnt -nro TARGET "${NBD}p1" 2>/dev/null || true)
+fi
+sleep 0.2
+
 set +e
 "${SUDO[@]}" e2fsck -fy "${NBD}p1"
 ec=$?

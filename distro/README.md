@@ -7,9 +7,9 @@ GNOME Shell extension, `kos-shell@kos`, not a fork of GNOME itself.
 The desktop is a macOS Launchpad-style home screen on a full-width bottom
 bar: 7 columns of large app icons with labels (no dark tiles), a dimmed
 wallpaper without a wordmark, and page dots if the apps overflow one
-screen. The bar keeps date, time and wifi on the left, dock app icons
-sitting directly on the bar (no extra pill), and system icons on the
-right. Clicking an icon opens the app in a normal window.
+screen. The bar keeps date and time on the left, dock app icons sitting
+directly on the bar (no extra pill), and GNOME's stock system status
+cluster (network/volume/power) on the right. Clicking an icon opens the app in a normal window.
 
 ## Build and boot
 
@@ -55,7 +55,8 @@ The desktop chrome is a GNOME Shell 48 extension written in ESM JavaScript
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/extension.js`
   — entry point (`enable` / `disable`).
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/panel.js`
-  — moves the bar to the bottom and puts time/date/wifi on the left.
+  — moves the bar to the bottom and puts date and time on the left.
+    The stock system status cluster stays on the right.
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/dock.js`
   — the centre dock (pinned apps + All apps).
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/desktopGrid.js`

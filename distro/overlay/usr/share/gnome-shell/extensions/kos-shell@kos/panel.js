@@ -4,20 +4,14 @@
 // Main.panel is the bar. It has three flex-like boxes:
 //   _leftBox, _centerBox, _rightBox  — think display:flex; justify-content:space-between
 // Stock GNOME 48: Activities on the left, clock in the center, Quick Settings on the right.
-// kos: clock on the left, dock in the center, wifi + volume/power (Quick Settings) on the right.
-
-import Clutter from 'gi://Clutter';
-import Gio from 'gi://Gio';
-import GObject from 'gi://GObject';
-import St from 'gi://St';
+// kos: clock on the left, dock in the center, and GNOME's stock system
+// status cluster (network/volume/power) left alone on the right.
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 
 export class KosPanel {
     constructor() {
         this._signals = [];
-        this._network = null;
         this._movedDateMenu = false;
     }
 
@@ -27,7 +21,6 @@ export class KosPanel {
         this._hideActivities();
         this._disableHotCorners();
         this._moveDateMenuToLeft();
-        this._addNetworkButton();
         this._movePanelToBottom();
 
         // Re-run layout when monitors change or the bar is reallocated
@@ -45,11 +38,6 @@ export class KosPanel {
         for (const [obj, id] of this._signals)
             obj.disconnect(id);
         this._signals = [];
-
-        if (this._network) {
-            this._network.destroy();
-            this._network = null;
-        }
 
         this._restoreDateMenu();
         this._restorePanel();
@@ -95,7 +83,8 @@ export class KosPanel {
             return;
         if (parent)
             parent.remove_child(container);
-        // Left box is date/time only; wifi lives on the right with system icons.
+        // Left box is date/time only. The stock Quick Settings cluster
+        // stays on the right as GNOME ships it.
         Main.panel._leftBox.insert_child_at_index(container, 0);
         this._movedDateMenu = true;
     }
@@ -113,22 +102,6 @@ export class KosPanel {
         // Stock GNOME 48 keeps the clock in the center box.
         Main.panel._centerBox.add_child(container);
         this._movedDateMenu = false;
-    }
-
-    _addNetworkButton() {
-        if (this._network)
-            return;
-        this._network = new KosNetworkButton();
-        // Sit on the right, just to the left of Quick Settings (volume/power),
-        // so wifi is grouped with the other status icons.
-        let position = 0;
-        const qs = Main.panel.statusArea.quickSettings;
-        if (qs?.container) {
-            const parent = qs.container.get_parent();
-            if (parent === Main.panel._rightBox)
-                position = Math.max(0, parent.get_children().indexOf(qs.container));
-        }
-        Main.panel.addToStatusArea('kos-network', this._network, position, 'right');
     }
 
     // Reposition panelBox — the shell's chrome wrapper around the bar.
@@ -157,57 +130,3 @@ export class KosPanel {
         box.set_size(monitor.width, box.height);
     }
 }
-
-// A compact wifi/network status icon. Clicking it opens the same Quick Settings
-// menu that the right-side indicators use (so the user can pick a network).
-const KosNetworkButton = GObject.registerClass(
-class KosNetworkButton extends PanelMenu.Button {
-    _init() {
-        super._init(0.5, 'kos network', true);
-        this.add_style_class_name('kos-network-button');
-
-        this._icon = new St.Icon({
-            icon_name: 'network-wireless-symbolic',
-            style_class: 'system-status-icon',
-        });
-        this.add_child(this._icon);
-
-        this._monitor = Gio.NetworkMonitor.get_default();
-        this._monId = this._monitor.connect('network-changed', () => this._sync());
-        this._sync();
-    }
-
-    // Left-click opens Quick Settings (volume, wifi, power live in that one menu).
-    vfunc_event(event) {
-        if (event.type() === Clutter.EventType.BUTTON_PRESS && event.get_button() === 1) {
-            const qs = Main.panel.statusArea.quickSettings;
-            if (qs?.menu)
-                qs.menu.toggle();
-            return Clutter.EVENT_STOP;
-        }
-        return super.vfunc_event(event);
-    }
-
-    _sync() {
-        if (!this._monitor)
-            return;
-        if (this._monitor.get_network_available()) {
-            const conn = this._monitor.get_connectivity();
-            // FULL is a good link; anything else is "we have a network but it's limited".
-            if (conn === Gio.NetworkConnectivity.FULL)
-                this._icon.icon_name = 'network-wireless-signal-excellent-symbolic';
-            else
-                this._icon.icon_name = 'network-wireless-signal-ok-symbolic';
-        } else {
-            this._icon.icon_name = 'network-wireless-offline-symbolic';
-        }
-    }
-
-    destroy() {
-        if (this._monitor && this._monId) {
-            this._monitor.disconnect(this._monId);
-            this._monId = 0;
-        }
-        super.destroy();
-    }
-});
