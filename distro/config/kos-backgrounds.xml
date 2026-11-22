@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
+<wallpapers>
+  <wallpaper deleted="false">
+    <name>kos</name>
+    <filename>/usr/share/backgrounds/kos/kos-wallpaper.png</filename>
+    <filename-dark>/usr/share/backgrounds/kos/kos-wallpaper.png</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#0b1020</pcolor>
+    <scolor>#0b1020</scolor>
+  </wallpaper>
+</wallpapers>

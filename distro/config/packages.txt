@@ -1,0 +1,37 @@
+# Core system
+linux-image-amd64
+e2fsprogs
+firmware-linux-free
+firmware-linux
+grub-pc
+sudo
+locales
+ca-certificates
+dbus
+dbus-user-session
+polkitd
+pkexec
+
+# Networking
+network-manager
+network-manager-gnome
+
+# Graphical desktop (GNOME, polished and relatively compact)
+gnome-core
+gdm3
+gnome-terminal
+nautilus
+firefox-esr
+
+# Boot splash
+plymouth
+plymouth-themes
+plymouth-label
+
+# Fonts / wallpaper helpers
+fonts-cantarell
+fonts-dejavu-core
+fonts-liberation
+libglib2.0-bin
+dconf-cli
+xdg-user-dirs
