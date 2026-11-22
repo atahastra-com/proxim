@@ -6,38 +6,37 @@
     --accent-bg-color: #0a84ff;
     --accent-fg-color: #ffffff;
     --accent-color: #409cff;
-    --window-bg-color: #1e1e22;
+    --window-bg-color: #1c1c1e;
     --window-fg-color: #f5f5f7;
-    --view-bg-color: #1e1e22;
+    --view-bg-color: #1c1c1e;
     --view-fg-color: #f5f5f7;
-    --headerbar-bg-color: #1e1e22;
+    --headerbar-bg-color: #1c1c1e;
     --headerbar-fg-color: #f5f5f7;
-    --headerbar-border-color: rgba(255, 255, 255, 0.06);
-    --sidebar-bg-color: #26262c;
+    --headerbar-border-color: rgba(255, 255, 255, 0.07);
+    --sidebar-bg-color: #262629;
     --sidebar-fg-color: #f5f5f7;
-    --sidebar-border-color: rgba(255, 255, 255, 0.06);
-    --secondary-sidebar-bg-color: #26262c;
-    --card-bg-color: rgba(255, 255, 255, 0.06);
+    --sidebar-border-color: rgba(255, 255, 255, 0.08);
+    --secondary-sidebar-bg-color: #262629;
+    --card-bg-color: rgba(255, 255, 255, 0.055);
     --card-fg-color: #f5f5f7;
-    --popover-bg-color: #282930;
+    --popover-bg-color: #28282c;
     --popover-fg-color: #f5f5f7;
-    --dialog-bg-color: #25262c;
+    --dialog-bg-color: #242428;
     --dialog-fg-color: #f5f5f7;
 }
 
-/* Fallback @define-color for older GTK4 widgets */
 @define-color accent_bg_color #0a84ff;
 @define-color accent_fg_color #ffffff;
 @define-color accent_color #409cff;
-@define-color window_bg_color #1e1e22;
+@define-color window_bg_color #1c1c1e;
 @define-color window_fg_color #f5f5f7;
-@define-color view_bg_color #1e1e22;
+@define-color view_bg_color #1c1c1e;
 @define-color view_fg_color #f5f5f7;
-@define-color headerbar_bg_color #1e1e22;
+@define-color headerbar_bg_color #1c1c1e;
 @define-color headerbar_fg_color #f5f5f7;
-@define-color sidebar_bg_color #26262c;
+@define-color sidebar_bg_color #262629;
 @define-color sidebar_fg_color #f5f5f7;
-@define-color card_bg_color rgba(255, 255, 255, 0.06);
+@define-color card_bg_color rgba(255, 255, 255, 0.055);
 @define-color card_fg_color #f5f5f7;
 
 window.csd {
@@ -50,18 +49,23 @@ headerbar,
     background-image: none;
     border-bottom: none;
     box-shadow: none;
+    min-height: 46px;
 }
 
 /* macOS System Settings left sidebar */
 .sidebar-pane,
 .navigation-sidebar {
-    background-color: #25252b;
+    background-color: #262629;
+}
+
+.sidebar-pane {
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .navigation-sidebar > row {
-    border-radius: 8px;
+    border-radius: 9px;
     margin: 2px 10px;
-    padding: 4px 8px;
+    padding: 5px 10px;
 }
 
 .navigation-sidebar > row:selected,
@@ -75,7 +79,11 @@ list.boxed-list,
 list.boxed-list-separate > row,
 .card {
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+list.boxed-list > row:not(:last-child) {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Apple green toggle switches */
@@ -92,20 +100,30 @@ switch > slider {
     background-color: #ffffff;
 }
 
-/* macOS traffic-light window controls */
+/* macOS traffic-light window controls — forced 13x13 circles via vertical
+ * margins so headerbar never stretches them into ovals. */
+windowcontrols {
+    margin-left: 6px;
+    margin-right: 8px;
+}
+
 windowcontrols button {
-    min-width: 14px;
-    min-height: 14px;
+    min-width: 13px;
+    min-height: 13px;
     padding: 0;
-    margin: 0 4px;
+    margin: 16px 4px;
     border-radius: 99px;
     border: none;
     box-shadow: none;
 }
 
 windowcontrols button > image {
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
     opacity: 0;
-    -gtk-icon-size: 10px;
+    -gtk-icon-size: 9px;
     color: rgba(0, 0, 0, 0.8);
 }
 
