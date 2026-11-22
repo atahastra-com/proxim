@@ -21,22 +21,8 @@ export default class KosShellExtension extends Extension {
         this._settingsHandles = [];
         this._overviewIds = [];
 
-        this._applySessionSettings();
-        this._blockOverview();
-
-        this._allApps = new KosAllAppsOverlay();
-        this._panel = new KosPanel();
-        this._dock = new KosDock({
-            onAllApps: () => this._allApps.toggle(),
-        });
-        this._grid = new KosDesktopGrid({
-            extensionPath: this.path,
-        });
-
-        this._panel.enable();
-        this._dock.enable();
-        this._grid.enable();
-
+        // Runs first, so a bug in panel/dock/grid can never leave the stock
+        // overview stuck on screen.
         // GNOME 44+ plays a login animation that opens the Activities
         // overview. Do NOT hide the overview in the middle of that animation:
         // its "done" callback never fires, so the shell never leaves startup
@@ -58,6 +44,23 @@ export default class KosShellExtension extends Extension {
         } else {
             this._hideOverview();
         }
+
+        this._applySessionSettings();
+        this._blockOverview();
+
+        this._allApps = new KosAllAppsOverlay();
+        this._panel = new KosPanel();
+        this._dock = new KosDock({
+            onAllApps: () => this._allApps.toggle(),
+        });
+        this._grid = new KosDesktopGrid({
+            extensionPath: this.path,
+        });
+
+        this._panel.enable();
+        this._dock.enable();
+        this._grid.enable();
+
     }
 
     disable() {

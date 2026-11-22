@@ -32,7 +32,8 @@ export class KosPanel {
         // Re-run layout when monitors change or the bar is reallocated
         // (like a resize listener on window.resize).
         this._connect(Main.layoutManager, 'monitors-changed', () => this._movePanelToBottom());
-        this._connect(Main.layoutManager, 'workareas-changed', () => this._movePanelToBottom());
+        // workareas-changed lives on global.display, not on LayoutManager.
+        this._connect(global.display, 'workareas-changed', () => this._movePanelToBottom());
         this._connect(Main.layoutManager, 'startup-complete', () => {
             this._hideActivities();
             this._disableHotCorners();
