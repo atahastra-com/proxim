@@ -11,6 +11,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
+import Pango from 'gi://Pango';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -214,20 +215,27 @@ export class KosDesktopGrid {
             width,
         });
 
-        // No tile box: just the app's own icon, larger, on the wallpaper.
+        // No tile box: icon and label are both centered in the cell.
         const gicon = new St.Icon({
             gicon: app.get_icon(),
             icon_size: ICON_SIZE,
             style_class: 'kos-desktop-icon-app',
             x_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
         });
         const label = new St.Label({
             text: app.get_name(),
             style_class: 'kos-desktop-icon-label',
             x_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
         });
-        label.clutter_text.ellipsize = 3; // Pango.EllipsizeMode.END
-        label.clutter_text.set_line_wrap(false);
+        // St.Label x_align centers the actor; the text inside a full-width
+        // label still defaults to left, so set Pango alignment explicitly.
+        const ct = label.clutter_text;
+        ct.ellipsize = Pango.EllipsizeMode.END;
+        ct.line_wrap = true;
+        ct.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+        ct.line_alignment = Pango.Alignment.CENTER;
         label.set_width(width);
 
         box.add_child(gicon);

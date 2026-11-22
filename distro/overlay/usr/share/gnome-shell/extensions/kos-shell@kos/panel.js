@@ -4,7 +4,7 @@
 // Main.panel is the bar. It has three flex-like boxes:
 //   _leftBox, _centerBox, _rightBox  — think display:flex; justify-content:space-between
 // Stock GNOME 48: Activities on the left, clock in the center, Quick Settings on the right.
-// kos: clock + wifi on the left, dock in the center, volume/power (Quick Settings) on the right.
+// kos: clock on the left, dock in the center, wifi + volume/power (Quick Settings) on the right.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -95,7 +95,7 @@ export class KosPanel {
             return;
         if (parent)
             parent.remove_child(container);
-        // Insert at the start of the left box so time/date come first, then wifi.
+        // Left box is date/time only; wifi lives on the right with system icons.
         Main.panel._leftBox.insert_child_at_index(container, 0);
         this._movedDateMenu = true;
     }
@@ -119,8 +119,16 @@ export class KosPanel {
         if (this._network)
             return;
         this._network = new KosNetworkButton();
-        // Official way to add a panel item (it also tracks it in statusArea).
-        Main.panel.addToStatusArea('kos-network', this._network, 1, 'left');
+        // Sit on the right, just to the left of Quick Settings (volume/power),
+        // so wifi is grouped with the other status icons.
+        let position = 0;
+        const qs = Main.panel.statusArea.quickSettings;
+        if (qs?.container) {
+            const parent = qs.container.get_parent();
+            if (parent === Main.panel._rightBox)
+                position = Math.max(0, parent.get_children().indexOf(qs.container));
+        }
+        Main.panel.addToStatusArea('kos-network', this._network, position, 'right');
     }
 
     // Reposition panelBox — the shell's chrome wrapper around the bar.

@@ -1,6 +1,7 @@
-// The center of the bottom bar is a macOS-style dock: pinned apps + an
-// "all apps" button. Each item is a button (like an <button> with an <img>).
+// The center of the bottom bar is a macOS-style dock of pinned apps.
+// Each item is a button (like an <button> with an <img>).
 // A blue dot under the icon means the app has an open window (a running state).
+// There is no "all apps" grid button — the desktop already shows every app.
 
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
@@ -64,12 +65,6 @@ export class KosDock {
                 onClick: () => this._activate(app),
             }));
         }
-
-        this._actor.add_child(new DockItem({
-            iconName: 'view-app-grid-symbolic',
-            label: 'All apps',
-            onClick: () => this._onAllApps?.(),
-        }));
 
         this._syncRunning();
     }
