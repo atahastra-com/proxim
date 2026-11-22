@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # KOS build: Linux kernel + static BusyBox rootfs + kosinit + kosd, bootable in QEMU.
 # Usage: ./build.sh [targets...]
-#   deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|test|dev|distro|distro-run|all
+#   deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|test|dev|distro|distro-run|distro-update|distro-dev|all
 # Multiple targets run in order, e.g. ./build.sh rust rootfs boot-interactive
 set -euo pipefail
 
@@ -324,6 +324,16 @@ distro_image() {
   "${KOS}/distro/build-image.sh"
 }
 
+# Sync distro/overlay into the existing qcow2 (seconds, not a full rebuild).
+distro_update() {
+  "${KOS}/distro/update-image.sh"
+}
+
+# Boot the desktop with the extension dir shared from the host (hot reload).
+distro_dev() {
+  "${KOS}/distro/run-dev.sh"
+}
+
 # Open the kos desktop in a QEMU window (KVM + WSLg on Windows).
 distro_run() {
   local img="${KOS}/distro/out/kos.qcow2"
@@ -348,7 +358,7 @@ distro_run() {
 }
 
 usage() {
-  echo "Usage: $0 [deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|test|dev|distro|distro-run|all]..."
+  echo "Usage: $0 [deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|test|dev|distro|distro-run|distro-update|distro-dev|all]..."
 }
 
 run_target() {
@@ -365,6 +375,8 @@ run_target() {
     dev) kosinit; rust; rootfs; boot_interactive ;;
     distro) distro_image ;;
     distro-run) distro_run ;;
+    distro-update) distro_update ;;
+    distro-dev) distro_dev ;;
     all) deps; kernel; busybox; kosinit; rust; rootfs; run_tests ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
