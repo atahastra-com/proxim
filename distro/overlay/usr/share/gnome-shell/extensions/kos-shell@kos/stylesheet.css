@@ -210,29 +210,29 @@
     background-color: rgba(255, 255, 255, 0.95);
 }
 
-/* Panel popovers (Date/Calendar/Notifications, Quick Settings) styled to
- * match the dark frosted glass bottom dock. */
+/* Panel popovers (Date/Calendar/Notifications, Quick Settings) — clean,
+ * minimal, borderless dark glass matching the bottom dock. */
 .popup-menu-boxpointer,
 .candidate-popup-boxpointer {
-    -arrow-background-color: rgba(16, 18, 24, 0.84);
-    -arrow-border-color: rgba(255, 255, 255, 0.12);
-    -arrow-border-width: 1px;
+    -arrow-background-color: rgba(16, 18, 24, 0.86);
+    -arrow-border-color: transparent;
+    -arrow-border-width: 0;
     -arrow-border-radius: 20px;
     -arrow-rise: 8px;
 }
 
 .popup-menu-content {
-    background-color: rgba(16, 18, 24, 0.84);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background-color: rgba(16, 18, 24, 0.86);
+    border: none;
     border-radius: 20px;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.52);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
     color: #f3f4f6;
 }
 
 .popup-menu-item:hover,
 .popup-menu-item:focus,
 .popup-menu-item.selected {
-    background-color: rgba(255, 255, 255, 0.10);
+    background-color: rgba(255, 255, 255, 0.08);
     border-radius: 12px;
 }
 
@@ -242,12 +242,12 @@
 }
 
 .popup-separator-menu-item .popup-separator-menu-item-separator {
-    background-color: rgba(255, 255, 255, 0.10);
+    background-color: rgba(255, 255, 255, 0.06);
 }
 
-/* Calendar & Notifications popover cards */
+/* Calendar & Notifications popover — borderless minimal cards */
 .datemenu-calendar-column {
-    border-left-color: rgba(255, 255, 255, 0.10);
+    border-left: none;
 }
 
 .calendar,
@@ -256,11 +256,15 @@
 .weather-button,
 .events-button,
 .message {
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.04);
+    border: none;
     border-radius: 14px;
     box-shadow: none;
     color: #f3f4f6;
+}
+
+.datemenu-today-button {
+    background-color: transparent;
 }
 
 .datemenu-today-button:hover,
@@ -268,12 +272,21 @@
 .weather-button:hover,
 .events-button:hover,
 .message:hover {
-    background-color: rgba(255, 255, 255, 0.10);
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Keep calendar days clean & borderless (override generic .button rule) */
+.calendar .calendar-day-base,
+.calendar .calendar-month-header .pager-button {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 .calendar .calendar-day-base:hover,
-.calendar .calendar-day-base:focus {
-    background-color: rgba(255, 255, 255, 0.12);
+.calendar .calendar-day-base:focus,
+.calendar .calendar-month-header .pager-button:hover {
+    background-color: rgba(255, 255, 255, 0.10);
 }
 
 .calendar .calendar-today,
@@ -285,53 +298,58 @@
 }
 
 .message-list-clear-button.button,
-.button {
-    background-color: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+.datemenu-popover .button,
+.popup-menu-content .button {
+    background-color: rgba(255, 255, 255, 0.07);
+    border: none;
+    box-shadow: none;
     border-radius: 10px;
     color: #f3f4f6;
 }
 
 .message-list-clear-button.button:hover,
-.button:hover {
-    background-color: rgba(255, 255, 255, 0.14);
+.datemenu-popover .button:hover,
+.popup-menu-content .button:hover {
+    background-color: rgba(255, 255, 255, 0.13);
 }
 
 .toggle-switch {
     background-color: rgba(255, 255, 255, 0.18);
+    border: none;
 }
 
 .toggle-switch:checked {
     background-color: #3b82f6;
 }
 
-/* Quick Settings toggles & sliders */
+/* Quick Settings toggles & sliders — clean & borderless */
 .quick-toggle,
 .quick-menu-toggle .quick-toggle,
 .quick-menu-toggle .quick-toggle-menu-button,
 .quick-slider .slider-bin {
-    background-color: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.06);
+    border: none;
+    box-shadow: none;
     color: #f3f4f6;
 }
 
 .quick-toggle:hover,
 .quick-menu-toggle .quick-toggle:hover,
 .quick-menu-toggle .quick-toggle-menu-button:hover {
-    background-color: rgba(255, 255, 255, 0.13);
+    background-color: rgba(255, 255, 255, 0.12);
 }
 
 .quick-toggle:checked,
 .quick-menu-toggle .quick-toggle:checked,
 .quick-menu-toggle .quick-toggle-menu-button:checked {
     background-color: #3b82f6;
-    border-color: rgba(96, 165, 250, 0.45);
+    border: none;
     color: #ffffff;
 }
 
 .quick-toggle-menu {
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.04);
+    border: none;
     border-radius: 16px;
 }
 
