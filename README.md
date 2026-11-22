@@ -42,4 +42,13 @@ Work in the WSL Ubuntu copy at `~/kos` (Linux filesystem, not `/mnt/c`).
 ./build.sh all                  # kernel, busybox, userspace, then test
 ./build.sh distro               # build the Debian-based kos desktop image
 ./build.sh distro-run           # boot that image in a QEMU window (KVM)
+./build.sh distro-update        # sync UI changes into the existing image
+./build.sh distro-dev           # boot with a live-shared extension dir (hot reload)
 ```
+
+The Debian desktop is a GNOME 48 Launchpad-style home screen with a
+full-width bottom bar. How to edit the look, the update/hot-reload loop,
+and ESM caching limits are in `distro/README.md`. The CSS lives at
+`distro/overlay/usr/share/gnome-shell/extensions/kos-shell@kos/stylesheet.css`
+and the JS modules (`desktopGrid.js`, `panel.js`, `dock.js`, `extension.js`)
+are in the same folder.
