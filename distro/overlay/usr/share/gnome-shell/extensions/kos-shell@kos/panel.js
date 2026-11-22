@@ -7,17 +7,23 @@
 // kos: clock on the left, dock in the center, and GNOME's stock system
 // status cluster (network/volume/power) left alone on the right.
 
+import Shell from 'gi://Shell';
+
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+export const PANEL_HEIGHT = 72;
 
 export class KosPanel {
     constructor() {
         this._signals = [];
         this._movedDateMenu = false;
+        this._blurEffect = null;
     }
 
     enable() {
         Main.panel.add_style_class_name('kos-panel');
 
+        this._enableBlur();
         this._hideActivities();
         this._disableHotCorners();
         this._moveDateMenuToLeft();
@@ -26,12 +32,14 @@ export class KosPanel {
         // Re-run layout when monitors change or the bar is reallocated
         // (like a resize listener on window.resize).
         this._connect(Main.layoutManager, 'monitors-changed', () => this._movePanelToBottom());
+        this._connect(Main.layoutManager, 'workareas-changed', () => this._movePanelToBottom());
         this._connect(Main.layoutManager, 'startup-complete', () => {
             this._hideActivities();
             this._disableHotCorners();
             this._movePanelToBottom();
         });
         this._connect(Main.layoutManager.panelBox, 'notify::allocation', () => this._movePanelToBottom());
+        this._connect(Main.panel, 'notify::height', () => this._movePanelToBottom());
     }
 
     disable() {
@@ -39,6 +47,7 @@ export class KosPanel {
             obj.disconnect(id);
         this._signals = [];
 
+        this._disableBlur();
         this._restoreDateMenu();
         this._restorePanel();
         Main.panel.remove_style_class_name('kos-panel');
@@ -51,6 +60,37 @@ export class KosPanel {
         const id = obj.connect(signal, cb);
         this._signals.push([obj, id]);
         return id;
+    }
+
+    // Real frosted-glass background blur behind the bottom dock bar.
+    _enableBlur() {
+        if (this._blurEffect)
+            return;
+        try {
+            const effect = new Shell.BlurEffect({
+                mode: Shell.BlurMode.BACKGROUND,
+                brightness: 0.85,
+            });
+            if ('radius' in effect)
+                effect.radius = 28;
+            else if ('sigma' in effect)
+                effect.sigma = 28;
+            Main.panel.add_effect(effect);
+            this._blurEffect = effect;
+        } catch (_e) {
+            this._blurEffect = null;
+        }
+    }
+
+    _disableBlur() {
+        if (!this._blurEffect)
+            return;
+        try {
+            Main.panel.remove_effect(this._blurEffect);
+        } catch (_e) {
+            // ignore
+        }
+        this._blurEffect = null;
     }
 
     // Hide the "Activities" button (the overview toggle in the top-left).
@@ -104,20 +144,20 @@ export class KosPanel {
         this._movedDateMenu = false;
     }
 
-    // Reposition panelBox — the shell's chrome wrapper around the bar.
-    // This is the equivalent of changing a fixed header to a fixed footer.
+    // Reposition panelBox — full-width bottom bar, letting CSS own the exact
+    // height so panelBox never exceeds Main.panel and leaves a gap below it.
     _movePanelToBottom() {
         const box = Main.layoutManager.panelBox;
         const monitor = Main.layoutManager.primaryMonitor;
         if (!box || !monitor)
             return;
-        const height = Math.max(box.height, 56);
+        if (box.width !== monitor.width)
+            box.set_size(monitor.width, -1);
+        const height = Math.ceil(Main.panel.height || box.height || PANEL_HEIGHT);
         const x = monitor.x;
         const y = monitor.y + monitor.height - height;
         if (box.x !== x || box.y !== y)
             box.set_position(x, y);
-        if (box.width !== monitor.width)
-            box.set_size(monitor.width, height);
         this._disableHotCorners();
     }
 

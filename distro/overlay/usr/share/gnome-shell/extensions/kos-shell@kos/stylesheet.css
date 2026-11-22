@@ -3,32 +3,38 @@
  * work: background-color, border-radius, padding, box-shadow, color, font-size.
  * The accent is kos blue, close to Tailwind's blue-500. */
 
-/* The top bar, after we move it to position:fixed; bottom:0; width:100%. */
+/* Full-width bottom taskbar, flush to the bottom edge, borderless dark frosted glass. */
 #panel.kos-panel {
-    background-color: rgba(11, 16, 32, 0.88);
-    border-top: 1px solid rgba(255, 255, 255, 0.10);
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.38);
-    /* Slightly taller than stock so the dock icons and clock breathe. */
-    height: 56px;
-    padding: 0 10px;
+    background-color: rgba(16, 18, 24, 0.72);
+    border: none;
+    border-top: none;
+    border-bottom: none;
+    border-radius: 0;
+    box-shadow: none;
+    height: 72px;
+    min-height: 72px;
+    margin: 0;
+    padding: 0 14px;
+    font-size: 13px;
     font-weight: 600;
 }
 
 #panel.kos-panel .panel-button {
-    color: #eef2ff;
+    color: #f3f4f6;
     background-color: transparent;
     border: none;
     box-shadow: none;
     border-radius: 12px;
-    margin: 8px 4px;
+    margin: 15px 4px;
     padding: 0 12px;
     -natural-hpadding: 12px;
     -minimum-hpadding: 8px;
+    transition-duration: 120ms;
 }
 
 #panel.kos-panel .panel-button:hover,
 #panel.kos-panel .panel-button:focus {
-    background-color: rgba(59, 130, 246, 0.22);
+    background-color: rgba(255, 255, 255, 0.12);
     box-shadow: none;
     color: #ffffff;
 }
@@ -36,9 +42,13 @@
 #panel.kos-panel .panel-button:active,
 #panel.kos-panel .panel-button:checked,
 #panel.kos-panel .panel-button:overview {
-    background-color: rgba(59, 130, 246, 0.34);
+    background-color: rgba(255, 255, 255, 0.18);
     box-shadow: none;
     color: #ffffff;
+}
+
+#panel.kos-panel .system-status-icon {
+    icon-size: 17px;
 }
 
 /* Strip GNOME 48's built-in inner clock pill so hovering the date/time
@@ -57,10 +67,10 @@
     margin: 0;
 }
 
-/* Pinned & running app icons sit directly on the full-width bar — no pill behind them. */
+/* Clean macOS-style center dock: icons sit directly on the glass bar with no box outline. */
 .kos-dock {
-    spacing: 4px;
-    padding: 0 6px;
+    spacing: 10px;
+    padding: 0 8px;
     margin: 0;
     background-color: transparent;
     border: none;
@@ -70,51 +80,74 @@
 
 .kos-dock-separator {
     width: 1px;
-    height: 24px;
-    margin: 0 6px;
-    background-color: rgba(255, 255, 255, 0.16);
+    height: 32px;
+    margin: 0 4px;
+    background-color: rgba(255, 255, 255, 0.20);
 }
 
+/* Pixel-exact vertical centering in the 72px bar:
+ * Rest: 12px top + 42px icon + 8px dot + 4px bottom = 66px (+3px top/bot = 15px above & below icon).
+ * Hover: 10px top + 46px icon + 8px dot + 2px bottom = 66px (13px above & below icon, zero shift). */
 .kos-dock-item {
-    padding: 4px 7px;
-    border-radius: 12px;
-    border: 1px solid transparent;
+    padding: 12px 8px 4px 8px;
+    border-radius: 14px;
+    border: none;
+    box-shadow: none;
+    background-color: transparent;
+    transition-duration: 120ms;
 }
 
 .kos-dock-item:hover,
 .kos-dock-item:focus {
-    background-color: rgba(59, 130, 246, 0.24);
+    padding: 10px 6px 2px 6px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border: none;
+    box-shadow: none;
 }
 
 .kos-dock-item:active {
-    background-color: rgba(59, 130, 246, 0.38);
+    padding: 12px 8px 4px 8px;
+    background-color: rgba(255, 255, 255, 0.14);
+    border: none;
+    box-shadow: none;
 }
 
 .kos-dock-item.focused {
-    background-color: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: transparent;
+    border: none;
 }
 
 .kos-dock-item-icon {
-    icon-size: 28px;
+    icon-size: 42px;
+    transition-duration: 120ms;
 }
 
-/* Running-app indicator (the little dot under a dock icon). */
+.kos-dock-item:hover .kos-dock-item-icon,
+.kos-dock-item:focus .kos-dock-item-icon {
+    icon-size: 46px;
+}
+
+.kos-dock-item:active .kos-dock-item-icon {
+    icon-size: 42px;
+}
+
+/* Running-app indicator dot centered neatly beneath each open dock icon. */
 .kos-dock-dot {
-    width: 5px;
-    height: 5px;
-    border-radius: 5px;
+    width: 4px;
+    height: 4px;
+    border-radius: 4px;
     background-color: transparent;
-    margin-top: 2px;
+    margin-top: 4px;
+    transition-duration: 120ms;
 }
 
 .kos-dock-dot.running {
-    background-color: #3b82f6;
+    background-color: rgba(255, 255, 255, 0.82);
 }
 
 .kos-dock-item.focused .kos-dock-dot.running {
-    width: 12px;
-    background-color: #60a5fa;
+    width: 14px;
+    background-color: #ffffff;
 }
 
 /* Launchpad-style home screen. The JS positions the grid; CSS styles children. */

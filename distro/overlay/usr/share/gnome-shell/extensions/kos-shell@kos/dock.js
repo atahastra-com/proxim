@@ -125,6 +125,8 @@ class DockItem extends St.Button {
             reactive: true,
             can_focus: true,
             track_hover: true,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
             button_mask: St.ButtonMask.ONE,
         });
         this._app = app;
@@ -136,7 +138,11 @@ class DockItem extends St.Button {
             y_align: Clutter.ActorAlign.CENTER,
         });
 
-        const icon = new St.Icon({style_class: 'kos-dock-item-icon'});
+        const icon = new St.Icon({
+            style_class: 'kos-dock-item-icon',
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
         const gicon = app ? (app.get_icon() || app.app_info?.get_icon()) : null;
         if (gicon)
             icon.set_gicon(gicon);

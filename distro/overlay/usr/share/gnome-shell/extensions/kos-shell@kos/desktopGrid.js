@@ -134,7 +134,7 @@ export class KosDesktopGrid {
 
     _workArea() {
         const monitor = Main.layoutManager.primaryMonitor;
-        const panelH = (Main.panel && Main.panel.height) ? Main.panel.height : 56;
+        const panelH = (Main.panel && Main.panel.height) ? Main.panel.height : 72;
         return {
             x: monitor.x,
             y: monitor.y,
@@ -144,11 +144,13 @@ export class KosDesktopGrid {
     }
 
     _layout() {
-        const wa = this._workArea();
-        this._actor.set_position(wa.x, wa.y);
-        this._actor.set_size(wa.w, wa.h);
+        const monitor = Main.layoutManager.primaryMonitor;
+        // Cover the full monitor with the dim backdrop so there is never a
+        // 1px seam line between the dimmer and the bottom dock bar.
+        this._actor.set_position(monitor.x, monitor.y);
+        this._actor.set_size(monitor.width, monitor.height);
         this._backdrop.set_position(0, 0);
-        this._backdrop.set_size(wa.w, wa.h);
+        this._backdrop.set_size(monitor.width, monitor.height);
         this._raise();
         this._layoutIcons();
     }
