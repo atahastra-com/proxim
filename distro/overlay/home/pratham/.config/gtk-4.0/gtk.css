@@ -100,54 +100,49 @@ switch > slider {
     background-color: #ffffff;
 }
 
-/* macOS traffic-light window controls — forced 13x13 circles via vertical
- * margins so headerbar never stretches them into ovals. */
-windowcontrols {
+/* macOS traffic-light window controls — draw the 13x13 circle on the centered
+ * inner image so headerbar vertical stretching can never turn it into an oval. */
+headerbar windowcontrols {
     margin-left: 6px;
     margin-right: 8px;
 }
 
-windowcontrols button {
+headerbar windowcontrols > button,
+headerbar windowcontrols > button:hover,
+headerbar windowcontrols > button:active {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    min-width: 20px;
+    min-height: 20px;
+    padding: 0;
+    margin: 0 1px;
+}
+
+headerbar windowcontrols > button > image {
     min-width: 13px;
     min-height: 13px;
     padding: 0;
-    margin: 16px 4px;
+    margin: 0;
     border-radius: 99px;
-    border: none;
-    box-shadow: none;
+    opacity: 1;
+    -gtk-icon-size: 9px;
+    color: transparent;
 }
 
-windowcontrols button > image {
-    min-width: 0;
-    min-height: 0;
-    padding: 0;
-    margin: 0;
-    opacity: 0;
-    -gtk-icon-size: 9px;
+headerbar windowcontrols:hover > button > image {
     color: rgba(0, 0, 0, 0.8);
 }
 
-windowcontrols:hover button > image {
-    opacity: 0.85;
-}
-
-windowcontrols button.close,
-windowcontrols button.close:hover,
-windowcontrols button.close:active {
+headerbar windowcontrols > button.close > image {
     background-color: #ff5f57;
-    background-image: none;
 }
 
-windowcontrols button.minimize,
-windowcontrols button.minimize:hover,
-windowcontrols button.minimize:active {
+headerbar windowcontrols > button.minimize > image {
     background-color: #febc2e;
-    background-image: none;
 }
 
-windowcontrols button.maximize,
-windowcontrols button.maximize:hover,
-windowcontrols button.maximize:active {
+headerbar windowcontrols > button.maximize > image {
     background-color: #28c840;
-    background-image: none;
 }
