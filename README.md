@@ -40,4 +40,6 @@ Work in the WSL Ubuntu copy at `~/kos` (Linux filesystem, not `/mnt/c`).
 ./build.sh boot-interactive     # boot the interactive image in this terminal
 ./build.sh test                 # automated QEMU proofs (not an interactive shell)
 ./build.sh all                  # kernel, busybox, userspace, then test
+./build.sh distro               # build the Debian-based kos desktop image
+./build.sh distro-run           # boot that image in a QEMU window (KVM)
 ```

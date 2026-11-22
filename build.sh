@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # KOS build: Linux kernel + static BusyBox rootfs + kosinit + kosd, bootable in QEMU.
 # Usage: ./build.sh [targets...]
-#   deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|test|dev|all
+#   deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|test|dev|distro|distro-run|all
 # Multiple targets run in order, e.g. ./build.sh rust rootfs boot-interactive
 set -euo pipefail
 
@@ -319,8 +319,36 @@ boot_interactive() {
     -kernel "$BZIMAGE" -initrd "$INTERACTIVE_INITRD"
 }
 
+# Build the Debian-based kos desktop image (see distro/README.md).
+distro_image() {
+  "${KOS}/distro/build-image.sh"
+}
+
+# Open the kos desktop in a QEMU window (KVM + WSLg on Windows).
+distro_run() {
+  local img="${KOS}/distro/out/kos.qcow2"
+  if [[ ! -f "$img" ]]; then
+    echo "No image at ${img}. Build it first with: ./build.sh distro" >&2
+    exit 1
+  fi
+  if [[ ! -e /dev/kvm ]]; then
+    echo "KVM is not available (/dev/kvm missing). The window would be very slow." >&2
+    exit 1
+  fi
+  if [[ ! -w /dev/kvm ]]; then
+    echo "This user cannot write /dev/kvm. Add yourself to the kvm group and start a new shell:" >&2
+    echo "  sudo usermod -aG kvm \$USER" >&2
+    exit 1
+  fi
+  echo "Booting kos desktop (shut down from the GNOME menu, or close the window)"
+  exec qemu-system-x86_64 -enable-kvm -m 4G -smp 4 -vga virtio \
+    -drive "file=${img},format=qcow2,if=virtio" \
+    -nic user,model=virtio-net-pci \
+    -usb -device usb-tablet
+}
+
 usage() {
-  echo "Usage: $0 [deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|test|dev|all]..."
+  echo "Usage: $0 [deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|test|dev|distro|distro-run|all]..."
 }
 
 run_target() {
@@ -335,6 +363,8 @@ run_target() {
     boot-interactive) boot_interactive ;;
     test) run_tests ;;
     dev) kosinit; rust; rootfs; boot_interactive ;;
+    distro) distro_image ;;
+    distro-run) distro_run ;;
     all) deps; kernel; busybox; kosinit; rust; rootfs; run_tests ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;

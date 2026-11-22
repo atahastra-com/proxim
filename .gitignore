@@ -28,3 +28,11 @@ kosinit/kosinit
 
 # Rootfs install stamp
 .busybox-rootfs-stamp
+
+# Debian kos distro build output
+distro/out/
+distro/mnt/
+
+# Local proof screenshots of the distro desktop
+/distro-shot.png
+/distro-desktop.png
