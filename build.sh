@@ -350,9 +350,16 @@ distro_run() {
     echo "  sudo usermod -aG kvm \$USER" >&2
     exit 1
   fi
+  # shellcheck source=distro/qemu-flags.sh
+  source "${KOS}/distro/qemu-flags.sh"
+  kos_qemu_detect
+  kos_qemu_window_display
+  kos_qemu_print
   echo "Booting kos desktop (shut down from the GNOME menu, or close the window)"
-  exec qemu-system-x86_64 -enable-kvm -m 4G -smp 4 -vga virtio \
-    -drive "file=${img},format=qcow2,if=virtio" \
+  exec qemu-system-x86_64 \
+    "${KOS_QEMU_ACCEL[@]}" -m "${KOS_QEMU_MEM}" -smp "${KOS_QEMU_SMP}" \
+    "${KOS_QEMU_DISPLAY[@]}" \
+    -drive "file=${img},${KOS_QEMU_DRIVE_OPTS}" \
     -nic user,model=virtio-net-pci \
     -usb -device usb-tablet
 }

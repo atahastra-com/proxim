@@ -1,0 +1,8 @@
+disable tracker-miner-fs-3.service
+disable tracker-miner-rss-3.service
+disable tracker-extract-3.service
+disable tracker-writeback-3.service
+disable evolution-addressbook-factory.service
+disable evolution-calendar-factory.service
+disable evolution-source-registry.service
+disable evolution-user-prompter.service

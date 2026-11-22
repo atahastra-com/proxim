@@ -5,12 +5,11 @@ GNOME 48 (this image uses gnome-shell / mutter 48.7). The kos look is a
 GNOME Shell extension, `kos-shell@kos`, not a fork of GNOME itself.
 
 The desktop is a macOS Launchpad-style home screen on a full-width bottom
-bar: 7 columns of large app icons with labels (no dark tiles), a rounded
-search field at the top that filters as you type, a dimmed wallpaper
-without the old "kos 0.1" wordmark, and page dots if the apps overflow
-one screen. The bar keeps date, time and wifi on the left, dock apps in
-the middle, and system icons on the right. Clicking an icon opens the
-app in a normal window.
+bar: 7 columns of large app icons with labels (no dark tiles), a dimmed
+wallpaper without a wordmark, and page dots if the apps overflow one
+screen. The bar keeps date, time and wifi on the left, dock app icons
+sitting directly on the bar (no extra pill), and system icons on the
+right. Clicking an icon opens the app in a normal window.
 
 ## Build and boot
 
@@ -51,8 +50,8 @@ The desktop chrome is a GNOME Shell 48 extension written in ESM JavaScript
 (the same `import`/`export` style as a modern web app) plus CSS:
 
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/stylesheet.css`
-  — colours, the translucent bottom bar, the rounded dock, the search
-  field, and icon labels. Accent colour is kos blue (`#3b82f6`).
+  — colours, the translucent bottom bar, dock icons, and icon labels.
+  Accent colour is kos blue (`#3b82f6`).
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/extension.js`
   — entry point (`enable` / `disable`).
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/panel.js`
@@ -60,7 +59,7 @@ The desktop chrome is a GNOME Shell 48 extension written in ESM JavaScript
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/dock.js`
   — the centre dock (pinned apps + All apps).
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/desktopGrid.js`
-  — the Launchpad-style 7-column icon grid, search, and page dots.
+  — the Launchpad-style 7-column icon grid and page dots.
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/apps.txt`
   — the home-screen app list (one `.desktop` id per line). Leave it
   empty to show every visible installed app. The All apps button always
@@ -101,3 +100,17 @@ does not attach the share; the installed copy of the extension is used.
 Proof screenshots from a headless KVM boot live at the repo root:
 `kos-ui.png` (Launchpad home screen), `kos-ui-window.png` (Files opened
 from an icon click), `hotreload-before.png` and `hotreload-after.png`.
+
+## Speed
+
+`./build.sh distro-run` and `distro-dev` use KVM (`-enable-kvm -cpu host`),
+a writeback virtio disk, and a guest with GNOME animations off and some
+background services (Tracker, PackageKit, GNOME Software, Evolution)
+disabled. Virgl/OpenGL is not used: this WSL QEMU's virtio-vga-gl module
+fails to load, so the guest stays on virtio-vga (typically llvmpipe).
+Disabling animations is the main smoothness win on that path.
+
+The default WSL VM is about 8 GB RAM, which is tight for a 4 GB guest.
+To give the VM more, create `%UserProfile%\.wslconfig` (see the notes
+in the latest report) and run `wsl --shutdown` once. `distro-run` then
+picks a larger `-m` / `-smp` automatically.

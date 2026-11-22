@@ -253,6 +253,8 @@ MOD
 
     systemctl enable gdm3 || systemctl enable gdm || true
     systemctl enable NetworkManager || true
+    systemctl enable kos-tune.service || true
+    /usr/libexec/kos-tune || true
     systemctl set-default graphical.target
 
     update-initramfs -u

@@ -1,0 +1,13 @@
+[Unit]
+Description=Disable heavy background services on the kos desktop
+DefaultDependencies=no
+After=systemd-sysusers.service
+Before=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/kos-tune
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

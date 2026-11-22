@@ -16,12 +16,11 @@ if [[ ! -f "${SHARE}/metadata.json" ]]; then
   echo "Extension sources missing at ${SHARE}" >&2
   exit 1
 fi
-if [[ ! -e /dev/kvm ]]; then
-  echo "KVM is not available (/dev/kvm missing)." >&2
-  exit 1
-fi
-if [[ ! -w /dev/kvm ]]; then
-  echo "This user cannot write /dev/kvm. Add yourself to the kvm group." >&2
+# shellcheck source=qemu-flags.sh
+source "${KOS}/distro/qemu-flags.sh"
+kos_qemu_detect
+if [[ ${#KOS_QEMU_ACCEL[@]} -eq 0 ]]; then
+  echo "KVM is not available. The desktop would be very slow." >&2
   exit 1
 fi
 
@@ -33,8 +32,11 @@ fi
 QEMU_EXTRA=()
 DISPLAY_ARGS=()
 if [[ "${KOS_DISTRO_HEADLESS:-}" == "1" ]]; then
-  DISPLAY_ARGS=(-display vnc=127.0.0.1:99 -monitor unix:/tmp/kos-ui-mon.sock,server,nowait -qmp unix:/tmp/kos-ui-qmp.sock,server,nowait)
+  kos_qemu_headless_display
+  DISPLAY_ARGS=("${KOS_QEMU_DISPLAY[@]}")
 else
+  kos_qemu_window_display
+  DISPLAY_ARGS=("${KOS_QEMU_DISPLAY[@]}")
   echo "Booting kos desktop in dev mode."
   echo "Edit files in:"
   echo "  ${SHARE}"
@@ -88,9 +90,11 @@ fi
 # Headless stays attached to this tool; interactive exec's QEMU (replaces us).
 if [[ "${KOS_DISTRO_HEADLESS:-}" == "1" ]]; then
   rm -f /tmp/kos-ui-mon.sock /tmp/kos-ui-qmp.sock /tmp/kos-ui-qemu.pid
-  qemu-system-x86_64 -enable-kvm -m 4G -smp 4 -vga virtio \
+  kos_qemu_print
+  qemu-system-x86_64 \
+    "${KOS_QEMU_ACCEL[@]}" -m "${KOS_QEMU_MEM}" -smp "${KOS_QEMU_SMP}" \
     "${DISPLAY_ARGS[@]}" \
-    -drive "file=${IMG},format=qcow2,if=virtio" \
+    -drive "file=${IMG},${KOS_QEMU_DRIVE_OPTS}" \
     -nic user,model=virtio-net-pci \
     -usb -device usb-tablet \
     "${QEMU_EXTRA[@]}" \
@@ -98,8 +102,11 @@ if [[ "${KOS_DISTRO_HEADLESS:-}" == "1" ]]; then
     -daemonize
   echo "Headless dev VM started"
 else
-  exec qemu-system-x86_64 -enable-kvm -m 4G -smp 4 -vga virtio \
-    -drive "file=${IMG},format=qcow2,if=virtio" \
+  kos_qemu_print
+  exec qemu-system-x86_64 \
+    "${KOS_QEMU_ACCEL[@]}" -m "${KOS_QEMU_MEM}" -smp "${KOS_QEMU_SMP}" \
+    "${DISPLAY_ARGS[@]}" \
+    -drive "file=${IMG},${KOS_QEMU_DRIVE_OPTS}" \
     -nic user,model=virtio-net-pci \
     -usb -device usb-tablet \
     "${QEMU_EXTRA[@]}"

@@ -117,6 +117,8 @@ fi
 systemctl enable mnt-kosdev.mount || true
 systemctl enable kos-shell-dev.service || true
 systemctl --global enable kos-shell-reload.service || true
+systemctl enable kos-tune.service || true
+/usr/libexec/kos-tune || true
 if id '${KOS_USER}' >/dev/null 2>&1; then
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/shell/enabled-extensions "['kos-shell@kos']" || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/shell/disable-user-extensions false || true
@@ -124,6 +126,7 @@ if id '${KOS_USER}' >/dev/null 2>&1; then
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/wm/preferences/num-workspaces 1 || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/enable-hot-corners false || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/clock-show-date true || true
+  sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/enable-animations false || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/mutter/experimental-features "@as []" || true
 fi
 APPLY

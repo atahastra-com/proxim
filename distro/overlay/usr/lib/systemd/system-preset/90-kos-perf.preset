@@ -1,0 +1,5 @@
+enable kos-tune.service
+disable packagekit.service
+disable packagekit-offline-update.service
+disable apt-daily.timer
+disable apt-daily-upgrade.timer

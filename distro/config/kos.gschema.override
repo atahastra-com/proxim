@@ -19,6 +19,7 @@ icon-theme='Adwaita'
 enable-hot-corners=false
 clock-show-date=true
 clock-show-weekday=true
+enable-animations=false
 
 [org.gnome.desktop.session]
 idle-delay=uint32 0

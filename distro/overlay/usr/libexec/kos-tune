@@ -1,0 +1,12 @@
+#!/bin/bash
+# Quiet background services that fight the desktop for CPU on a small VM.
+set +e
+systemctl disable --now packagekit.service packagekit-offline-update.service 2>/dev/null
+systemctl mask packagekit.service packagekit-offline-update.service 2>/dev/null
+systemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null
+systemctl --global disable tracker-miner-fs-3.service tracker-miner-rss-3.service \
+  tracker-extract-3.service tracker-writeback-3.service 2>/dev/null
+systemctl --global disable evolution-addressbook-factory.service \
+  evolution-calendar-factory.service evolution-source-registry.service \
+  evolution-user-prompter.service 2>/dev/null
+exit 0
