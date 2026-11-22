@@ -1,9 +1,9 @@
-/* kos-shell styles — Deepin OS dark frosted-glass aesthetic with kos blue (#3b82f6).
+/* kos-shell styles — Deepin OS dark frosted-glass aesthetic (#0081ff accent).
  * Purely visual styling (no layout/feature changes). */
 
-/* Full-width bottom dock, flush to the bottom edge, Deepin-style smoky dark glass. */
+/* Full-width bottom dock, flush to the bottom edge, Deepin smoky frosted glass. */
 #panel.kos-panel {
-    background-color: rgba(24, 27, 34, 0.72);
+    background-color: rgba(24, 26, 32, 0.68);
     border: none;
     border-top: none;
     border-bottom: none;
@@ -40,7 +40,7 @@
 #panel.kos-panel .panel-button:active,
 #panel.kos-panel .panel-button:checked,
 #panel.kos-panel .panel-button:overview {
-    background-color: rgba(59, 130, 246, 0.30);
+    background-color: rgba(0, 129, 255, 0.28);
     box-shadow: none;
     color: #ffffff;
 }
@@ -105,7 +105,7 @@
 
 .kos-dock-item:active {
     padding: 12px 8px 4px 8px;
-    background-color: rgba(59, 130, 246, 0.28);
+    background-color: rgba(0, 129, 255, 0.28);
     border: none;
     box-shadow: none;
 }
@@ -145,7 +145,7 @@
 
 .kos-dock-item.focused .kos-dock-dot.running {
     width: 16px;
-    background-color: #3b82f6;
+    background-color: #0081ff;
 }
 
 /* Launchpad-style home screen. The JS positions the grid; CSS styles children. */
@@ -154,7 +154,7 @@
 
 /* Subtle dimmer so Deepin2022 icons pop cleanly over any wallpaper. */
 .kos-launchpad-dim {
-    background-color: rgba(10, 12, 18, 0.30);
+    background-color: rgba(10, 12, 18, 0.28);
 }
 
 /* App icon + label. No tile box at rest; soft Deepin squircle on hover. */
@@ -172,7 +172,7 @@
 }
 
 .kos-desktop-icon:active {
-    background-color: rgba(59, 130, 246, 0.26);
+    background-color: rgba(0, 129, 255, 0.26);
 }
 
 .kos-desktop-icon-app {
@@ -210,11 +210,12 @@
     background-color: #ffffff;
 }
 
-/* Panel popovers (Calendar/Notifications, Quick Settings) — Deepin dark
- * translucent glass, clean & borderless, kos blue accents. */
+/* ============================================================================
+ * Deepin OS frosted dark glass theme across all GNOME Shell popovers & overlays
+ * ============================================================================ */
 .popup-menu-boxpointer,
 .candidate-popup-boxpointer {
-    -arrow-background-color: rgba(28, 31, 38, 0.86);
+    -arrow-background-color: rgba(28, 30, 38, 0.74);
     -arrow-border-color: transparent;
     -arrow-border-width: 0;
     -arrow-border-radius: 18px;
@@ -222,32 +223,34 @@
 }
 
 .popup-menu-content {
-    background-color: rgba(28, 31, 38, 0.86);
+    background-color: rgba(28, 30, 38, 0.74);
     border: none;
     border-radius: 18px;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.50);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
     color: rgba(255, 255, 255, 0.92);
+}
+
+.popup-menu-item {
+    border-radius: 10px;
 }
 
 .popup-menu-item:hover,
 .popup-menu-item:focus,
 .popup-menu-item.selected {
     background-color: rgba(255, 255, 255, 0.10);
-    border-radius: 12px;
 }
 
 .popup-menu-item:active {
-    background-color: rgba(59, 130, 246, 0.30);
-    border-radius: 12px;
+    background-color: rgba(0, 129, 255, 0.28);
 }
 
 .popup-separator-menu-item .popup-separator-menu-item-separator {
     background-color: rgba(255, 255, 255, 0.08);
 }
 
-/* Calendar & Notifications popover — soft Deepin surface cards */
+/* Calendar & Notifications — airy Deepin layout with zero nested boxes */
 .datemenu-calendar-column {
-    border-left: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .calendar,
@@ -256,15 +259,11 @@
 .weather-button,
 .events-button,
 .message {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: transparent;
     border: none;
-    border-radius: 14px;
+    border-radius: 12px;
     box-shadow: none;
     color: rgba(255, 255, 255, 0.92);
-}
-
-.datemenu-today-button {
-    background-color: transparent;
 }
 
 .datemenu-today-button:hover,
@@ -272,13 +271,21 @@
 .weather-button:hover,
 .events-button:hover,
 .message:hover {
-    background-color: rgba(255, 255, 255, 0.11);
+    background-color: rgba(255, 255, 255, 0.07);
 }
 
-/* Keep calendar days clean & borderless */
+/* Strip EVERY GNOME 48 calendar day/month background circle so dates sit flat */
+.calendar .calendar-month-label,
+.calendar .calendar-month-header .calendar-month-label,
+.calendar .calendar-month-header .pager-button,
+.calendar .calendar-day,
 .calendar .calendar-day-base,
-.calendar .calendar-month-header .pager-button {
+.calendar .calendar-nonwork-day,
+.calendar .calendar-other-month-day,
+.calendar .calendar-week-number,
+.calendar .calendar-day-with-events {
     background-color: transparent;
+    background-image: none;
     border: none;
     box-shadow: none;
     border-radius: 99px;
@@ -286,6 +293,7 @@
 
 .calendar .calendar-day-base:hover,
 .calendar .calendar-day-base:focus,
+.calendar .calendar-day:hover,
 .calendar .calendar-month-header .pager-button:hover {
     background-color: rgba(255, 255, 255, 0.12);
 }
@@ -294,14 +302,14 @@
 .calendar .calendar-today:hover,
 .calendar .calendar-today:focus,
 .calendar .calendar-today:selected {
-    background-color: #3b82f6;
+    background-color: #0081ff;
     color: #ffffff;
 }
 
 .message-list-clear-button.button,
 .datemenu-popover .button,
 .popup-menu-content .button {
-    background-color: rgba(255, 255, 255, 0.09);
+    background-color: rgba(255, 255, 255, 0.08);
     border: none;
     box-shadow: none;
     border-radius: 10px;
@@ -320,10 +328,10 @@
 }
 
 .toggle-switch:checked {
-    background-color: #3b82f6;
+    background-color: #0081ff;
 }
 
-/* Quick Settings toggles & sliders — Deepin-style squircle pills */
+/* Quick Settings toggles & sliders */
 .quick-toggle,
 .quick-menu-toggle .quick-toggle,
 .quick-menu-toggle .quick-toggle-menu-button,
@@ -344,7 +352,7 @@
 .quick-toggle:checked,
 .quick-menu-toggle .quick-toggle:checked,
 .quick-menu-toggle .quick-toggle-menu-button:checked {
-    background-color: #3b82f6;
+    background-color: #0081ff;
     border: none;
     color: #ffffff;
 }
@@ -352,10 +360,44 @@
 .quick-toggle-menu {
     background-color: rgba(255, 255, 255, 0.06);
     border: none;
-    border-radius: 16px;
+    border-radius: 14px;
 }
 
 .slider {
     -barlevel-background-color: rgba(255, 255, 255, 0.18);
-    -barlevel-active-background-color: #3b82f6;
+    -barlevel-active-background-color: #0081ff;
+}
+
+/* System OSD (volume/brightness), modal dialogs, and Alt-Tab switcher */
+.osd-window,
+.modal-dialog,
+.switcher-list,
+.resize-popup {
+    background-color: rgba(28, 30, 38, 0.82);
+    border: none;
+    border-radius: 18px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.50);
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.switcher-list .item-box:selected,
+.switcher-list .item-box:hover {
+    background-color: rgba(0, 129, 255, 0.28);
+    border-radius: 14px;
+}
+
+.modal-dialog .modal-dialog-linked-button {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: none;
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.modal-dialog .modal-dialog-linked-button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.modal-dialog .modal-dialog-linked-button:default {
+    background-color: #0081ff;
+    color: #ffffff;
 }

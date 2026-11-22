@@ -23,6 +23,7 @@ export class KosPanel {
     enable() {
         Main.panel.add_style_class_name('kos-panel');
 
+        this._menuBlurs = [];
         this._enableBlur();
         this._hideActivities();
         this._disableHotCorners();
@@ -63,35 +64,57 @@ export class KosPanel {
         return id;
     }
 
-    // Real frosted-glass background blur behind the bottom dock bar.
+    // Real frosted-glass background blur behind the bottom dock bar & popovers.
     _enableBlur() {
-        if (this._blurEffect)
-            return;
-        try {
-            const effect = new Shell.BlurEffect({
-                mode: Shell.BlurMode.BACKGROUND,
-                brightness: 0.92,
-            });
-            if ('radius' in effect)
-                effect.radius = 32;
-            else if ('sigma' in effect)
-                effect.sigma = 32;
-            Main.panel.add_effect(effect);
-            this._blurEffect = effect;
-        } catch (_e) {
-            this._blurEffect = null;
+        const addBlur = (actor, radius, brightness) => {
+            if (!actor)
+                return null;
+            try {
+                const effect = new Shell.BlurEffect({
+                    mode: Shell.BlurMode.BACKGROUND,
+                    brightness,
+                });
+                if ('radius' in effect)
+                    effect.radius = radius;
+                else if ('sigma' in effect)
+                    effect.sigma = radius;
+                actor.add_effect(effect);
+                return [actor, effect];
+            } catch (_e) {
+                return null;
+            }
+        };
+
+        if (!this._blurEffect) {
+            const pair = addBlur(Main.panel, 36, 0.90);
+            if (pair)
+                this._blurEffect = pair[1];
+        }
+        for (const area of ['dateMenu', 'quickSettings']) {
+            const box = Main.panel.statusArea[area]?.menu?.box;
+            const pair = addBlur(box, 36, 0.88);
+            if (pair)
+                this._menuBlurs.push(pair);
         }
     }
 
     _disableBlur() {
-        if (!this._blurEffect)
-            return;
-        try {
-            Main.panel.remove_effect(this._blurEffect);
-        } catch (_e) {
-            // ignore
+        if (this._blurEffect) {
+            try {
+                Main.panel.remove_effect(this._blurEffect);
+            } catch (_e) {
+                // ignore
+            }
+            this._blurEffect = null;
         }
-        this._blurEffect = null;
+        for (const [actor, effect] of this._menuBlurs || []) {
+            try {
+                actor.remove_effect(effect);
+            } catch (_e) {
+                // ignore
+            }
+        }
+        this._menuBlurs = [];
     }
 
     // Hide the "Activities" button (the overview toggle in the top-left).
