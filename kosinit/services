@@ -1,0 +1,5 @@
+# KOS service list — one service per line:
+#   name   respawn|once   /path  [args...]
+# Lines starting with # are comments. kosinit is PID 1 and supervises these.
+hello   once      /bin/echo  hello-from-service
+shell   respawn   /bin/sh

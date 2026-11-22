@@ -1,0 +1,24 @@
+# Large third-party trees and generated root filesystem
+linux/
+linux-*/
+busybox-*/
+rootfs/
+initramfs/
+
+# Tarballs and boot images
+*.tar.xz
+*.tar.bz2
+*.tar.gz
+*.sha256
+*.cpio.gz
+
+# Built binaries
+kosinit/kosinit
+/init
+*.o
+
+# Logs, fifos, timing crumbs
+*.log
+*-start.txt
+*-end.txt
+.qemu-stdin
