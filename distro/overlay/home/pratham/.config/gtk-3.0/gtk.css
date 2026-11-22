@@ -1,4 +1,4 @@
-/* Apple macOS–inspired dark accents & circular traffic-light controls for GTK3 apps. */
+/* Apple macOS–inspired dark accents for GTK3 apps (default window controls kept). */
 
 window.csd,
 .background {
@@ -11,29 +11,4 @@ headerbar {
     background-image: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
     box-shadow: none;
-}
-
-headerbar button.titlebutton.close,
-headerbar button.titlebutton.minimize,
-headerbar button.titlebutton.maximize {
-    min-width: 13px;
-    min-height: 13px;
-    padding: 0;
-    margin: 14px 4px;
-    border-radius: 99px;
-    border: none;
-    box-shadow: none;
-    color: transparent;
-}
-
-headerbar button.titlebutton.close {
-    background-color: #ff5f57;
-}
-
-headerbar button.titlebutton.minimize {
-    background-color: #febc2e;
-}
-
-headerbar button.titlebutton.maximize {
-    background-color: #28c840;
 }

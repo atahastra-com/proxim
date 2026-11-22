@@ -131,7 +131,7 @@ export default class KosShellExtension extends Extension {
 
         const wm = new Gio.Settings({schema_id: 'org.gnome.desktop.wm.preferences'});
         wm.set_int('num-workspaces', 1);
-        wm.set_string('button-layout', 'close,minimize,maximize:');
+        wm.reset('button-layout');
 
         const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
         iface.set_string('icon-theme', 'Deepin2022');
