@@ -1,11 +1,9 @@
-/* kos-shell styles. This file is regular CSS, same idea as a website's stylesheet.
- * GNOME Shell uses St (a CSS-styled Clutter toolkit), so most properties you know
- * work: background-color, border-radius, padding, box-shadow, color, font-size.
- * The accent is kos blue, close to Tailwind's blue-500. */
+/* kos-shell styles — Deepin OS dark frosted-glass aesthetic with kos blue (#3b82f6).
+ * Purely visual styling (no layout/feature changes). */
 
-/* Full-width bottom taskbar, flush to the bottom edge, borderless dark frosted glass. */
+/* Full-width bottom dock, flush to the bottom edge, Deepin-style smoky dark glass. */
 #panel.kos-panel {
-    background-color: rgba(16, 18, 24, 0.72);
+    background-color: rgba(24, 27, 34, 0.72);
     border: none;
     border-top: none;
     border-bottom: none;
@@ -14,13 +12,13 @@
     height: 72px;
     min-height: 72px;
     margin: 0;
-    padding: 0 14px;
+    padding: 0 16px;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 #panel.kos-panel .panel-button {
-    color: #f3f4f6;
+    color: rgba(255, 255, 255, 0.92);
     background-color: transparent;
     border: none;
     box-shadow: none;
@@ -29,7 +27,7 @@
     padding: 0 12px;
     -natural-hpadding: 12px;
     -minimum-hpadding: 8px;
-    transition-duration: 120ms;
+    transition-duration: 140ms;
 }
 
 #panel.kos-panel .panel-button:hover,
@@ -42,7 +40,7 @@
 #panel.kos-panel .panel-button:active,
 #panel.kos-panel .panel-button:checked,
 #panel.kos-panel .panel-button:overview {
-    background-color: rgba(255, 255, 255, 0.18);
+    background-color: rgba(59, 130, 246, 0.30);
     box-shadow: none;
     color: #ffffff;
 }
@@ -67,7 +65,7 @@
     margin: 0;
 }
 
-/* Clean macOS-style center dock: icons sit directly on the glass bar with no box outline. */
+/* Deepin-style center dock: icons sit flat on the smoky glass bar. */
 .kos-dock {
     spacing: 10px;
     padding: 0 8px;
@@ -80,34 +78,34 @@
 
 .kos-dock-separator {
     width: 1px;
-    height: 32px;
-    margin: 0 4px;
-    background-color: rgba(255, 255, 255, 0.20);
+    height: 30px;
+    margin: 0 6px;
+    background-color: rgba(255, 255, 255, 0.16);
 }
 
 /* Pixel-exact vertical centering in the 72px bar:
- * Rest: 12px top + 42px icon + 8px dot + 4px bottom = 66px (+3px top/bot = 15px above & below icon).
- * Hover: 10px top + 46px icon + 8px dot + 2px bottom = 66px (13px above & below icon, zero shift). */
+ * Rest: 12px top + 42px icon + 8px dot + 4px bottom = 66px.
+ * Hover: 10px top + 46px icon + 8px dot + 2px bottom = 66px (zero neighbor shift). */
 .kos-dock-item {
     padding: 12px 8px 4px 8px;
     border-radius: 14px;
     border: none;
     box-shadow: none;
     background-color: transparent;
-    transition-duration: 120ms;
+    transition-duration: 140ms;
 }
 
 .kos-dock-item:hover,
 .kos-dock-item:focus {
     padding: 10px 6px 2px 6px;
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.11);
     border: none;
     box-shadow: none;
 }
 
 .kos-dock-item:active {
     padding: 12px 8px 4px 8px;
-    background-color: rgba(255, 255, 255, 0.14);
+    background-color: rgba(59, 130, 246, 0.28);
     border: none;
     box-shadow: none;
 }
@@ -119,7 +117,7 @@
 
 .kos-dock-item-icon {
     icon-size: 42px;
-    transition-duration: 120ms;
+    transition-duration: 140ms;
 }
 
 .kos-dock-item:hover .kos-dock-item-icon,
@@ -131,49 +129,50 @@
     icon-size: 42px;
 }
 
-/* Running-app indicator dot centered neatly beneath each open dock icon. */
+/* Deepin-style running indicator beneath open dock icons. */
 .kos-dock-dot {
-    width: 4px;
+    width: 6px;
     height: 4px;
     border-radius: 4px;
     background-color: transparent;
     margin-top: 4px;
-    transition-duration: 120ms;
+    transition-duration: 140ms;
 }
 
 .kos-dock-dot.running {
-    background-color: rgba(255, 255, 255, 0.82);
+    background-color: rgba(255, 255, 255, 0.78);
 }
 
 .kos-dock-item.focused .kos-dock-dot.running {
-    width: 14px;
-    background-color: #ffffff;
+    width: 16px;
+    background-color: #3b82f6;
 }
 
 /* Launchpad-style home screen. The JS positions the grid; CSS styles children. */
 .kos-desktop-grid {
 }
 
-/* Dimmer sitting over the wallpaper so icons read clearly, without a wordmark. */
+/* Subtle dimmer so Deepin2022 icons pop cleanly over any wallpaper. */
 .kos-launchpad-dim {
-    background-color: rgba(6, 10, 20, 0.38);
+    background-color: rgba(10, 12, 18, 0.30);
 }
 
-/* App icon + label. No dark tile box — the icon sits on its own, like a Mac. */
+/* App icon + label. No tile box at rest; soft Deepin squircle on hover. */
 .kos-desktop-icon {
     padding: 8px 4px;
     border-radius: 18px;
     background-color: transparent;
     border: none;
     box-shadow: none;
+    transition-duration: 140ms;
 }
 
 .kos-desktop-icon:hover {
-    background-color: rgba(255, 255, 255, 0.10);
+    background-color: rgba(255, 255, 255, 0.12);
 }
 
 .kos-desktop-icon:active {
-    background-color: rgba(59, 130, 246, 0.24);
+    background-color: rgba(59, 130, 246, 0.26);
 }
 
 .kos-desktop-icon-app {
@@ -181,7 +180,7 @@
 }
 
 .kos-desktop-icon-label {
-    color: #f8fafc;
+    color: rgba(255, 255, 255, 0.96);
     font-size: 12px;
     font-weight: 500;
     text-align: center;
@@ -198,54 +197,55 @@
     width: 8px;
     height: 8px;
     border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.32);
+    background-color: rgba(255, 255, 255, 0.30);
     border: none;
 }
 
 .kos-page-dot:hover {
-    background-color: rgba(255, 255, 255, 0.58);
+    background-color: rgba(255, 255, 255, 0.60);
 }
 
 .kos-page-dot.active {
-    background-color: rgba(255, 255, 255, 0.95);
+    width: 18px;
+    background-color: #ffffff;
 }
 
-/* Panel popovers (Date/Calendar/Notifications, Quick Settings) — clean,
- * minimal, borderless dark glass matching the bottom dock. */
+/* Panel popovers (Calendar/Notifications, Quick Settings) — Deepin dark
+ * translucent glass, clean & borderless, kos blue accents. */
 .popup-menu-boxpointer,
 .candidate-popup-boxpointer {
-    -arrow-background-color: rgba(16, 18, 24, 0.86);
+    -arrow-background-color: rgba(28, 31, 38, 0.86);
     -arrow-border-color: transparent;
     -arrow-border-width: 0;
-    -arrow-border-radius: 20px;
+    -arrow-border-radius: 18px;
     -arrow-rise: 8px;
 }
 
 .popup-menu-content {
-    background-color: rgba(16, 18, 24, 0.86);
+    background-color: rgba(28, 31, 38, 0.86);
     border: none;
-    border-radius: 20px;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.55);
-    color: #f3f4f6;
+    border-radius: 18px;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.50);
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .popup-menu-item:hover,
 .popup-menu-item:focus,
 .popup-menu-item.selected {
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.10);
     border-radius: 12px;
 }
 
 .popup-menu-item:active {
-    background-color: rgba(59, 130, 246, 0.28);
+    background-color: rgba(59, 130, 246, 0.30);
     border-radius: 12px;
 }
 
 .popup-separator-menu-item .popup-separator-menu-item-separator {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
-/* Calendar & Notifications popover — borderless minimal cards */
+/* Calendar & Notifications popover — soft Deepin surface cards */
 .datemenu-calendar-column {
     border-left: none;
 }
@@ -256,11 +256,11 @@
 .weather-button,
 .events-button,
 .message {
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: rgba(255, 255, 255, 0.06);
     border: none;
     border-radius: 14px;
     box-shadow: none;
-    color: #f3f4f6;
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .datemenu-today-button {
@@ -272,21 +272,22 @@
 .weather-button:hover,
 .events-button:hover,
 .message:hover {
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.11);
 }
 
-/* Keep calendar days clean & borderless (override generic .button rule) */
+/* Keep calendar days clean & borderless */
 .calendar .calendar-day-base,
 .calendar .calendar-month-header .pager-button {
     background-color: transparent;
     border: none;
     box-shadow: none;
+    border-radius: 99px;
 }
 
 .calendar .calendar-day-base:hover,
 .calendar .calendar-day-base:focus,
 .calendar .calendar-month-header .pager-button:hover {
-    background-color: rgba(255, 255, 255, 0.10);
+    background-color: rgba(255, 255, 255, 0.12);
 }
 
 .calendar .calendar-today,
@@ -300,21 +301,21 @@
 .message-list-clear-button.button,
 .datemenu-popover .button,
 .popup-menu-content .button {
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: rgba(255, 255, 255, 0.09);
     border: none;
     box-shadow: none;
     border-radius: 10px;
-    color: #f3f4f6;
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .message-list-clear-button.button:hover,
 .datemenu-popover .button:hover,
 .popup-menu-content .button:hover {
-    background-color: rgba(255, 255, 255, 0.13);
+    background-color: rgba(255, 255, 255, 0.15);
 }
 
 .toggle-switch {
-    background-color: rgba(255, 255, 255, 0.18);
+    background-color: rgba(255, 255, 255, 0.20);
     border: none;
 }
 
@@ -322,21 +323,22 @@
     background-color: #3b82f6;
 }
 
-/* Quick Settings toggles & sliders — clean & borderless */
+/* Quick Settings toggles & sliders — Deepin-style squircle pills */
 .quick-toggle,
 .quick-menu-toggle .quick-toggle,
 .quick-menu-toggle .quick-toggle-menu-button,
 .quick-slider .slider-bin {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: rgba(255, 255, 255, 0.08);
     border: none;
     box-shadow: none;
-    color: #f3f4f6;
+    border-radius: 14px;
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .quick-toggle:hover,
 .quick-menu-toggle .quick-toggle:hover,
 .quick-menu-toggle .quick-toggle-menu-button:hover {
-    background-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.14);
 }
 
 .quick-toggle:checked,
@@ -348,12 +350,12 @@
 }
 
 .quick-toggle-menu {
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: rgba(255, 255, 255, 0.06);
     border: none;
     border-radius: 16px;
 }
 
 .slider {
-    -barlevel-background-color: rgba(255, 255, 255, 0.16);
+    -barlevel-background-color: rgba(255, 255, 255, 0.18);
     -barlevel-active-background-color: #3b82f6;
 }

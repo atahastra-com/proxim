@@ -70,12 +70,12 @@ export class KosPanel {
         try {
             const effect = new Shell.BlurEffect({
                 mode: Shell.BlurMode.BACKGROUND,
-                brightness: 0.85,
+                brightness: 0.92,
             });
             if ('radius' in effect)
-                effect.radius = 28;
+                effect.radius = 32;
             else if ('sigma' in effect)
-                effect.sigma = 28;
+                effect.sigma = 32;
             Main.panel.add_effect(effect);
             this._blurEffect = effect;
         } catch (_e) {
