@@ -23,13 +23,14 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 export const GRID_COLS = 7;
-export const ICON_SIZE = 80;
-export const LABEL_HEIGHT = 22;
-export const CELL_HEIGHT = 118;
-export const SIDE_PAD = 48;
-export const GRID_PAD_Y = 32;
+export const ICON_SIZE = 72; // all-apps overlay only; the home grid sizes from the screen
+export const MAX_GRID_WIDTH = 1100;
+export const LABEL_GAP = 8;
 export const DOTS_HEIGHT = 24;
-export const DOTS_BOTTOM = 16;
+
+function clamp(v, lo, hi) {
+    return Math.max(lo, Math.min(hi, v));
+}
 
 export class KosDesktopGrid {
     constructor({extensionPath} = {}) {
@@ -152,19 +153,30 @@ export class KosDesktopGrid {
         this._layoutIcons();
     }
 
-    _pageMetrics(wa, appCount) {
-        // Leave room for page dots; center the used rows in the leftover band.
-        const topLimit = GRID_PAD_Y;
-        const bottomLimit = wa.h - DOTS_BOTTOM - DOTS_HEIGHT;
-        const band = Math.max(CELL_HEIGHT, bottomLimit - topLimit);
-        const rowsFit = Math.max(1, Math.floor(band / CELL_HEIGHT));
-        const perPage = GRID_COLS * rowsFit;
-        const count = appCount !== undefined ? appCount : this._apps.length;
+    // All spacing comes from the work area, so it scales with resolution.
+    // At 1280x744 (1280x800 minus the bar): 68px icons, a 1000px-wide block
+    // (~11% margin each side), 7 x 143px columns, 128px rows.
+    _metrics(wa, appCount) {
+        const iconSize = clamp(Math.round(Math.min(wa.w / 19, wa.h / 11) / 4) * 4, 48, 112);
+        const gridW = Math.min(Math.round(wa.w * 0.78), MAX_GRID_WIDTH);
+        const colW = Math.floor(gridW / GRID_COLS);
+        const labelH = Math.round(iconSize * 0.26) + LABEL_GAP;
+        // Rows a bit shorter than columns: the label fills part of the
+        // vertical gap, so icon-to-icon spacing looks even both ways.
+        const rowH = Math.max(iconSize + labelH + 20, Math.round(colW * 0.9));
+        const padY = Math.max(32, Math.round(wa.h * 0.07));
+        const band = Math.max(rowH, wa.h - 2 * padY - DOTS_HEIGHT);
+        const rows = Math.max(1, Math.floor(band / rowH));
+        const perPage = GRID_COLS * rows;
+        const count = appCount ?? this._apps.length;
         const onPage = Math.min(perPage, Math.max(0, count));
-        const usedRows = Math.max(1, Math.ceil(onPage / GRID_COLS) || 1);
-        const usedH = usedRows * CELL_HEIGHT;
-        const gridTop = topLimit + Math.max(0, Math.floor((band - usedH) / 2));
-        return {gridTop, rows: rowsFit, perPage, usedRows};
+        const usedRows = Math.max(1, Math.ceil(onPage / GRID_COLS));
+        const blockW = colW * GRID_COLS;
+        const blockH = usedRows * rowH;
+        // Center the block in the area above the bar (dots get their own strip).
+        const left = Math.round((wa.w - blockW) / 2);
+        const top = padY + Math.max(0, Math.round((band - blockH) / 2));
+        return {iconSize, colW, rowH, labelH, rows, perPage, left, top, padY};
     }
 
     _layoutIcons() {
@@ -180,44 +192,46 @@ export class KosDesktopGrid {
 
         const wa = this._workArea();
         const apps = this._apps;
-        const {gridTop, rows, perPage} = this._pageMetrics(wa, apps.length);
-        const pages = Math.max(1, Math.ceil(apps.length / perPage));
+        const m = this._metrics(wa, apps.length);
+        const pages = Math.max(1, Math.ceil(apps.length / m.perPage));
         if (this._page >= pages)
             this._page = pages - 1;
 
-        const slotW = (wa.w - 2 * SIDE_PAD) / GRID_COLS;
-        const start = this._page * perPage;
-        const pageApps = apps.slice(start, start + perPage);
+        const start = this._page * m.perPage;
+        const pageApps = apps.slice(start, start + m.perPage);
+        // The button (and its hover highlight) is a tidy tile centered in
+        // its cell, not the whole cell.
+        const tileW = Math.min(m.colW - 12, m.iconSize + 64);
+        const tileH = m.iconSize + m.labelH + 16;
 
         pageApps.forEach((app, i) => {
             const col = i % GRID_COLS;
             const row = Math.floor(i / GRID_COLS);
-            const x = Math.round(SIDE_PAD + col * slotW);
-            const y = gridTop + row * CELL_HEIGHT;
-            const icon = this._makeIcon(app, Math.round(slotW));
-            icon.set_position(x, y);
-            icon.set_size(Math.round(slotW), CELL_HEIGHT);
+            const icon = this._makeIcon(app, tileW, m.iconSize);
+            icon.set_size(tileW, tileH);
+            icon.set_position(
+                m.left + col * m.colW + Math.round((m.colW - tileW) / 2),
+                m.top + row * m.rowH + Math.round((m.rowH - tileH) / 2));
             this._actor.add_child(icon);
         });
 
-        this._layoutDots(pages, wa);
-        log(`kos-shell: launchpad ${apps.length} apps, page ${this._page + 1}/${pages}, ${rows} rows x ${GRID_COLS} cols`);
-        if (pageApps.length)
-            log(`kos-shell: first-icon center ${Math.round(wa.x + SIDE_PAD + slotW / 2)},${Math.round(wa.y + gridTop + ICON_SIZE / 2)}`);
+        this._layoutDots(pages, wa, m);
+        log(`kos-shell: launchpad ${apps.length} apps, page ${this._page + 1}/${pages}, ` +
+            `${m.rows} rows x ${GRID_COLS} cols, icon ${m.iconSize}px, cell ${m.colW}x${m.rowH}, ` +
+            `block at ${m.left},${m.top}`);
     }
 
-    _makeIcon(app, width) {
+    _makeIcon(app, tileW, iconSize) {
         const box = new St.BoxLayout({
             vertical: true,
-            x_expand: false,
-            y_expand: false,
+            x_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.START,
         });
 
-        // No tile box: icon and label are both centered in the cell.
         const gicon = new St.Icon({
             gicon: app.get_icon(),
-            icon_size: ICON_SIZE,
+            icon_size: iconSize,
             style_class: 'kos-desktop-icon-app',
             x_align: Clutter.ActorAlign.CENTER,
         });
@@ -226,14 +240,12 @@ export class KosDesktopGrid {
             style_class: 'kos-desktop-icon-label',
             x_align: Clutter.ActorAlign.CENTER,
         });
-        // St.Label x_align centers the actor; the text inside a full-width
-        // label still defaults to left, so set Pango alignment explicitly.
+        // One line, centered, "Disk Usage Ana…" for long names.
         const ct = label.clutter_text;
+        ct.line_wrap = false;
         ct.ellipsize = Pango.EllipsizeMode.END;
-        ct.line_wrap = true;
-        ct.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
         ct.line_alignment = Pango.Alignment.CENTER;
-        label.set_width(width - 8);
+        label.set_width(tileW - 8);
 
         box.add_child(gicon);
         box.add_child(label);
@@ -253,14 +265,14 @@ export class KosDesktopGrid {
         return button;
     }
 
-    _layoutDots(pages, wa) {
+    _layoutDots(pages, wa, m) {
         this._dots.destroy_all_children();
         if (pages <= 1) {
             this._dots.visible = false;
             return;
         }
         this._dots.visible = true;
-        this._dots.set_position(0, wa.h - DOTS_BOTTOM - DOTS_HEIGHT);
+        this._dots.set_position(0, wa.h - m.padY - DOTS_HEIGHT);
         this._dots.set_size(wa.w, DOTS_HEIGHT);
         for (let i = 0; i < pages; i++) {
             const dot = new St.Button({
@@ -276,7 +288,7 @@ export class KosDesktopGrid {
 
     _setPage(page) {
         const apps = this._apps;
-        const {perPage} = this._pageMetrics(this._workArea(), apps.length);
+        const {perPage} = this._metrics(this._workArea(), apps.length);
         const pages = Math.max(1, Math.ceil(apps.length / perPage));
         const next = Math.max(0, Math.min(pages - 1, page));
         if (next === this._page)
