@@ -22,3 +22,6 @@ kosinit/kosinit
 *-start.txt
 *-end.txt
 .qemu-stdin
+
+# Rust build output
+**/target/

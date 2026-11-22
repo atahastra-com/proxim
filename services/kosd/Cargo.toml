@@ -1,0 +1,12 @@
+[package]
+name = "kosd"
+version = "0.1.0"
+edition = "2021"
+description = "KOS first userspace service: a tiny status/heartbeat daemon"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+opt-level = "z"
+strip = false

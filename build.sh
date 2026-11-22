@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# KOS build: Linux kernel + static BusyBox rootfs + kosinit, bootable in QEMU.
-# Usage: ./build.sh [deps|kernel|busybox|kosinit|rootfs|boot|boot-interactive|all]
+# KOS build: Linux kernel + static BusyBox rootfs + kosinit + kosd, bootable in QEMU.
+# Usage: ./build.sh [deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|all]
 set -euo pipefail
 
 KOS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,12 +20,14 @@ INTERACTIVE_INITRD="${KOS}/initramfs-interactive.cpio.gz"
 KOSINIT_SRC="${KOS}/kosinit/kosinit.c"
 KOSINIT_BIN="${KOS}/kosinit/kosinit"
 KOSINIT_SERVICES="${KOS}/kosinit/services"
+KOSD_DIR="${KOS}/services/kosd"
+KOSD_BIN="${KOSD_DIR}/target/x86_64-unknown-linux-musl/release/kosd"
 QEMU_COMMON=(qemu-system-x86_64 -nographic -m 256M -no-reboot -append 'console=ttyS0')
 
 need_pkg() { dpkg -s "$1" >/dev/null 2>&1; }
 
 deps() {
-  local pkgs=(build-essential flex bison bc libelf-dev libssl-dev cpio qemu-system-x86 git)
+  local pkgs=(build-essential flex bison bc libelf-dev libssl-dev cpio qemu-system-x86 git musl-tools file)
   local missing=() p
   for p in "${pkgs[@]}"; do
     need_pkg "$p" || missing+=("$p")
@@ -92,6 +94,25 @@ kosinit() {
   ls -l "$KOSINIT_BIN"
 }
 
+rust() {
+  if [[ -f "${HOME}/.cargo/env" ]]; then
+    # shellcheck disable=SC1091
+    . "${HOME}/.cargo/env"
+  fi
+  if ! command -v rustc >/dev/null || ! command -v cargo >/dev/null; then
+    echo "rust: rustup/cargo not found. Install with:"
+    echo "  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal"
+    echo "  rustup target add x86_64-unknown-linux-musl"
+    exit 1
+  fi
+  test -f "${KOSD_DIR}/Cargo.toml"
+  echo "Building kosd (static musl, rustc $(rustc --version))"
+  cargo build --release --target x86_64-unknown-linux-musl --manifest-path "${KOSD_DIR}/Cargo.toml"
+  strip "$KOSD_BIN"
+  file "$KOSD_BIN"
+  ls -l "$KOSD_BIN"
+}
+
 write_inits() {
   cat > "${KOS}/init.proof.sh" << 'EOF'
 #!/bin/sh
@@ -120,6 +141,7 @@ install_kosinit_into_rootfs() {
 rootfs() {
   test -f "${BUSYBOX_DIR}/busybox"
   kosinit
+  rust
   write_inits
   rm -rf "$ROOTFS"
   mkdir -p "$ROOTFS"
@@ -137,8 +159,11 @@ EOF
   chmod 755 "$ROOTFS/init"
   (cd "$ROOTFS" && find . | cpio -o -H newc) | gzip -9 > "$PROOF_INITRD"
 
-  # Interactive / default image: kosinit is PID 1.
+  # Interactive / default image: kosinit is PID 1, kosd is a respawn service.
   install_kosinit_into_rootfs
+  mkdir -p "${ROOTFS}/usr/bin"
+  cp "$KOSD_BIN" "${ROOTFS}/usr/bin/kosd"
+  chmod 755 "${ROOTFS}/usr/bin/kosd"
   (cd "$ROOTFS" && find . | cpio -o -H newc) | gzip -9 > "$INTERACTIVE_INITRD"
 
   ls -l "$PROOF_INITRD" "$INTERACTIVE_INITRD"
@@ -161,21 +186,20 @@ boot() {
   echo "SUCCESS (qemu rc=${rc})"
 }
 
-# Drive an interactive kosinit boot: wait for log lines, then type commands.
+# Drive an interactive kosinit+kosd boot: wait for log lines, then type commands.
 # Early stdin is eaten by the kernel, so we only write after the banner appears.
 boot_interactive() {
   test -f "$BZIMAGE"
   test -f "$INTERACTIVE_INITRD"
   local log="${KOS}/serial-kosinit.log"
   local fifo="${KOS}/.qemu-stdin"
-  echo "Booting kosinit initramfs (log: ${log})"
+  echo "Booting kosinit+kosd initramfs (log: ${log})"
   rm -f "$fifo" "$log"
   mkfifo "$fifo"
   set +e
-  timeout --signal=KILL 90 "${QEMU_COMMON[@]}" -kernel "$BZIMAGE" -initrd "$INTERACTIVE_INITRD" \
+  timeout --signal=KILL 120 "${QEMU_COMMON[@]}" -kernel "$BZIMAGE" -initrd "$INTERACTIVE_INITRD" \
     <"$fifo" >"$log" 2>&1 &
   local tpid=$!
-  # Keep the write end open for the whole run (closing it would send EOF to qemu).
   exec 3>"$fifo"
 
   wait_for() {
@@ -192,24 +216,52 @@ boot_interactive() {
     return 1
   }
 
+  wait_count() {
+    local pat="$1" want="$2" secs="$3" i n
+    for i in $(seq 1 $((secs * 10))); do
+      n=$(grep -c -E "$pat" "$log" 2>/dev/null || true)
+      if [[ "${n:-0}" -ge "$want" ]]; then
+        return 0
+      fi
+      if ! kill -0 "$tpid" 2>/dev/null; then
+        return 1
+      fi
+      sleep 0.1
+    done
+    return 1
+  }
+
   fail_boot() {
     echo "FAIL: $1"
     exec 3>&- || true
     kill "$tpid" 2>/dev/null || true
     wait "$tpid" 2>/dev/null || true
-    tail -n 50 "$log"
+    tail -n 80 "$log"
     exit 1
   }
 
   wait_for 'kosinit: starting kos' 30 || fail_boot "no kosinit banner"
-  wait_for 'kosinit: starting shell|hello-from-service|starting hello' 10 || fail_boot "no service start lines"
-  sleep 3
-  printf 'echo $$\nps\n' >&3
-  wait_for 'kosinit' 10 || fail_boot "ps did not show kosinit"
+  wait_for 'kosinit: starting kosd' 10 || fail_boot "kosd was not started"
+  wait_for 'kosd: hello from rust \(pid ' 10 || fail_boot "no kosd hello"
+  wait_for 'kosd: status ' 10 || fail_boot "no kosd status"
+  wait_count 'kosd: heartbeat uptime=' 2 40 || fail_boot "did not see 2 kosd heartbeats"
   sleep 1
-  printf 'exit\n' >&3
-  wait_for 'exited \(status .*\), restarting' 15 || fail_boot "shell did not respawn"
-  sleep 3
+  printf 'ps\n' >&3
+  wait_for '/usr/bin/kosd' 10 || fail_boot "ps did not show kosd"
+
+  local kpid
+  kpid=$(sed -n 's/.*kosd: hello from rust (pid \([0-9][0-9]*\)).*/\1/p' "$log" | tr -d '\r' | head -1)
+  if [[ -z "$kpid" ]]; then
+    kpid=$(awk '/\/usr\/bin\/kosd$/ { print $1; exit }' "$log" | tr -d '\r')
+  fi
+  if [[ -z "$kpid" ]]; then
+    fail_boot "could not parse kosd pid"
+  fi
+  echo "Killing kosd pid ${kpid}"
+  printf 'kill %s\n' "$kpid" >&3
+  wait_for 'kosinit: kosd exited \(status .*\), restarting' 15 || fail_boot "kosd did not respawn"
+  wait_count 'kosd: hello from rust \(pid ' 2 15 || fail_boot "kosd did not print hello after restart"
+  sleep 1
   printf 'poweroff\n' >&3
   wait "$tpid"
   local rc=$?
@@ -218,9 +270,6 @@ boot_interactive() {
   set -e
   cp -f "$log" "${KOS}/serial-interactive.log"
 
-  if ! grep -q 'kosinit: starting kos' "$log"; then fail_boot "missing banner"; fi
-  if ! grep -q 'ok-shell\|kosinit' "$log"; then :; fi
-  if ! grep -q 'restarting' "$log"; then fail_boot "missing restart log"; fi
   if ! grep -q 'reboot: Power down' "$log"; then
     echo "FAIL: did not power down cleanly (qemu rc=${rc})"
     tail -n 40 "$log"
@@ -234,7 +283,7 @@ boot_interactive() {
   echo "SUCCESS (qemu rc=${rc})"
 }
 
-usage() { echo "Usage: $0 [deps|kernel|busybox|kosinit|rootfs|boot|boot-interactive|all]"; }
+usage() { echo "Usage: $0 [deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|all]"; }
 
 main() {
   case "${1:-all}" in
@@ -242,10 +291,11 @@ main() {
     kernel) deps; kernel ;;
     busybox) deps; busybox ;;
     kosinit) deps; kosinit ;;
+    rust) rust ;;
     rootfs) rootfs ;;
     boot) boot ;;
     boot-interactive) boot_interactive ;;
-    all) deps; kernel; busybox; kosinit; rootfs; boot; boot_interactive ;;
+    all) deps; kernel; busybox; kosinit; rust; rootfs; boot; boot_interactive ;;
     -h|--help) usage ;;
     *) usage; exit 2 ;;
   esac

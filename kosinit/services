@@ -2,4 +2,5 @@
 #   name   respawn|once   /path  [args...]
 # Lines starting with # are comments. kosinit is PID 1 and supervises these.
 hello   once      /bin/echo  hello-from-service
+kosd    respawn   /usr/bin/kosd
 shell   respawn   /bin/sh
