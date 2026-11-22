@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # KOS build: Linux kernel + static BusyBox rootfs + kosinit + kosd, bootable in QEMU.
-# Usage: ./build.sh [deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|all]
+# Usage: ./build.sh [targets...]
+#   deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|test|dev|all
+# Multiple targets run in order, e.g. ./build.sh rust rootfs boot-interactive
 set -euo pipefail
 
 KOS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,6 +24,7 @@ KOSINIT_BIN="${KOS}/kosinit/kosinit"
 KOSINIT_SERVICES="${KOS}/kosinit/services"
 KOSD_DIR="${KOS}/services/kosd"
 KOSD_BIN="${KOSD_DIR}/target/x86_64-unknown-linux-musl/release/kosd"
+BUSYBOX_STAMP="${KOS}/.busybox-rootfs-stamp"
 QEMU_COMMON=(qemu-system-x86_64 -nographic -m 256M -no-reboot -append 'console=ttyS0')
 
 need_pkg() { dpkg -s "$1" >/dev/null 2>&1; }
@@ -138,14 +141,31 @@ install_kosinit_into_rootfs() {
   cp "$KOSINIT_SERVICES" "${ROOTFS}/etc/kos/services"
 }
 
+busybox_rootfs_current() {
+  [[ -x "${ROOTFS}/bin/busybox" && -x "${BUSYBOX_DIR}/busybox" && -f "$BUSYBOX_STAMP" ]] || return 1
+  cmp -s "${BUSYBOX_DIR}/busybox" "${ROOTFS}/bin/busybox" || return 1
+  [[ ! "${BUSYBOX_DIR}/busybox" -nt "$BUSYBOX_STAMP" ]]
+}
+
+install_busybox_rootfs() {
+  if busybox_rootfs_current; then
+    echo "BusyBox already installed in rootfs, skipping reinstall"
+    return 0
+  fi
+  echo "Installing BusyBox into rootfs (log: ${KOS}/busybox-install.log)"
+  rm -rf "$ROOTFS"
+  mkdir -p "$ROOTFS"
+  make -C "$BUSYBOX_DIR" CONFIG_PREFIX="$ROOTFS" install >"${KOS}/busybox-install.log" 2>&1
+  touch "$BUSYBOX_STAMP"
+  echo "BusyBox installed into ${ROOTFS}"
+}
+
 rootfs() {
   test -f "${BUSYBOX_DIR}/busybox"
   kosinit
   rust
   write_inits
-  rm -rf "$ROOTFS"
-  mkdir -p "$ROOTFS"
-  make -C "$BUSYBOX_DIR" CONFIG_PREFIX="$ROOTFS" install
+  install_busybox_rootfs
   mkdir -p "$ROOTFS"/{proc,sys,dev,etc,tmp,root,run}
   chmod 1777 "$ROOTFS/tmp"
   cat > "$ROOTFS/etc/profile" << 'EOF'
@@ -186,14 +206,14 @@ boot() {
   echo "SUCCESS (qemu rc=${rc})"
 }
 
-# Drive an interactive kosinit+kosd boot: wait for log lines, then type commands.
-# Early stdin is eaten by the kernel, so we only write after the banner appears.
-boot_interactive() {
+# Automated kosinit+kosd proof. Early stdin is eaten by the kernel, so
+# commands are typed only after the banner appears.
+boot_test_interactive() {
   test -f "$BZIMAGE"
   test -f "$INTERACTIVE_INITRD"
   local log="${KOS}/serial-kosinit.log"
   local fifo="${KOS}/.qemu-stdin"
-  echo "Booting kosinit+kosd initramfs (log: ${log})"
+  echo "Testing kosinit+kosd initramfs (log: ${log})"
   rm -f "$fifo" "$log"
   mkfifo "$fifo"
   set +e
@@ -283,10 +303,28 @@ boot_interactive() {
   echo "SUCCESS (qemu rc=${rc})"
 }
 
-usage() { echo "Usage: $0 [deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|all]"; }
+run_tests() {
+  boot
+  boot_test_interactive
+}
 
-main() {
-  case "${1:-all}" in
+# Real interactive boot: qemu is attached to this terminal.
+# Exit with `poweroff` at the kos shell, or Ctrl-A then X.
+boot_interactive() {
+  test -f "$BZIMAGE"
+  test -f "$INTERACTIVE_INITRD"
+  echo "Booting KOS (exit with poweroff, or Ctrl-A then X)"
+  exec qemu-system-x86_64 -nographic -m 256M -no-reboot \
+    -append 'console=ttyS0' \
+    -kernel "$BZIMAGE" -initrd "$INTERACTIVE_INITRD"
+}
+
+usage() {
+  echo "Usage: $0 [deps|kernel|busybox|kosinit|rust|rootfs|boot|boot-interactive|test|dev|all]..."
+}
+
+run_target() {
+  case "$1" in
     deps) deps ;;
     kernel) deps; kernel ;;
     busybox) deps; busybox ;;
@@ -295,10 +333,22 @@ main() {
     rootfs) rootfs ;;
     boot) boot ;;
     boot-interactive) boot_interactive ;;
-    all) deps; kernel; busybox; kosinit; rust; rootfs; boot; boot_interactive ;;
-    -h|--help) usage ;;
+    test) run_tests ;;
+    dev) kosinit; rust; rootfs; boot_interactive ;;
+    all) deps; kernel; busybox; kosinit; rust; rootfs; run_tests ;;
+    -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
   esac
+}
+
+main() {
+  if (($# == 0)); then
+    set -- all
+  fi
+  local t
+  for t in "$@"; do
+    run_target "$t"
+  done
 }
 
 main "$@"

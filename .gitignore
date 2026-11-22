@@ -25,3 +25,6 @@ kosinit/kosinit
 
 # Rust build output
 **/target/
+
+# Rootfs install stamp
+.busybox-rootfs-stamp
