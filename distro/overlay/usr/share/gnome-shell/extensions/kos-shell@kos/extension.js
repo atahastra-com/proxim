@@ -37,11 +37,23 @@ export default class KosShellExtension extends Extension {
         this._dock.enable();
         this._grid.enable();
 
-        // GNOME 44+ shows the Activities overview at login. Hide it once
-        // the shell has finished starting so we land on the home screen.
+        // GNOME 44+ plays a login animation that opens the Activities
+        // overview. Do NOT hide the overview in the middle of that animation:
+        // its "done" callback never fires, so the shell never leaves startup
+        // mode and its full-screen startup cover (a reactive actor on top of
+        // everything) keeps eating every mouse click while keys still work.
+        // Instead, tell the shell there is no overview while starting up, so
+        // it runs the plain fade-in, then restore the flag.
         if (Main.layoutManager._startingUp) {
+            this._savedHasOverview = Main.sessionMode.hasOverview;
+            Main.sessionMode.hasOverview = false;
             this._startupId = Main.layoutManager.connect('startup-complete', () => {
-                this._hideOverview();
+                this._restoreHasOverview();
+                Main.layoutManager.disconnect(this._startupId);
+                this._startupId = 0;
+                // If the shell started its overview animation before we were
+                // enabled, it has finished now and is safe to close.
+                GLibIdleHide(() => this._hideOverview());
             });
         } else {
             this._hideOverview();
@@ -53,6 +65,7 @@ export default class KosShellExtension extends Extension {
             Main.layoutManager.disconnect(this._startupId);
             this._startupId = 0;
         }
+        this._restoreHasOverview();
         for (const id of this._overviewIds)
             Main.overview.disconnect(id);
         this._overviewIds = [];
@@ -71,6 +84,13 @@ export default class KosShellExtension extends Extension {
         this._settingsHandles = [];
     }
 
+    _restoreHasOverview() {
+        if (this._savedHasOverview !== undefined) {
+            Main.sessionMode.hasOverview = this._savedHasOverview;
+            this._savedHasOverview = undefined;
+        }
+    }
+
     _hideOverview() {
         try {
             if (Main.overview.visible)
@@ -86,6 +106,9 @@ export default class KosShellExtension extends Extension {
         const onShowing = Main.overview.connect('showing', () => {
             // Let our own "all apps" overlay be the only full-screen sheet.
             if (this._allApps && this._allApps._actor)
+                return;
+            // Never cut the login animation short (see enable()).
+            if (Main.layoutManager._startingUp)
                 return;
             GLibIdleHide(() => this._hideOverview());
         });
