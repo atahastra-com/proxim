@@ -1,0 +1,20 @@
+#!/bin/bash
+# Mount the host kosdev share (virtiofs or 9p) and bind-mount it over the
+# installed kos-shell@kos extension directory for ./build.sh distro-dev.
+set -euo pipefail
+
+MNT=/mnt/kosdev
+EXT=/usr/share/gnome-shell/extensions/kos-shell@kos
+
+mkdir -p "$MNT"
+
+if ! mountpoint -q "$MNT"; then
+  # Try virtiofs first (if started with KOS_DISTRO_USE_VIRTIOFS=1), then 9p.
+  if ! mount -t virtiofs kosdev "$MNT" 2>/dev/null; then
+    mount -t 9p -o trans=virtio,version=9p2000.L,msize=262144 kosdev "$MNT" 2>/dev/null || exit 0
+  fi
+fi
+
+if [[ -f "${MNT}/metadata.json" ]] && ! mountpoint -q "$EXT"; then
+  mount --bind "$MNT" "$EXT"
+fi

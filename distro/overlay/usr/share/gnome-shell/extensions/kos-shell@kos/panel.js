@@ -127,6 +127,6 @@ export class KosPanel {
         if (!box || !monitor)
             return;
         box.set_position(monitor.x, monitor.y);
-        box.set_size(monitor.width, box.height);
+        box.set_size(monitor.width, -1);
     }
 }

@@ -35,6 +35,7 @@ struct service {
 	char *argv[MAX_ARGS];
 	char argbuf[256];         /* backing store for argv strings */
 	pid_t pid;                /* 0 = not running */
+	int ran;                  /* 1 once started (prevents ONCE re-run) */
 	time_t restart_after;     /* respawn backoff deadline */
 };
 
@@ -96,10 +97,17 @@ static int parse_services(const char *path)
 		int argc = 0;
 
 		lineno++;
+		if ((nl = strchr(p, '\n'))) {
+			*nl = '\0';
+		} else {
+			/* Discard the remainder of an oversized line. */
+			int ch;
+			while ((ch = fgetc(fp)) != '\n' && ch != EOF)
+				;
+		}
 		while (*p == ' ' || *p == '\t')
 			p++;
-		if (*p == '\0' || *p == '\n' || *p == '#') continue;
-		if ((nl = strchr(p, '\n'))) *nl = '\0';
+		if (*p == '\0' || *p == '#') continue;
 		if (nservices >= MAX_SERVICES) {
 			logmsg("kosinit: too many services, ignoring line %d", lineno);
 			break;
@@ -190,6 +198,7 @@ static void start_service(struct service *s)
 		_exit(127);
 	}
 	s->pid = pid;
+	s->ran = 1;
 }
 
 static void handle_exit(pid_t pid, int st)
@@ -202,7 +211,6 @@ static void handle_exit(pid_t pid, int st)
 		struct service *s = &services[i];
 		if (s->pid != pid) continue;
 		s->pid = 0;
-		s->restart_after = time(NULL); /* marks ONCE as consumed */
 		if (s->mode == RESPAWN && !want_poweroff && !want_reboot) {
 			logmsg("kosinit: %s exited (status %d), restarting", s->name, status);
 			s->restart_after = time(NULL) + BACKOFF_SEC;
@@ -221,7 +229,7 @@ static void start_due_services(void)
 	for (i = 0; i < nservices; i++) {
 		struct service *s = &services[i];
 		if (s->pid != 0) continue;
-		if (s->mode == ONCE && s->restart_after) continue; /* already ran */
+		if (s->mode == ONCE && s->ran) continue; /* already ran */
 		if (!s->restart_after || now >= s->restart_after)
 			start_service(s);
 	}
@@ -229,12 +237,15 @@ static void start_due_services(void)
 
 static void shutdown_now(int rb_cmd, const char *why)
 {
+	struct timespec req = {1, 0}, rem;
+
 	logmsg("kosinit: %s", why);
 	signal(SIGTERM, SIG_IGN);
 	signal(SIGUSR2, SIG_IGN);
 	signal(SIGINT, SIG_IGN);
 	kill(-1, SIGTERM);
-	sleep(1);
+	while (nanosleep(&req, &rem) < 0 && errno == EINTR)
+		req = rem;
 	kill(-1, SIGKILL);
 	while (waitpid(-1, NULL, WNOHANG) > 0)
 		;

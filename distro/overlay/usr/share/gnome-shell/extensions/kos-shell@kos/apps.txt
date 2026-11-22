@@ -1,7 +1,6 @@
 # Curated home-screen apps (one .desktop id per line).
-# If this file is empty or missing, kos shows every visible installed app.
-# Think of this as a homepage shortcut list, not a launch-denylist:
-# apps not listed still appear under the dock's "all apps" button.
+# Leave this file empty (or remove it) to show every visible installed app
+# across Launchpad pages. Edits hot-reload automatically in ./build.sh distro-dev.
 firefox-esr.desktop
 org.gnome.Nautilus.desktop
 org.gnome.Terminal.desktop

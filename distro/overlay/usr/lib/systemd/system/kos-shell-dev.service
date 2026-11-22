@@ -1,14 +1,14 @@
 [Unit]
 Description=Bind-mount the host kos-shell extension over the installed copy
-After=mnt-kosdev.mount
-Requires=mnt-kosdev.mount
-ConditionPathExists=/mnt/kosdev/metadata.json
+After=systemd-modules-load.service mnt-kosdev.mount
+Wants=mnt-kosdev.mount
+Before=display-manager.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-ExecStart=/bin/mount --bind /mnt/kosdev /usr/share/gnome-shell/extensions/kos-shell@kos
-ExecStop=/bin/umount /usr/share/gnome-shell/extensions/kos-shell@kos
+ExecStart=/usr/libexec/kos-mount-dev
+ExecStop=-/bin/umount /usr/share/gnome-shell/extensions/kos-shell@kos
 
 [Install]
 WantedBy=multi-user.target

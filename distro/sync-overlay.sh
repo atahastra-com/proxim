@@ -40,13 +40,15 @@ fi
 "${SUDO[@]}" mkdir -p "$MNT/usr/share/glib-2.0/schemas"
 "${SUDO[@]}" cp "${CFG}/kos.gschema.override" "$MNT/usr/share/glib-2.0/schemas/90-kos.gschema.override"
 
-# Permissions on the extension should be world-readable
+# Permissions on the extension and helper scripts should be consistent
 if [[ -d "$MNT/usr/share/gnome-shell/extensions/kos-shell@kos" ]]; then
   "${SUDO[@]}" chmod -R a+rX "$MNT/usr/share/gnome-shell/extensions/kos-shell@kos"
-  if [[ -f "$MNT/usr/libexec/kos-shell-reload" ]]; then
-    "${SUDO[@]}" chmod 755 "$MNT/usr/libexec/kos-shell-reload"
-  fi
 fi
+for bin in kos-shell-reload kos-mount-dev kos-tune; do
+  if [[ -f "$MNT/usr/libexec/${bin}" ]]; then
+    "${SUDO[@]}" chmod 755 "$MNT/usr/libexec/${bin}"
+  fi
+done
 
 # rsync -a src/ dest/ updates dest's own metadata; force the guest root back to root.
 "${SUDO[@]}" chown root:root "$MNT"

@@ -58,13 +58,13 @@ The desktop chrome is a GNOME Shell 48 extension written in ESM JavaScript
   — moves the bar to the bottom and puts date and time on the left.
     The stock system status cluster stays on the right.
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/dock.js`
-  — the centre dock (pinned apps + All apps).
+  — the centre dock (pinned favorites + running apps with focus/minimize toggle).
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/desktopGrid.js`
   — the Launchpad-style 7-column icon grid and page dots.
 - `overlay/usr/share/gnome-shell/extensions/kos-shell@kos/apps.txt`
   — the home-screen app list (one `.desktop` id per line). Leave it
-  empty to show every visible installed app. The All apps button always
-  lists everything.
+  empty to show every visible installed app across pages. Edits hot-reload
+  automatically in `distro-dev`.
 
 System defaults (workspaces, enabled-extensions, clock, wallpaper) live
 in `config/dconf-kos-shell.ini` and `config/kos.gschema.override`.
@@ -94,9 +94,10 @@ always appears after the reload (the search-field accent change in
 JavaScript changes (especially to imports or top-level module state) are
 cached by GJS and need a log out/in, or a VM reboot, to take effect.
 
-The share uses virtiofs when `virtiofsd` starts cleanly, otherwise 9p
-(`-virtfs local,...,mount_tag=kosdev`). Ordinary `./build.sh distro-run`
-does not attach the share; the installed copy of the extension is used.
+The share defaults to 9p (`-virtfs local,...,mount_tag=kosdev`), which needs
+no host helper daemon. Set `KOS_DISTRO_USE_VIRTIOFS=1` to use `virtiofsd`
+instead. Ordinary `./build.sh distro-run` does not attach the share; the
+installed copy of the extension is used.
 
 Proof screenshots from a headless KVM boot live at the repo root:
 `kos-ui.png` (Launchpad home screen), `kos-ui-window.png` (Files opened

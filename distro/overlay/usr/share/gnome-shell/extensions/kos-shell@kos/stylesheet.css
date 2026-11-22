@@ -6,24 +6,58 @@
 /* The top bar, after we move it to position:fixed; bottom:0; width:100%. */
 #panel.kos-panel {
     background-color: rgba(11, 16, 32, 0.88);
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.35);
+    border-top: 1px solid rgba(255, 255, 255, 0.10);
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.38);
     /* Slightly taller than stock so the dock icons and clock breathe. */
     height: 56px;
+    padding: 0 10px;
     font-weight: 600;
 }
 
 #panel.kos-panel .panel-button {
     color: #eef2ff;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 12px;
+    margin: 8px 4px;
+    padding: 0 12px;
+    -natural-hpadding: 12px;
+    -minimum-hpadding: 8px;
 }
 
 #panel.kos-panel .panel-button:hover,
-#panel.kos-panel .panel-button:active {
+#panel.kos-panel .panel-button:focus {
     background-color: rgba(59, 130, 246, 0.22);
+    box-shadow: none;
     color: #ffffff;
 }
 
-/* Pinned-app icons sit directly on the full-width bar — no pill behind them. */
+#panel.kos-panel .panel-button:active,
+#panel.kos-panel .panel-button:checked,
+#panel.kos-panel .panel-button:overview {
+    background-color: rgba(59, 130, 246, 0.34);
+    box-shadow: none;
+    color: #ffffff;
+}
+
+/* Strip GNOME 48's built-in inner clock pill so hovering the date/time
+ * shows a single clean highlight instead of a pill nested inside a box. */
+#panel.kos-panel .panel-button.clock-display .clock,
+#panel.kos-panel .panel-button.clock-display:hover .clock,
+#panel.kos-panel .panel-button.clock-display:active .clock,
+#panel.kos-panel .panel-button.clock-display:checked .clock,
+#panel.kos-panel .panel-button.clock-display:focus .clock,
+#panel.kos-panel .panel-button.clock-display .clock-display-box {
+    background-color: transparent;
+    box-shadow: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    margin: 0;
+}
+
+/* Pinned & running app icons sit directly on the full-width bar — no pill behind them. */
 .kos-dock {
     spacing: 4px;
     padding: 0 6px;
@@ -34,14 +68,31 @@
     box-shadow: none;
 }
 
+.kos-dock-separator {
+    width: 1px;
+    height: 24px;
+    margin: 0 6px;
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
 .kos-dock-item {
-    padding: 4px 6px;
+    padding: 4px 7px;
     border-radius: 12px;
+    border: 1px solid transparent;
 }
 
 .kos-dock-item:hover,
 .kos-dock-item:focus {
-    background-color: rgba(59, 130, 246, 0.28);
+    background-color: rgba(59, 130, 246, 0.24);
+}
+
+.kos-dock-item:active {
+    background-color: rgba(59, 130, 246, 0.38);
+}
+
+.kos-dock-item.focused {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .kos-dock-item-icon {
@@ -61,6 +112,11 @@
     background-color: #3b82f6;
 }
 
+.kos-dock-item.focused .kos-dock-dot.running {
+    width: 12px;
+    background-color: #60a5fa;
+}
+
 /* Launchpad-style home screen. The JS positions the grid; CSS styles children. */
 .kos-desktop-grid {
 }
@@ -75,10 +131,16 @@
     padding: 6px 4px 2px 4px;
     border-radius: 16px;
     background-color: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 .kos-desktop-icon:hover {
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+.kos-desktop-icon:active {
+    background-color: rgba(59, 130, 246, 0.24);
 }
 
 .kos-desktop-icon-app {
@@ -104,32 +166,13 @@
     height: 8px;
     border-radius: 8px;
     background-color: rgba(255, 255, 255, 0.32);
+    border: none;
 }
 
 .kos-page-dot:hover {
-    background-color: rgba(255, 255, 255, 0.55);
+    background-color: rgba(255, 255, 255, 0.58);
 }
 
 .kos-page-dot.active {
     background-color: rgba(255, 255, 255, 0.95);
-}
-
-/* "All apps" overlay — a dimmed full-screen sheet, like a simple modal. */
-.kos-all-apps-overlay {
-    background-color: rgba(7, 10, 20, 0.72);
-}
-
-.kos-all-apps-panel {
-    padding: 28px 32px 40px 32px;
-    border-radius: 24px;
-    background-color: rgba(15, 20, 36, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
-}
-
-.kos-all-apps-title {
-    color: #eef2ff;
-    font-size: 18px;
-    font-weight: 700;
-    padding-bottom: 16px;
 }

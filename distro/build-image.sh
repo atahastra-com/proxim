@@ -82,15 +82,20 @@ packages_list() {
 
 generate_art() {
   local wall="${OUT}/kos-wallpaper.png"
+  local overlay_wall="${DISTRO}/overlay/usr/share/backgrounds/kos/kos-wallpaper.png"
   local logo="${OUT}/kos-logo.png"
   local splash="${OUT}/kos-splash-bg.png"
-  echo "Generating kos wallpaper and splash art"
-  # Desktop wallpaper is a clean dim gradient — no giant logo, so Launchpad-style
-  # icons sit on a dark field instead of over a wordmark.
-  "${IM[@]}" -size 1920x1080 gradient:'#070b14-#1a2744' \
-    \( -size 1920x1080 radial-gradient:'rgba(0,0,0,0)-rgba(0,0,0,0.45)' \) \
-    -compose multiply -composite \
-    "$wall"
+  echo "Generating kos splash art"
+  if [[ -f "$overlay_wall" ]]; then
+    cp "$overlay_wall" "$wall"
+  else
+    # Desktop wallpaper is a clean dim gradient — no giant logo, so Launchpad-style
+    # icons sit on a dark field instead of over a wordmark.
+    "${IM[@]}" -size 1920x1080 gradient:'#070b14-#1a2744' \
+      \( -size 1920x1080 radial-gradient:'rgba(0,0,0,0)-rgba(0,0,0,0.45)' \) \
+      -compose multiply -composite \
+      "$wall"
+  fi
   "${IM[@]}" -size 1280x800 gradient:'#0b1020-#1a2744' "$splash"
   "${IM[@]}" -size 640x240 xc:none \
     -gravity center -fill '#eef2ff' -font DejaVu-Sans-Bold -pointsize 120 -annotate +0+0 'kos' \
@@ -170,8 +175,10 @@ install_overlays() {
   "${SUDO[@]}" cp "${CFG}/grub.default" "$MNT/etc/default/grub"
   "${SUDO[@]}" mkdir -p "$MNT/etc/gdm3"
   # Debian reads daemon.conf; Ubuntu-style custom.conf is kept in sync.
-  "${SUDO[@]}" cp "${CFG}/gdm-custom.conf" "$MNT/etc/gdm3/daemon.conf"
-  "${SUDO[@]}" cp "${CFG}/gdm-custom.conf" "$MNT/etc/gdm3/custom.conf"
+  # Template KOS_USER so overriding KOS_USER=... keeps autologin working.
+  sed -e "s/^AutomaticLogin=.*/AutomaticLogin=${KOS_USER}/" \
+      -e "s/^TimedLogin=.*/TimedLogin=${KOS_USER}/" \
+      "${CFG}/gdm-custom.conf" | "${SUDO[@]}" tee "$MNT/etc/gdm3/daemon.conf" "$MNT/etc/gdm3/custom.conf" >/dev/null
 
   "${SUDO[@]}" mkdir -p "$MNT/etc/dconf/profile" "$MNT/etc/dconf/db/gdm.d"
   "${SUDO[@]}" cp "${CFG}/gdm-dconf-profile" "$MNT/etc/dconf/profile/gdm"
@@ -253,6 +260,9 @@ MOD
 
     systemctl enable gdm3 || systemctl enable gdm || true
     systemctl enable NetworkManager || true
+    systemctl enable mnt-kosdev.mount || true
+    systemctl enable kos-shell-dev.service || true
+    systemctl --global enable kos-shell-reload.service || true
     systemctl enable kos-tune.service || true
     /usr/libexec/kos-tune || true
     systemctl set-default graphical.target

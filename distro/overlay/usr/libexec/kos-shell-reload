@@ -1,12 +1,12 @@
 #!/bin/bash
 # Watch the kos-shell extension directory and reload it in the running
 # GNOME session. This is the guest half of ./build.sh distro-dev:
-# the host directory is bind-mounted here, so saving a CSS/JS file on the
-# host should refresh the extension in about a second.
+# the host directory is bind-mounted here, so saving a CSS/JS/apps.txt
+# file on the host refreshes the extension in ~0.5-1s.
 #
-# 9p shares often do not fire inotify events, so we always poll file
-# mtimes as well. If inotify-tools is installed, we also reload on
-# inotify so a local (non-9p) edit is picked up immediately.
+# 9p shares often do not fire inotify events, so we poll file metadata
+# in a single serialized loop (and optionally nudge it via inotifywait
+# without ever running two concurrent disable/enable calls).
 set -u
 DIR=/usr/share/gnome-shell/extensions/kos-shell@kos
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
@@ -18,31 +18,47 @@ for _ in $(seq 1 60); do
 done
 
 reload() {
-  echo "kos-shell-reload: reloading kos-shell@kos"
+  echo "kos-shell-reload: [$(date +%H:%M:%S)] reloading kos-shell@kos"
   gnome-extensions disable kos-shell@kos >/dev/null 2>&1 || true
   gnome-extensions enable kos-shell@kos >/dev/null 2>&1 || true
 }
 
 hash_dir() {
-  # Path + mtime + size; cheap and works on 9p.
-  find "$DIR" -type f \( -name '*.css' -o -name '*.js' -o -name '*.json' \) -printf '%P %T@ %s\n' 2>/dev/null | sort | md5sum
+  # Path + mtime + size; cheap and works reliably on 9p and virtiofs.
+  find "$DIR" -type f \( -name '*.css' -o -name '*.js' -o -name '*.json' -o -name 'apps.txt' \) \
+    -printf '%P %T@ %s\n' 2>/dev/null | sort | md5sum
 }
 
-# Optional fast path.
+TRIGGER="${XDG_RUNTIME_DIR}/kos-shell-reload.trigger"
+rm -f "$TRIGGER"
+
+INOTIFY_PID=""
+cleanup() {
+  [[ -n "$INOTIFY_PID" ]] && kill "$INOTIFY_PID" 2>/dev/null || true
+  rm -f "$TRIGGER"
+}
+trap cleanup EXIT
+
+# Optional fast nudge for local or virtiofs edits; the main loop owns all reloads.
 if command -v inotifywait >/dev/null; then
-  inotifywait -m -q -e modify,close_write,create,delete,move,attrib --exclude '\.git' -r "$DIR" 2>/dev/null |
-  while read -r _; do
-    sleep 0.4
-    reload
-  done &
+  (
+    inotifywait -m -q -e modify,close_write,create,delete,move,attrib --exclude '\.git' -r "$DIR" 2>/dev/null |
+    while read -r _; do
+      : > "$TRIGGER"
+    done
+  ) &
+  INOTIFY_PID=$!
 fi
 
 prev=$(hash_dir)
 while true; do
-  sleep 1
+  sleep 0.5
   cur=$(hash_dir)
-  if [[ "$cur" != "$prev" ]]; then
-    prev=$cur
+  if [[ "$cur" != "$prev" || -f "$TRIGGER" ]]; then
+    rm -f "$TRIGGER"
+    # Brief settle window so rapid multi-file saves trigger one clean reload.
+    sleep 0.2
+    prev=$(hash_dir)
     reload
   fi
 done

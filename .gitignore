@@ -12,9 +12,10 @@ initramfs/
 *.sha256
 *.cpio.gz
 
-# Built binaries
+# Built binaries and generated scripts
 kosinit/kosinit
 /init
+/init.proof.sh
 *.o
 
 # Logs, fifos, timing crumbs
