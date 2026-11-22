@@ -85,10 +85,11 @@ generate_art() {
   local logo="${OUT}/kos-logo.png"
   local splash="${OUT}/kos-splash-bg.png"
   echo "Generating kos wallpaper and splash art"
-  "${IM[@]}" -size 1920x1080 gradient:'#0b1020-#1a2744' \
-    -gravity center \
-    -fill '#eef2ff' -font DejaVu-Sans-Bold -pointsize 140 -annotate +0-40 'kos' \
-    -fill '#8b93a7' -font DejaVu-Sans -pointsize 36 -annotate +0+70 '0.1' \
+  # Desktop wallpaper is a clean dim gradient — no giant logo, so Launchpad-style
+  # icons sit on a dark field instead of over a wordmark.
+  "${IM[@]}" -size 1920x1080 gradient:'#070b14-#1a2744' \
+    \( -size 1920x1080 radial-gradient:'rgba(0,0,0,0)-rgba(0,0,0,0.45)' \) \
+    -compose multiply -composite \
     "$wall"
   "${IM[@]}" -size 1280x800 gradient:'#0b1020-#1a2744' "$splash"
   "${IM[@]}" -size 640x240 xc:none \
@@ -190,6 +191,9 @@ install_overlays() {
   "${SUDO[@]}" cp "${CFG}/kos.script" "$MNT/usr/share/plymouth/themes/kos/kos.script"
   "${SUDO[@]}" cp "${OUT}/kos-splash-bg.png" "$MNT/usr/share/plymouth/themes/kos/background.png"
   "${SUDO[@]}" cp "${OUT}/kos-logo.png" "$MNT/usr/share/plymouth/themes/kos/logo.png"
+
+  # Extension, dconf defaults, and schema overrides (shared with distro-update).
+  "${DISTRO}/sync-overlay.sh" "$MNT"
 }
 
 configure_system() {

@@ -1,0 +1,13 @@
+[Unit]
+Description=Reload kos-shell when its files change (distro-dev loop)
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/kos-shell-reload
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=gnome-session.target

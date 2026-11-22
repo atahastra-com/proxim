@@ -1,0 +1,165 @@
+/* kos-shell styles. This file is regular CSS, same idea as a website's stylesheet.
+ * GNOME Shell uses St (a CSS-styled Clutter toolkit), so most properties you know
+ * work: background-color, border-radius, padding, box-shadow, color, font-size.
+ * The accent is kos blue, close to Tailwind's blue-500. */
+
+/* The top bar, after we move it to position:fixed; bottom:0; width:100%. */
+#panel.kos-panel {
+    background-color: rgba(11, 16, 32, 0.88);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.35);
+    /* Slightly taller than stock so the dock icons and clock breathe. */
+    height: 56px;
+    font-weight: 600;
+}
+
+#panel.kos-panel .panel-button {
+    color: #eef2ff;
+}
+
+#panel.kos-panel .panel-button:hover,
+#panel.kos-panel .panel-button:active {
+    background-color: rgba(59, 130, 246, 0.22);
+    color: #ffffff;
+}
+
+/* Pinned-app "dock" in the middle of the bar — like a macOS Dock pill. */
+.kos-dock {
+    spacing: 4px;
+    padding: 4px 10px;
+    margin: 4px 0;
+    background-color: rgba(20, 28, 48, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 18px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+}
+
+.kos-dock-item {
+    padding: 4px 6px;
+    border-radius: 12px;
+}
+
+.kos-dock-item:hover,
+.kos-dock-item:focus {
+    background-color: rgba(59, 130, 246, 0.28);
+}
+
+.kos-dock-item-icon {
+    icon-size: 28px;
+}
+
+/* Running-app indicator (the little dot under a dock icon). */
+.kos-dock-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 5px;
+    background-color: transparent;
+    margin-top: 2px;
+}
+
+.kos-dock-dot.running {
+    background-color: #3b82f6;
+}
+
+/* Launchpad-style home screen. The JS positions the grid; CSS styles children. */
+.kos-desktop-grid {
+}
+
+/* Dimmer sitting over the wallpaper so icons read clearly, without a wordmark. */
+.kos-launchpad-dim {
+    background-color: rgba(6, 10, 20, 0.38);
+}
+
+/* Small rounded search field, centered at the top — like macOS Launchpad. */
+.kos-search {
+    width: 240px;
+    height: 28px;
+    padding: 2px 14px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    color: #f8fafc;
+    font-size: 13px;
+    font-weight: 500;
+    caret-color: #eef2ff;
+    selected-color: #0b1020;
+    selection-background-color: rgba(59, 130, 246, 0.85);
+}
+
+.kos-search:focus,
+.kos-search:hover {
+    background-color: rgba(255, 255, 255, 0.26);
+    border-color: rgba(255, 255, 255, 0.28);
+}
+
+.kos-search StLabel,
+.kos-search StEntry {
+    color: #f8fafc;
+}
+
+.kos-search-hint {
+    color: rgba(255, 255, 255, 0.62);
+}
+
+/* App icon + label. No dark tile box — the icon sits on its own, like a Mac. */
+.kos-desktop-icon {
+    padding: 6px 4px 2px 4px;
+    border-radius: 16px;
+    background-color: transparent;
+}
+
+.kos-desktop-icon:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.kos-desktop-icon-app {
+    icon-size: 80px;
+}
+
+.kos-desktop-icon-label {
+    color: #f8fafc;
+    font-size: 12px;
+    font-weight: 500;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+    padding-top: 8px;
+}
+
+/* Page indicators under the grid, shown only when apps overflow one page. */
+.kos-page-dots {
+    spacing: 10px;
+}
+
+.kos-page-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.32);
+}
+
+.kos-page-dot:hover {
+    background-color: rgba(255, 255, 255, 0.55);
+}
+
+.kos-page-dot.active {
+    background-color: rgba(255, 255, 255, 0.95);
+}
+
+/* "All apps" overlay — a dimmed full-screen sheet, like a simple modal. */
+.kos-all-apps-overlay {
+    background-color: rgba(7, 10, 20, 0.72);
+}
+
+.kos-all-apps-panel {
+    padding: 28px 32px 40px 32px;
+    border-radius: 24px;
+    background-color: rgba(15, 20, 36, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+}
+
+.kos-all-apps-title {
+    color: #eef2ff;
+    font-size: 18px;
+    font-weight: 700;
+    padding-bottom: 16px;
+}

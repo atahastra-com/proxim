@@ -1,0 +1,23 @@
+# Curated home-screen apps (one .desktop id per line).
+# If this file is empty or missing, kos shows every visible installed app.
+# Think of this as a homepage shortcut list, not a launch-denylist:
+# apps not listed still appear under the dock's "all apps" button.
+firefox-esr.desktop
+org.gnome.Nautilus.desktop
+org.gnome.Terminal.desktop
+org.gnome.Settings.desktop
+org.gnome.TextEditor.desktop
+org.gnome.Calculator.desktop
+org.gnome.Calendar.desktop
+org.gnome.clocks.desktop
+org.gnome.Weather.desktop
+org.gnome.Snapshot.desktop
+org.gnome.Loupe.desktop
+org.gnome.SystemMonitor.desktop
+org.gnome.Characters.desktop
+org.gnome.font-viewer.desktop
+org.gnome.baobab.desktop
+org.gnome.Evince.desktop
+org.gnome.Totem.desktop
+org.gnome.Papers.desktop
+yelp.desktop

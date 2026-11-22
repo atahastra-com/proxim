@@ -1,0 +1,16 @@
+[Unit]
+Description=kos-shell host share (9p/virtiofs from ./build.sh distro-dev)
+DefaultDependencies=no
+After=systemd-modules-load.service
+# If QEMU wasn't started with the share, just time out and leave the path empty.
+StartLimitIntervalSec=0
+
+[Mount]
+What=kosdev
+Where=/mnt/kosdev
+Type=9p
+Options=trans=virtio,version=9p2000.L,msize=262144,_netdev,nofail
+TimeoutSec=4
+
+[Install]
+WantedBy=multi-user.target
