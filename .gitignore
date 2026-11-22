@@ -30,9 +30,10 @@ kosinit/kosinit
 # Rootfs install stamp
 .busybox-rootfs-stamp
 
-# Debian kos distro build output
+# Debian kos distro build output & third-party icon theme
 distro/out/
 distro/mnt/
+distro/overlay/usr/share/icons/Deepin2022/
 
 # Local proof screenshots of the distro desktop
 /distro-shot.png
