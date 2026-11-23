@@ -287,7 +287,7 @@
     -arrow-border-color: transparent;
     -arrow-border-width: 0;
     -arrow-border-radius: 18px;
-    -arrow-rise: 8px;
+    -arrow-rise: 18px;
 }
 
 .popup-menu-content {
@@ -465,7 +465,7 @@
  * ============================================================================ */
 .kos-cc-boxpointer {
     -arrow-background-color: transparent;
-    -arrow-rise: 10px;
+    -arrow-rise: 18px;
 }
 
 .quick-settings.kos-cc {
