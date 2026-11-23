@@ -368,12 +368,7 @@ export class KosDesktopGrid {
             y_align: Clutter.ActorAlign.START,
         });
 
-        const gicon = new St.Icon({
-            gicon: app.get_icon(),
-            icon_size: iconSize,
-            style_class: 'kos-desktop-icon-app',
-            x_align: Clutter.ActorAlign.CENTER,
-        });
+        const gicon = appIcon(item.id, iconSize, 'kos-desktop-icon-app');
         const label = new St.Label({
             text: app.get_name(),
             style_class: 'kos-desktop-icon-label',
@@ -937,18 +932,17 @@ export function listHomeApps(extensionPath) {
             apps.push(app);
         }
     }
-    if (apps.length >= 8)
-        return apps;
+    // After the curated order, append every other visible installed app
+    // so later apt/flatpak installs show up on the launchpad with the
+    // same squircle (apps.txt empty still means "all apps").
     for (const id of listDesktopFiles()) {
         if (seen.has(id))
             continue;
         const app = loadApp(id);
-        if (app) {
-            seen.add(id);
+        if (app && !seen.has(app.get_id())) {
+            seen.add(app.get_id());
             apps.push(app);
         }
-        if (apps.length >= 28)
-            break;
     }
     return apps;
 }
@@ -1044,12 +1038,7 @@ class KosAllAppsOverlay extends St.Widget {
                 style_class: 'kos-desktop-icon',
                 width: 140,
             });
-            box.add_child(new St.Icon({
-                gicon: app.get_icon(),
-                icon_size: ICON_SIZE,
-                style_class: 'kos-desktop-icon-app',
-                x_align: Clutter.ActorAlign.CENTER,
-            }));
+            box.add_child(appIcon(app.get_id(), ICON_SIZE, 'kos-desktop-icon-app'));
             box.add_child(new St.Label({
                 text: app.get_name(),
                 style_class: 'kos-desktop-icon-label',

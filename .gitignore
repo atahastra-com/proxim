@@ -34,8 +34,6 @@ kosinit/kosinit
 distro/out/
 distro/mnt/
 distro/overlay/usr/share/icons/Deepin2022/
-distro/overlay/usr/share/icons/kos-icons/
-distro/icons/sources/
 
 # Local proof screenshots of the distro desktop
 /distro-shot.png

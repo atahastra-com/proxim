@@ -17,6 +17,8 @@ import St from 'gi://St';
 
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 
+import {squircleIcon, squircleRadius} from './icons.js';
+
 export const FOLDER_COLS = 4;
 
 // ---- favorites (dock pins) ------------------------------------------------
@@ -56,12 +58,13 @@ export function lookupApp(appId) {
     return Shell.AppSystem.get_default().lookup_app(appId);
 }
 
-export function appIcon(appId, size) {
+export function appIcon(appId, size, styleClass = '') {
     const app = lookupApp(appId);
-    return new St.Icon({
+    return squircleIcon({
         gicon: app?.get_icon() ?? null,
         fallback_icon_name: 'application-x-executable',
         icon_size: size,
+        style_class: styleClass,
     });
 }
 
@@ -244,11 +247,11 @@ export function deleteDesktopFile(name) {
 }
 
 export function dirIcon(size) {
-    return new St.Icon({
+    return squircleIcon({
         icon_name: 'folder',
         fallback_icon_name: 'folder',
         icon_size: size,
-        x_align: Clutter.ActorAlign.CENTER,
+        style_class: 'kos-desktop-icon-app',
     });
 }
 
@@ -265,11 +268,11 @@ export function fileIcon(name, size) {
         const [ctype] = Gio.content_type_guess(name, null);
         gicon = Gio.content_type_get_icon(ctype || 'text/plain');
     }
-    return new St.Icon({
+    return squircleIcon({
         gicon,
         fallback_icon_name: 'text-x-generic',
         icon_size: size,
-        x_align: Clutter.ActorAlign.CENTER,
+        style_class: 'kos-desktop-icon-app',
     });
 }
 
@@ -283,6 +286,7 @@ export function makeFolderSquare(folder, size) {
         width: size,
         height: size,
         x_align: Clutter.ActorAlign.CENTER,
+        style: `border-radius: ${squircleRadius(size)}px;`,
     });
     const grid = folder.apps.length > 4 ? 3 : 2;
     const pad = Math.round(size * 0.12);

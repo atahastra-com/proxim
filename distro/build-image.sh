@@ -54,11 +54,6 @@ else
   exit 1
 fi
 
-# Same kos-icons preflight as update-image.sh: before any disk work.
-if [[ -x "${DISTRO}/icons/build-theme.sh" && -d "${DISTRO}/icons/sources" ]]; then
-  "${DISTRO}/icons/build-theme.sh"
-fi
-
 mkdir -p "$OUT" "$MNT"
 LOOP=""
 MOUNTED=0

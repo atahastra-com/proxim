@@ -35,14 +35,6 @@ need_cmd qemu-nbd
 need_cmd rsync
 need_cmd e2fsck
 
-# Rebuild kos-icons before mounting, so a missing icns2png/ImageMagick
-# fails with a clear apt hint instead of after e2fsck has the image open.
-# If those tools are missing but the generated theme already exists,
-# build-theme.sh keeps it and continues.
-if [[ -x "${DISTRO}/icons/build-theme.sh" && -d "${DISTRO}/icons/sources" ]]; then
-  "${DISTRO}/icons/build-theme.sh"
-fi
-
 mkdir -p "$MNT"
 NBD=/dev/nbd0
 MOUNTED=0
@@ -54,6 +46,7 @@ cleanup() {
     "${SUDO[@]}" umount "$MNT/dev" 2>/dev/null || true
     "${SUDO[@]}" umount "$MNT/proc" 2>/dev/null || true
     "${SUDO[@]}" umount "$MNT/sys" 2>/dev/null || true
+    "${SUDO[@]}" umount "$MNT/etc/resolv.conf" 2>/dev/null || true
     "${SUDO[@]}" umount "$MNT" 2>/dev/null || true
     MOUNTED=0
   fi
@@ -108,6 +101,11 @@ start="$(date +%s)"
 "${SUDO[@]}" mount --bind /dev/pts "$MNT/dev/pts"
 "${SUDO[@]}" mount -t proc proc "$MNT/proc"
 "${SUDO[@]}" mount -t sysfs sysfs "$MNT/sys"
+# apt in the chroot needs the host resolver
+if [[ -e /etc/resolv.conf ]]; then
+  "${SUDO[@]}" touch "$MNT/etc/resolv.conf"
+  "${SUDO[@]}" mount --bind /etc/resolv.conf "$MNT/etc/resolv.conf"
+fi
 
 "${SUDO[@]}" tee "$MNT/tmp/kos-apply-dconf.sh" >/dev/null << APPLY
 #!/bin/bash
@@ -120,11 +118,20 @@ export DEBIAN_FRONTEND=noninteractive
 # KOS_SKIP_APT=1 or DNS is down so a CSS/JS tweak does not wait minutes.
 if [[ "${KOS_SKIP_APT:-0}" == 1 ]]; then
   echo "Skipping apt (KOS_SKIP_APT=1)"
-elif ! dpkg -s inotify-tools >/dev/null 2>&1; then
-  if apt-get update && apt-get install -y --no-install-recommends inotify-tools; then
-    :
-  else
-    echo "WARN: could not install inotify-tools (network?); hot-reload watcher may be missing"
+else
+  need_pkg() { dpkg -s "$1" >/dev/null 2>&1; }
+  if ! need_pkg inotify-tools || ! need_pkg deepin-icon-theme; then
+    pkgs=()
+    need_pkg inotify-tools || pkgs+=(inotify-tools)
+    need_pkg deepin-icon-theme || pkgs+=(deepin-icon-theme)
+    if apt-get update && apt-get install -y --no-install-recommends "${pkgs[@]}"; then
+      :
+    else
+      echo "WARN: could not install ${pkgs[*]} (network?)."
+      if ! need_pkg deepin-icon-theme; then
+        echo "missing deepin-icon-theme: run sudo apt install -y deepin-icon-theme"
+      fi
+    fi
   fi
 fi
 systemctl enable mnt-kosdev.mount || true
@@ -139,7 +146,7 @@ if id '${KOS_USER}' >/dev/null 2>&1; then
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/wm/preferences/num-workspaces 1 || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/enable-hot-corners false || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/clock-show-date true || true
-  sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/icon-theme "'kos-icons'" || true
+  sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/icon-theme "'bloom'" || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/enable-animations false || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/mutter/experimental-features "@as []" || true
 fi
@@ -148,6 +155,7 @@ APPLY
   "${SUDO[@]}" chroot "$MNT" /tmp/kos-apply-dconf.sh
   "${SUDO[@]}" rm -f "$MNT/tmp/kos-apply-dconf.sh"
 
+"${SUDO[@]}" umount "$MNT/etc/resolv.conf" 2>/dev/null || true
 "${SUDO[@]}" umount "$MNT/dev/pts"
 "${SUDO[@]}" umount "$MNT/dev"
 "${SUDO[@]}" umount "$MNT/proc"

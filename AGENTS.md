@@ -55,7 +55,7 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
 - App windows in Deepin Control Center style (`~/.config/gtk-4.0/gtk.css`, `gtk-3.0/gtk.css`, same files in `/etc/skel`): dark (#1f2128 window and content), 14px corners, soft shadow, flat titlebar the same color as the content, minimize/maximize/close on the RIGHT as thin plain glyphs (no circles; hover square on the icon, red on close) via `button-layout=':minimize,maximize,close'`; gray (#2c2f38) rounded header buttons, round '...' menu, gray pill search entry.
   - Sidebar slightly darker (#1a1c22), 40px rows with 8px corners, selected row solid #0081ff with white text and icon.
   - Grouped lists (`boxed-list`) are separate gray (#2c2f38) 9px cards with 6px gaps, label left, value right in gray. No macOS traffic lights.
-- Icon theme kos-icons (macOS-style app icons from macosicons.com, personal use; sources in `distro/icons/`, generated theme at `distro/overlay/usr/share/icons/kos-icons/`, gitignored, must exist locally before a build). Do not revert to Deepin2022 or Adwaita.
+- Icon theme is Deepin bloom (`deepin-icon-theme`, GPL-3.0-or-later, in `packages.txt`). Every app icon on the launchpad, dock and in folders is drawn in a uniform macOS-style squircle (`icons.js`), including apps installed later. Folder tiles use the same corner radius. Do not revert to macosicons.com, kos-icons, Deepin2022 or unshaped Adwaita.
 - kos wallpaper with a dim layer over the whole screen, accent #0081ff, animations off.
 
 ## Hard rules

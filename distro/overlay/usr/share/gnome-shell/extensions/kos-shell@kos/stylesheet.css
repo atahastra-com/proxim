@@ -192,7 +192,9 @@
 .kos-folder-icon {
     background-color: rgba(30, 32, 40, 0.62);
     border: 1px solid rgba(255, 255, 255, 0.10);
-    border-radius: 18px;
+    /* Corner radius is also set in JS from the icon size so it matches
+       the app-icon squircle at every grid scale. */
+    border-radius: 22.3%;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 

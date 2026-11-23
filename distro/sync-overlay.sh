@@ -63,7 +63,12 @@ done
 # rsync -a src/ dest/ updates dest's own metadata; force the guest root back to root.
 "${SUDO[@]}" chown root:root "$MNT"
 # If an earlier sync left host-uid files under system dirs, put them back.
-"${SUDO[@]}" find "$MNT/usr" "$MNT/etc" "$MNT/lib" "$MNT/boot" "$MNT/var" "$MNT/tmp" \
-  -uid "$(id -u)" -exec chown root:root {} + 2>/dev/null || true
+# Skip when running as root: id -u would be 0 and chown of every root-owned
+# file would strip setuid from sudo, su, pkexec, etc.
+host_uid="${SUDO_UID:-$(id -u)}"
+if [[ "$host_uid" != 0 ]]; then
+  "${SUDO[@]}" find "$MNT/usr" "$MNT/etc" "$MNT/lib" "$MNT/boot" "$MNT/var" "$MNT/tmp" \
+    -uid "$host_uid" -exec chown root:root {} + 2>/dev/null || true
+fi
 
 echo "Overlay sync finished"

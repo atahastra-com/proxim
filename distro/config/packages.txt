@@ -38,3 +38,6 @@ xdg-user-dirs
 
 # Hot-reload of the kos-shell extension in ./build.sh distro-dev
 inotify-tools
+
+# Official Deepin icon theme (bloom, GPL-3.0-or-later; pulls papirus-icon-theme)
+deepin-icon-theme

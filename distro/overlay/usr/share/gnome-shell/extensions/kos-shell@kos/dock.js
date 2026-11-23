@@ -11,6 +11,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
 
 import {DND, appIcon, getPins, later, makeDraggableIcon, pinAt} from './folders.js';
+import {squircleIcon} from './icons.js';
 
 export class KosDock {
     constructor() {
@@ -198,18 +199,14 @@ class DockItem extends St.Button {
             y_align: Clutter.ActorAlign.CENTER,
         });
 
-        const icon = this._kosIcon = new St.Icon({
-            style_class: 'kos-dock-item-icon',
-            x_align: Clutter.ActorAlign.CENTER,
-            y_align: Clutter.ActorAlign.CENTER,
-        });
         const gicon = app ? (app.get_icon() || app.app_info?.get_icon()) : null;
-        if (gicon)
-            icon.set_gicon(gicon);
-        else if (iconName)
-            icon.icon_name = iconName;
-        else
-            icon.icon_name = 'application-x-executable-symbolic';
+        const icon = this._kosIcon = squircleIcon({
+            gicon,
+            icon_name: gicon ? null : (iconName || 'application-x-executable'),
+            fallback_icon_name: 'application-x-executable',
+            icon_size: 52,
+            style_class: 'kos-dock-item-icon',
+        });
         box.add_child(icon);
 
         this._dot = new St.Widget({
