@@ -323,9 +323,70 @@
     background-color: rgba(255, 255, 255, 0.11);
 }
 
-/* Calendar & notifications: flat, no nested boxes. */
-.datemenu-calendar-column {
-    border-left: 1px solid rgba(255, 255, 255, 0.10);
+/* Calendar & notifications: flat, no nested boxes.
+ * Spacing: ONE padding (16px) around the popup and inside each side of the
+ * column divider, ONE gap (12px) between sections, rows padded 8px 12px.
+ * Same values as the quick settings panel. */
+.datemenu-popover {
+    padding: 16px;
+}
+
+#calendarArea {
+    padding: 0;
+    spacing: 0;
+}
+
+.message-list,
+.message-list:ltr,
+.message-list:rtl {
+    margin: 0;
+    padding: 0 16px 0 0;
+    /* the column divider */
+    border-width: 0 1px 0 0;
+    border-style: solid;
+    border-color: rgba(255, 255, 255, 0.10);
+}
+
+.message-view,
+.message-view:ltr,
+.message-view:rtl {
+    margin: 0;
+}
+
+.message-list-controls {
+    /* 12px sides = same text inset as the calendar-side rows */
+    padding: 12px 12px 0 12px;
+    spacing: 12px;
+}
+
+.datemenu-calendar-column,
+.datemenu-calendar-column:ltr,
+.datemenu-calendar-column:rtl {
+    border: none;
+    margin: 0;
+    padding: 0 0 0 16px;
+    spacing: 12px;
+}
+
+.datemenu-calendar-column .datemenu-displays-box {
+    spacing: 12px;
+}
+
+.datemenu-today-button,
+.events-button,
+.world-clocks-button,
+.weather-button {
+    padding: 8px 12px;
+    margin: 0;
+}
+
+.events-button .events-box .events-title {
+    padding-bottom: 4px;
+}
+
+.calendar {
+    margin: 0;
+    padding: 0 10px;
 }
 
 .calendar,
@@ -477,6 +538,8 @@
     padding: 16px;
 }
 
+/* Strict grid: 4 x 84px columns, 12px gaps both ways; tiles, slider cards
+   and the bottom row all start and end on the same edges. */
 .kos-cc .quick-settings-grid {
     width: 372px;
     spacing-rows: 12px;
@@ -682,7 +745,10 @@
 
 /* Bottom row: plain icons, gear left, lock + power right. */
 .kos-cc .kos-cc-system {
-    padding: 6px 4px 0 4px;
+    /* 4px + the buttons' 8px = icons 12px in, like the slider-card icons
+       (card padding 12px); no extra top gap beyond the 12px grid gap. */
+    padding: 0 4px;
+    margin: 0;
 }
 
 .kos-cc .kos-cc-system .icon-button,

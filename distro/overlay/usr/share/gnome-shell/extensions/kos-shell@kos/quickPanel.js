@@ -68,6 +68,7 @@ export class KosQuickPanel {
         for (const fn of this._undo.reverse())
             fn();
         this._undo = [];
+        this._watched = null;
 
         this._layout.nColumns = this._origColumns;
         for (const [item, span] of this._origSpans) {
@@ -154,7 +155,40 @@ export class KosQuickPanel {
                 }
             }
         }
+        this._fillLastRow(rows.slice(0, 4));
         this._layout.layout_changed();
+    }
+
+    // Strict grid: tiles wrap row by row like QuickSettingsLayout does; if
+    // the last tile row is short, the last tile widens to fill it, so there
+    // is never an empty slot at the end. Re-run when a tile shows or hides.
+    _fillLastRow(tileRows) {
+        this._watched ??= new Set();
+        let col = 0;
+        let last = null;
+        for (const [items, span] of tileRows) {
+            for (const item of items) {
+                if (item.get_parent() !== this._grid)
+                    continue;
+                if (!this._watched.has(item)) {
+                    this._watched.add(item);
+                    const id = item.connect('notify::visible', () => this._queueRelayout());
+                    this._undo.push(() => item.disconnect(id));
+                }
+                if (!item.visible)
+                    continue;
+                if (col + span > COLUMNS)
+                    col = 0;
+                col += span;
+                last = [item, span];
+                if (col === COLUMNS)
+                    col = 0;
+            }
+        }
+        if (last && col > 0) {
+            const [item, span] = last;
+            this._layout.child_set_property(this._grid, item, 'column-span', span + COLUMNS - col);
+        }
     }
 
     _addClass(actor, name) {
