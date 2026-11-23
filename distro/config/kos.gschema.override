@@ -1,4 +1,4 @@
-# Default GNOME look for kos: light (Deepin-style) desktop, kos wallpaper, no first-run tour,
+# Default GNOME look for kos: dark (Deepin-style) desktop, kos wallpaper, no first-run tour,
 # a single workspace, and the kos-shell extension enabled.
 [org.gnome.desktop.background]
 picture-uri='file:///usr/share/backgrounds/kos/kos-wallpaper.png'
@@ -12,7 +12,7 @@ picture-uri='file:///usr/share/backgrounds/kos/kos-wallpaper.png'
 primary-color='#0b1020'
 
 [org.gnome.desktop.interface]
-color-scheme='prefer-light'
+color-scheme='prefer-dark'
 accent-color='blue'
 gtk-theme='Adwaita'
 icon-theme='Deepin2022'

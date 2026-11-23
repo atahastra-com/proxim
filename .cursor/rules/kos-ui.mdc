@@ -24,22 +24,22 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
 
 ## Design
 - No top bar, Activities, overview, workspaces, or app-grid button.
-- One full-width bottom bar, 72px, flush to the bottom edge, DARK blurred glass (rgba(20,22,30,0.60) tint + Shell.BlurEffect radius 60, brightness 0.75 in panel.js), white icons, text and clock, no border. Only the bar is dark; popups, quick settings and windows stay light:
+- One full-width bottom bar, 72px, flush to the bottom edge, DARK blurred glass (rgba(20,22,30,0.60) tint + Shell.BlurEffect radius 60, brightness 0.75 in panel.js), white icons, text and clock, no border.:
   - left: date + time only;
   - middle: 42px dock icons (46px on hover) sitting flat on the bar, vertically centered, no pill or outline; a small white dot under running apps (blue under the focused one); a thin divider before running non-pinned apps;
   - right: GNOME's system cluster only (network/volume/power). No extra wifi icon.
 - Desktop: Launchpad-style 7-column grid, centered as a block with even spacing, centered labels, no tile boxes, no search bar. Clicking an icon opens the app window.
-- Theme is LIGHT, like Deepin (DDE 23): `color-scheme='prefer-light'` (gschema override, dconf defaults, extension.js). Don't switch back to dark.
-- Popups (calendar, menus, OSD, dialogs): one light translucent panel (rgba(248,249,251,0.90)), 18px radius, soft shadow (0 16px 44px rgba(0,0,0,0.22)), dark text, rounded-square buttons (10-12px, not pills), accent #0081ff.
+- Theme is DARK everywhere (Deepin DDE 23 dark): `color-scheme='prefer-dark'` in the gschema override and dconf defaults. extension.js switches an existing user to dark once (marker `~/.config/kos/dark-default-v1`), then leaves the Dark Style tile in charge. Don't switch to light unless asked.
+- Popups (calendar, menus, OSD, dialogs, quick settings): one dark frosted panel (rgba(30,32,40,0.84) + blur), 18px radius, soft shadow (0 16px 44px rgba(0,0,0,0.45-0.50)), white text, rounded-square buttons (10-12px, not pills), accent #0081ff.
 - Quick settings = Deepin control center. `quickPanel.js` switches GNOME's grid to 4 columns and reorders it; `.kos-cc*` classes style it. Top to bottom:
-  - wide tiles (2 columns) for network and bluetooth, then night light ("eye comfort"): light-gray 12px tile, icon in a circle on the left (pink #e0407a when on, gray when off), bold title, gray status line (filled in when GNOME leaves it empty), chevron on the right;
+  - wide tiles (2 columns) for network and bluetooth, then night light ("eye comfort"): translucent gray 12px tile, icon in a circle on the left (pink #e0407a when on, gray when off), bold title, gray status line (filled in when GNOME leaves it empty), chevron on the right;
   - small square tiles (1 column) for every other toggle, plus our own DND Mode, Screenshot, Record, System Monitor: icon on top, 10px label under it, blue #0081ff when on;
-  - each slider in its own light-gray card: thick dark filled track, white round knob, a settings button on the right (display / sound);
+  - each slider in its own gray card: thick light filled track, white round knob, a settings button on the right (display / sound);
   - bottom row: settings gear left, lock + power right (the screenshot button moved into a tile).
   - New quick settings items from GNOME or other extensions are picked up automatically (sliders become cards, toggles become small tiles). `disable()` must restore every span, order and style.
-- App windows in Deepin Control Center style (`~/.config/gtk-4.0/gtk.css`, `gtk-3.0/gtk.css`, same files in `/etc/skel`): white, 14px corners, soft shadow, flat white titlebar, minimize/maximize/close on the RIGHT as thin plain glyphs (no circles; hover square on the icon, red on close) via `button-layout=':minimize,maximize,close'`; light-gray rounded header buttons, round '...' menu, light-gray pill search entry.
-  - Sidebar white like the content, 40px rows with 8px corners, selected row solid #0081ff with white text and icon.
-  - Grouped lists (`boxed-list`) are separate light-gray (#f2f3f5) 9px cards with 6px gaps, label left, value right in gray. No macOS traffic lights.
+- App windows in Deepin Control Center style (`~/.config/gtk-4.0/gtk.css`, `gtk-3.0/gtk.css`, same files in `/etc/skel`): dark (#1f2128 window and content), 14px corners, soft shadow, flat titlebar the same color as the content, minimize/maximize/close on the RIGHT as thin plain glyphs (no circles; hover square on the icon, red on close) via `button-layout=':minimize,maximize,close'`; gray (#2c2f38) rounded header buttons, round '...' menu, gray pill search entry.
+  - Sidebar slightly darker (#1a1c22), 40px rows with 8px corners, selected row solid #0081ff with white text and icon.
+  - Grouped lists (`boxed-list`) are separate gray (#2c2f38) 9px cards with 6px gaps, label left, value right in gray. No macOS traffic lights.
 - Icon theme Deepin2022 (`distro/overlay/usr/share/icons/Deepin2022/`, gitignored, must exist locally before a build).
 - kos wallpaper with a dim layer over the whole screen, accent #0081ff, animations off.
 

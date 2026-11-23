@@ -141,8 +141,15 @@ export default class KosShellExtension extends Extension {
 
         const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
         iface.set_string('icon-theme', 'Deepin2022');
-        // Deepin is light: light apps (libadwaita) and GNOME's light shell theme.
-        iface.set_string('color-scheme', 'prefer-light');
+        // kos is dark everywhere. Switch an existing user to dark once (an
+        // earlier kos build set prefer-light); after that the Dark Style
+        // tile in quick settings stays in charge.
+        const marker = GLib.build_filenamev([GLib.get_user_config_dir(), 'kos', 'dark-default-v1']);
+        if (!GLib.file_test(marker, GLib.FileTest.EXISTS)) {
+            iface.set_string('color-scheme', 'prefer-dark');
+            GLib.mkdir_with_parents(GLib.path_get_dirname(marker), 0o755);
+            GLib.file_set_contents(marker, '');
+        }
         if (iface.list_keys().includes('enable-hot-corners'))
             iface.set_boolean('enable-hot-corners', false);
         iface.set_boolean('clock-show-date', true);

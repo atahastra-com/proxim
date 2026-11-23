@@ -1,6 +1,6 @@
-/* kos-shell styles: Deepin (DDE 23) look, #0081ff accent.
+/* kos-shell styles: Deepin (DDE 23) look, dark everywhere, #0081ff accent.
  * The bottom bar is dark blurred glass; its menus and the quick settings
- * popup are light. The launchpad grid sits on the wallpaper, so its labels
+ * popup are dark frosted glass. The launchpad grid sits on the wallpaper, so its labels
  * stay white. */
 
 /* Full-width bottom bar, flush to the bottom edge, dark blurred glass
@@ -219,11 +219,11 @@
 }
 
 /* ============================================================================
- * Popups: Deepin light frosted glass (white ~86%, 18px corners, soft shadow).
+ * Popups: Deepin dark frosted glass (18px corners, soft shadow).
  * ============================================================================ */
 .popup-menu-boxpointer,
 .candidate-popup-boxpointer {
-    -arrow-background-color: rgba(248, 249, 251, 0.90);
+    -arrow-background-color: rgba(30, 32, 40, 0.84);
     -arrow-border-color: transparent;
     -arrow-border-width: 0;
     -arrow-border-radius: 18px;
@@ -231,23 +231,23 @@
 }
 
 .popup-menu-content {
-    background-color: rgba(248, 249, 251, 0.90);
+    background-color: rgba(30, 32, 40, 0.84);
     border: none;
     border-radius: 18px;
-    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.22);
-    color: rgba(0, 0, 0, 0.88);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45);
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .popup-menu-item {
     border-radius: 10px;
-    color: rgba(0, 0, 0, 0.88);
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .popup-menu-item:hover,
 .popup-menu-item:focus,
 .popup-menu-item.selected {
-    background-color: rgba(0, 0, 0, 0.06);
-    color: #000000;
+    background-color: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
 }
 
 .popup-menu-item:active {
@@ -256,16 +256,16 @@
 }
 
 .popup-menu-item:insensitive {
-    color: rgba(0, 0, 0, 0.40);
+    color: rgba(255, 255, 255, 0.40);
 }
 
 .popup-separator-menu-item .popup-separator-menu-item-separator {
-    background-color: rgba(0, 0, 0, 0.08);
+    background-color: rgba(255, 255, 255, 0.11);
 }
 
 /* Calendar & notifications: flat, no nested boxes. */
 .datemenu-calendar-column {
-    border-left: 1px solid rgba(0, 0, 0, 0.07);
+    border-left: 1px solid rgba(255, 255, 255, 0.10);
 }
 
 .calendar,
@@ -278,7 +278,7 @@
     border: none;
     border-radius: 12px;
     box-shadow: none;
-    color: rgba(0, 0, 0, 0.88);
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .datemenu-today-button:hover,
@@ -286,7 +286,7 @@
 .weather-button:hover,
 .events-button:hover,
 .message:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: rgba(255, 255, 255, 0.07);
 }
 
 .calendar .calendar-month-label,
@@ -303,19 +303,19 @@
     border: none;
     box-shadow: none;
     border-radius: 99px;
-    color: rgba(0, 0, 0, 0.85);
+    color: rgba(255, 255, 255, 0.90);
 }
 
 .calendar .calendar-other-month-day,
 .calendar .calendar-nonwork-day {
-    color: rgba(0, 0, 0, 0.45);
+    color: rgba(255, 255, 255, 0.50);
 }
 
 .calendar .calendar-day-base:hover,
 .calendar .calendar-day-base:focus,
 .calendar .calendar-day:hover,
 .calendar .calendar-month-header .pager-button:hover {
-    background-color: rgba(0, 0, 0, 0.07);
+    background-color: rgba(255, 255, 255, 0.10);
 }
 
 .calendar .calendar-today,
@@ -329,21 +329,21 @@
 .message-list-clear-button.button,
 .datemenu-popover .button,
 .popup-menu-content .button {
-    background-color: rgba(0, 0, 0, 0.06);
+    background-color: rgba(255, 255, 255, 0.08);
     border: none;
     box-shadow: none;
     border-radius: 10px;
-    color: rgba(0, 0, 0, 0.85);
+    color: rgba(255, 255, 255, 0.90);
 }
 
 .message-list-clear-button.button:hover,
 .datemenu-popover .button:hover,
 .popup-menu-content .button:hover {
-    background-color: rgba(0, 0, 0, 0.11);
+    background-color: rgba(255, 255, 255, 0.15);
 }
 
 .toggle-switch {
-    background-color: rgba(0, 0, 0, 0.16);
+    background-color: rgba(255, 255, 255, 0.22);
     border: none;
 }
 
@@ -355,7 +355,7 @@
 .slider:hover {
     color: #ffffff;
     -barlevel-height: 6px;
-    -barlevel-background-color: rgba(0, 0, 0, 0.12);
+    -barlevel-background-color: rgba(255, 255, 255, 0.17);
     -barlevel-active-background-color: #0081ff;
     -slider-handle-radius: 9px;
     -slider-handle-border-width: 1px;
@@ -367,11 +367,11 @@
 .modal-dialog,
 .switcher-list,
 .resize-popup {
-    background-color: rgba(248, 249, 251, 0.92);
+    background-color: rgba(30, 32, 40, 0.88);
     border: none;
     border-radius: 18px;
-    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.25);
-    color: rgba(0, 0, 0, 0.88);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.50);
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .switcher-list .item-box:selected,
@@ -381,14 +381,14 @@
 }
 
 .modal-dialog .modal-dialog-linked-button {
-    background-color: rgba(0, 0, 0, 0.06);
+    background-color: rgba(255, 255, 255, 0.08);
     border: none;
     border-radius: 10px;
-    color: rgba(0, 0, 0, 0.88);
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .modal-dialog .modal-dialog-linked-button:hover {
-    background-color: rgba(0, 0, 0, 0.11);
+    background-color: rgba(255, 255, 255, 0.15);
 }
 
 .modal-dialog .modal-dialog-linked-button:default {
@@ -409,11 +409,11 @@
 }
 
 .quick-settings.kos-cc {
-    background-color: rgba(250, 250, 252, 0.88);
-    color: rgba(0, 0, 0, 0.88);
-    border: 1px solid rgba(255, 255, 255, 0.70);
+    background-color: rgba(30, 32, 40, 0.84);
+    color: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 18px;
-    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.26);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.50);
     padding: 12px;
 }
 
@@ -423,7 +423,7 @@
     spacing-columns: 10px;
 }
 
-/* Base for every tile: light gray rounded rect, dark text. */
+/* Base for every tile: translucent gray rounded rect, white text. */
 .kos-cc .quick-toggle,
 .kos-cc .quick-toggle:ltr,
 .kos-cc .quick-toggle:rtl,
@@ -433,8 +433,8 @@
 .kos-cc .quick-toggle-menu-button:rtl {
     min-width: 0;
     max-width: none;
-    background-color: rgba(0, 0, 0, 0.05);
-    color: rgba(0, 0, 0, 0.88);
+    background-color: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.92);
     border: none;
     box-shadow: none;
     border-radius: 12px;
@@ -442,7 +442,7 @@
 
 .kos-cc .quick-toggle:hover,
 .kos-cc .quick-toggle-menu-button:hover {
-    background-color: rgba(0, 0, 0, 0.09);
+    background-color: rgba(255, 255, 255, 0.13);
 }
 
 .kos-cc .quick-toggle-has-menu {
@@ -462,14 +462,14 @@
 .kos-cc .kos-cc-wide .quick-toggle-menu-button,
 .kos-cc .kos-cc-wide .quick-toggle-menu-button:checked {
     min-height: 58px;
-    background-color: rgba(0, 0, 0, 0.05);
-    color: rgba(0, 0, 0, 0.88);
+    background-color: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .kos-cc .kos-cc-wide .quick-toggle:hover,
 .kos-cc .kos-cc-wide.quick-toggle:hover,
 .kos-cc .kos-cc-wide .quick-toggle-menu-button:hover {
-    background-color: rgba(0, 0, 0, 0.09);
+    background-color: rgba(255, 255, 255, 0.13);
 }
 
 .kos-cc .kos-cc-wide .quick-toggle:ltr,
@@ -504,8 +504,8 @@
     icon-size: 16px;
     padding: 8px;
     border-radius: 999px;
-    background-color: rgba(0, 0, 0, 0.10);
-    color: rgba(0, 0, 0, 0.75);
+    background-color: rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .kos-cc .kos-cc-wide .quick-toggle:checked .quick-toggle-icon,
@@ -521,12 +521,12 @@
 
 .kos-cc .kos-cc-wide .quick-toggle-subtitle {
     font-size: 11px;
-    color: rgba(0, 0, 0, 0.50);
+    color: rgba(255, 255, 255, 0.55);
 }
 
 .kos-cc .kos-cc-wide .quick-toggle-menu-button {
     padding: 0 10px 0 4px;
-    color: rgba(0, 0, 0, 0.45);
+    color: rgba(255, 255, 255, 0.50);
 }
 
 .kos-cc .kos-cc-wide .quick-toggle-menu-button StIcon {
@@ -542,13 +542,13 @@
 .kos-cc .kos-cc-small .quick-toggle:rtl {
     min-height: 70px;
     border-radius: 12px;
-    background-color: rgba(0, 0, 0, 0.05);
-    color: rgba(0, 0, 0, 0.82);
+    background-color: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.88);
 }
 
 .kos-cc .kos-cc-small.quick-toggle:hover,
 .kos-cc .kos-cc-small .quick-toggle:hover {
-    background-color: rgba(0, 0, 0, 0.09);
+    background-color: rgba(255, 255, 255, 0.13);
 }
 
 .kos-cc .kos-cc-small.quick-toggle:checked,
@@ -576,9 +576,9 @@
     font-weight: normal;
 }
 
-/* Sliders: one card each, dark filled track, white round knob. */
+/* Sliders: one card each, light filled track, white round knob. */
 .kos-cc .kos-cc-card {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: rgba(255, 255, 255, 0.07);
     border-radius: 12px;
     padding: 6px 8px;
 }
@@ -598,26 +598,26 @@
 .kos-cc .kos-cc-card .slider:hover {
     color: #ffffff;
     -barlevel-height: 6px;
-    -barlevel-background-color: rgba(0, 0, 0, 0.12);
-    -barlevel-active-background-color: rgba(0, 0, 0, 0.78);
+    -barlevel-background-color: rgba(255, 255, 255, 0.17);
+    -barlevel-active-background-color: rgba(255, 255, 255, 0.85);
     -slider-handle-radius: 10px;
     -slider-handle-border-width: 1px;
-    -slider-handle-border-color: rgba(0, 0, 0, 0.20);
+    -slider-handle-border-color: rgba(0, 0, 0, 0.35);
 }
 
 .kos-cc .kos-cc-card .icon-button {
     background-color: transparent;
-    color: rgba(0, 0, 0, 0.80);
+    color: rgba(255, 255, 255, 0.88);
     border-radius: 8px;
     padding: 6px;
 }
 
 .kos-cc .kos-cc-card .kos-cc-card-button {
-    background-color: rgba(0, 0, 0, 0.06);
+    background-color: rgba(255, 255, 255, 0.08);
 }
 
 .kos-cc .kos-cc-card .icon-button:hover {
-    background-color: rgba(0, 0, 0, 0.10);
+    background-color: rgba(255, 255, 255, 0.14);
 }
 
 /* Bottom row: plain icons, gear left, lock + power right. */
@@ -628,7 +628,7 @@
 .kos-cc .kos-cc-system .icon-button,
 .kos-cc .kos-cc-system .button {
     background-color: transparent;
-    color: rgba(0, 0, 0, 0.80);
+    color: rgba(255, 255, 255, 0.88);
     border: none;
     box-shadow: none;
     border-radius: 10px;
@@ -637,21 +637,21 @@
 
 .kos-cc .kos-cc-system .icon-button:hover,
 .kos-cc .kos-cc-system .button:hover {
-    background-color: rgba(0, 0, 0, 0.08);
+    background-color: rgba(255, 255, 255, 0.11);
 }
 
 /* Submenus that open from a tile chevron (Wi-Fi list, outputs, ...). */
 .quick-toggle-menu {
-    background-color: rgba(255, 255, 255, 0.96);
-    color: rgba(0, 0, 0, 0.88);
+    background-color: rgba(44, 47, 56, 0.96);
+    color: rgba(255, 255, 255, 0.92);
     border: none;
     border-radius: 14px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
 .quick-toggle-menu .header .icon {
-    background-color: rgba(0, 0, 0, 0.10);
-    color: rgba(0, 0, 0, 0.75);
+    background-color: rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .quick-toggle-menu .header .icon.active {

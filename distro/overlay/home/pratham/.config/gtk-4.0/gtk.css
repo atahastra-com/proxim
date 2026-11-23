@@ -1,43 +1,43 @@
 /* kos window style for GTK4 / libadwaita 1.7 apps (Settings, Files, Text
- * Editor, ...), modeled on Deepin (DDE 23) Control Center: light, 14px
- * corners, soft shadow, flat white titlebar, thin window glyphs on the
- * right, blue selected rows, list rows as separate light-gray cards.
- * The light look itself comes from color-scheme='prefer-light'.
+ * Editor, ...), modeled on Deepin (DDE 23) Control Center, dark: 14px
+ * corners, soft shadow, flat titlebar the same color as the content, thin
+ * window glyphs on the right, blue selected rows, list rows as separate
+ * gray cards. The dark base comes from color-scheme='prefer-dark'.
  * Same file ships in /etc/skel for new users. Plain CSS overrides only. */
 
 :root {
     --accent-bg-color: #0081ff;
     --accent-fg-color: #ffffff;
-    --accent-color: #0072e5;
-    --window-bg-color: #ffffff;
-    --window-fg-color: rgba(0, 0, 0, 0.86);
-    --view-bg-color: #ffffff;
-    --view-fg-color: rgba(0, 0, 0, 0.86);
-    --headerbar-bg-color: #ffffff;
-    --headerbar-fg-color: rgba(0, 0, 0, 0.86);
+    --accent-color: #4aa3ff;
+    --window-bg-color: #1f2128;
+    --window-fg-color: rgba(255, 255, 255, 0.92);
+    --view-bg-color: #1f2128;
+    --view-fg-color: rgba(255, 255, 255, 0.92);
+    --headerbar-bg-color: #1f2128;
+    --headerbar-fg-color: rgba(255, 255, 255, 0.92);
     --headerbar-border-color: transparent;
     --headerbar-shade-color: transparent;
     --headerbar-darker-shade-color: transparent;
-    --sidebar-bg-color: #ffffff;
-    --sidebar-fg-color: rgba(0, 0, 0, 0.86);
+    --sidebar-bg-color: #1a1c22;
+    --sidebar-fg-color: rgba(255, 255, 255, 0.92);
     --sidebar-border-color: transparent;
     --sidebar-shade-color: transparent;
-    --secondary-sidebar-bg-color: #ffffff;
-    --secondary-sidebar-fg-color: rgba(0, 0, 0, 0.86);
+    --secondary-sidebar-bg-color: #1a1c22;
+    --secondary-sidebar-fg-color: rgba(255, 255, 255, 0.92);
     --secondary-sidebar-border-color: transparent;
-    --card-bg-color: #f2f3f5;
-    --card-fg-color: rgba(0, 0, 0, 0.86);
-    --popover-bg-color: #ffffff;
-    --popover-fg-color: rgba(0, 0, 0, 0.86);
-    --dialog-bg-color: #ffffff;
-    --dialog-fg-color: rgba(0, 0, 0, 0.86);
+    --card-bg-color: #2c2f38;
+    --card-fg-color: rgba(255, 255, 255, 0.92);
+    --popover-bg-color: #2a2d36;
+    --popover-fg-color: rgba(255, 255, 255, 0.92);
+    --dialog-bg-color: #252830;
+    --dialog-fg-color: rgba(255, 255, 255, 0.92);
     --window-radius: 14px;
 }
 
 /* Rounded window with a large soft shadow. */
 window.csd {
     border-radius: 14px;
-    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07);
 }
 
 window.csd.maximized,
@@ -47,7 +47,7 @@ window.csd.tiled {
     box-shadow: none;
 }
 
-/* Flat white titlebar, same color as the content below it. */
+/* Flat titlebar, same color as the content below it. */
 headerbar,
 .titlebar,
 .top-bar,
@@ -59,11 +59,11 @@ toolbarview > .top-bar headerbar {
     min-height: 50px;
 }
 
-/* Header buttons ('...', back, search): light gray rounded squares, round
+/* Header buttons ('...', back, search): gray rounded squares, round
  * when GTK marks them circular. */
 headerbar button.image-button:not(.titlebutton),
 headerbar menubutton > button {
-    background-color: #f0f1f3;
+    background-color: #2c2f38;
     border-radius: 8px;
     min-width: 32px;
     min-height: 32px;
@@ -71,7 +71,7 @@ headerbar menubutton > button {
 
 headerbar button.image-button:not(.titlebutton):hover,
 headerbar menubutton > button:hover {
-    background-color: #e4e6e9;
+    background-color: #363a45;
 }
 
 /* The '...' menu is round, like Deepin. */
@@ -80,11 +80,11 @@ headerbar menubutton > button.image-button {
     border-radius: 999px;
 }
 
-/* Search: wide light-gray pill. */
+/* Search: wide gray pill. */
 entry.search,
 searchentry,
 searchbar > revealer > box entry {
-    background-color: #f0f1f3;
+    background-color: #2c2f38;
     border-radius: 999px;
     min-height: 32px;
     box-shadow: none;
@@ -120,12 +120,12 @@ windowcontrols > button > image {
     box-shadow: none;
     padding: 7px;
     -gtk-icon-size: 14px;
-    color: rgba(0, 0, 0, 0.72);
+    color: rgba(255, 255, 255, 0.78);
 }
 
 windowcontrols > button:hover > image {
-    background-color: rgba(0, 0, 0, 0.07);
-    color: #000000;
+    background-color: rgba(255, 255, 255, 0.10);
+    color: #ffffff;
 }
 
 windowcontrols > button.close:hover > image {
@@ -133,19 +133,19 @@ windowcontrols > button.close:hover > image {
     color: #ffffff;
 }
 
-/* Sidebar: white like the content, 40px rows, 8px corners, solid blue
+/* Sidebar: a little darker than the content, 40px rows, 8px corners, solid blue
  * selection with white text and icon. */
 .sidebar-pane,
 .navigation-sidebar,
 placessidebar,
 .sidebar {
-    background-color: #ffffff;
+    background-color: #1a1c22;
     border: none;
     box-shadow: none;
 }
 
 .sidebar-pane {
-    border-right: 1px solid rgba(0, 0, 0, 0.05);
+    border-right: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .navigation-sidebar > row,
@@ -162,7 +162,7 @@ placessidebar row {
 
 .navigation-sidebar > row:hover,
 placessidebar row:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: rgba(255, 255, 255, 0.06);
 }
 
 .navigation-sidebar > row:selected,
@@ -183,7 +183,7 @@ placessidebar row:selected label {
     background-color: transparent;
 }
 
-/* Grouped lists -> separate light-gray cards with small gaps, like Deepin
+/* Grouped lists -> separate gray cards with small gaps, like Deepin
  * (libadwaita's own .boxed-list-separate, applied to every boxed list). */
 list.boxed-list,
 list.boxed-list-separate {
@@ -197,7 +197,7 @@ list.boxed-list > row:first-child,
 list.boxed-list > row:last-child,
 list.boxed-list > row:only-child,
 list.boxed-list-separate > row {
-    background-color: #f2f3f5;
+    background-color: #2c2f38;
     border: none;
     box-shadow: none;
     border-radius: 9px;
@@ -207,7 +207,7 @@ list.boxed-list-separate > row {
 
 list.boxed-list > row:hover,
 list.boxed-list-separate > row:hover {
-    background-color: #e9ebee;
+    background-color: #343844;
 }
 
 list.boxed-list > row:selected {
@@ -219,11 +219,11 @@ list.boxed-list > row:selected {
 row .subtitle,
 row label.dim-label,
 row .dim-label {
-    color: rgba(0, 0, 0, 0.50);
+    color: rgba(255, 255, 255, 0.55);
 }
 
 .card {
-    background-color: #f2f3f5;
+    background-color: #2c2f38;
     border-radius: 10px;
     border: none;
     box-shadow: none;
@@ -239,7 +239,7 @@ entry {
 }
 
 switch {
-    background-color: rgba(0, 0, 0, 0.16);
+    background-color: rgba(255, 255, 255, 0.20);
     border: none;
 }
 
