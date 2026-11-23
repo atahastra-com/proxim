@@ -28,6 +28,12 @@ export class KosDock {
         // Drop target: a grid icon dropped here is pinned at that spot; a
         // dock icon dropped here moves. dnd.js finds this via _delegate.
         this._actor._delegate = this;
+        // The whole bottom bar accepts the drop too (clock, gaps, status
+        // area, edges): dnd.js walks up from the actor under the pointer, and
+        // the clock and status buttons have no drop handlers of their own.
+        this._panelHadDelegate = '_delegate' in Main.panel;
+        this._panelDelegate = Main.panel._delegate;
+        Main.panel._delegate = this;
         this._rebuild();
         Main.panel._centerBox.add_child(this._actor);
 
@@ -43,6 +49,12 @@ export class KosDock {
         for (const [obj, id] of this._signals)
             obj.disconnect(id);
         this._signals = [];
+        if (Main.panel._delegate === this) {
+            if (this._panelHadDelegate)
+                Main.panel._delegate = this._panelDelegate;
+            else
+                delete Main.panel._delegate;
+        }
         if (this._actor) {
             this._actor.destroy();
             this._actor = null;
@@ -110,7 +122,8 @@ export class KosDock {
     }
 
     // Pin (or move) the app to the slot under the pointer: before the first
-    // pinned icon whose center is right of the pointer.
+    // pinned icon whose center is right of the pointer. The grid drops a
+    // newly pinned app itself when favorite-apps changes (one place only).
     acceptDrop(source) {
         if (this.handleDragOver(source) === DND.DragMotionResult.CONTINUE)
             return false;

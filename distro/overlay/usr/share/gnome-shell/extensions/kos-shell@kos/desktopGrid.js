@@ -23,7 +23,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {
-    DND, KosFolderView, appIcon, later, loadLayout, lookupApp,
+    DND, KosFolderView, appIcon, getPins, later, loadLayout, lookupApp,
     makeDraggableIcon, makeFolderSquare, saveLayout, unpin,
 } from './folders.js';
 
@@ -96,6 +96,9 @@ export class KosDesktopGrid {
         this._connect(appsys, 'installed-changed', () => this._rebuild());
         this._connect(Main.layoutManager, 'monitors-changed', () => this._rebuild());
         this._connect(Main.layoutManager, 'startup-complete', () => this._rebuild());
+        // An app lives in one place: pinned apps leave the grid, unpinned
+        // ones come back. Reload whenever the dock's pins change.
+        this._connect(global.settings, 'changed::favorite-apps', () => later(() => this._rebuild()));
         this._connect(this._actor, 'notify::allocation', () => this._logAllocation());
     }
 
@@ -139,22 +142,32 @@ export class KosDesktopGrid {
     _rebuild() {
         if (!this._actor)
             return;
+        const openFid = this._folderView?.isOpen ? this._folderView.folder?.fid : null;
         this._items = this._loadItems();
         if (this._page < 0)
             this._page = 0;
         this._layout();
+        if (openFid) {
+            const f = this._items.find(e => e.type === 'folder' && e.fid === openFid);
+            if (f)
+                this._folderView.open(f, Main.layoutManager.primaryMonitor);
+            else
+                this._folderView.close();
+        }
     }
 
     // Saved layout first (order, folders), then any home app it doesn't
-    // mention yet. Apps that are gone are dropped; a folder left with one
-    // app turns back into that app.
+    // mention yet. Apps that are gone, and apps pinned in the dock, are
+    // left out; a folder left with one app turns back into that app.
     _loadItems() {
-        const home = listHomeApps(this._extensionPath).map(a => a.get_id());
+        const pinned = new Set(getPins());
+        const home = listHomeApps(this._extensionPath).map(a => a.get_id())
+            .filter(id => !pinned.has(id));
         const saved = loadLayout();
         if (!saved)
             return home.map(id => ({type: 'app', id}));
 
-        const used = new Set();
+        const used = new Set(pinned);
         const take = id => {
             if (typeof id !== 'string' || used.has(id) || !loadApp(id))
                 return false;
@@ -175,7 +188,7 @@ export class KosDesktopGrid {
             }
         }
         for (const id of home) {
-            if (!used.has(id)) {
+            if (!used.has(id) && !pinned.has(id)) {
                 used.add(id);
                 items.push({type: 'app', id});
             }
@@ -478,6 +491,9 @@ export class KosDesktopGrid {
     // Move `source` to grid index `index`, or into `folderTarget` (an app
     // entry becomes a new folder; a folder entry gains the app).
     _place(source, index, folderTarget) {
+        // Dock -> grid is a move: the app lands here and leaves the dock.
+        // The layout is saved (in _commit) before the unpin runs, so the
+        // reload the unpin triggers already sees it at this spot.
         if (source.kind === 'dock-app')
             later(() => unpin(source.appId));
 
@@ -489,10 +505,6 @@ export class KosDesktopGrid {
                 this._items.splice(removedAt, 1);
             entry = source.folder;
         } else {
-            // dock icon already in the grid with no folder target: unpinning is all.
-            if (source.kind === 'dock-app' && !folderTarget && this._contains(source.appId)) {
-                return;
-            }
             removedAt = this._removeId(source.appId);
             entry = {type: 'app', id: source.appId};
         }
@@ -519,10 +531,6 @@ export class KosDesktopGrid {
             this._items.splice(index, 0, entry);
         }
         this._commit();
-    }
-
-    _contains(appId) {
-        return this._items.some(e => e.type === 'folder' ? e.apps.includes(appId) : e.id === appId);
     }
 
     // Remove an app from the top level or from its folder. A folder left
