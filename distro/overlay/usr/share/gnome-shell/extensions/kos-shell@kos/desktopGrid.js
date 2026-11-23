@@ -24,8 +24,9 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {
     DND, KosFolderView, appIcon, getPins, later, loadLayout, lookupApp,
-    makeDraggableIcon, makeFolderSquare, saveLayout, unpin,
+    makeDraggableIcon, makeFolderSquare, pinAt, saveLayout, unpin,
 } from './folders.js';
+import {closeContextMenu, openContextMenu} from './contextMenu.js';
 
 export const GRID_COLS = 7;
 export const ICON_SIZE = 72; // all-apps overlay only; the home grid sizes from the screen
@@ -68,6 +69,17 @@ export class KosDesktopGrid {
         // Empty desktop space is a drop target: move an icon there, or drop
         // a dock icon there to unpin it.
         this._backdrop._delegate = this;
+        // Right-click on empty desktop space: "New Folder".
+        this._backdrop.connect('button-press-event', (_a, event) => {
+            if (event.get_button() !== Clutter.BUTTON_SECONDARY)
+                return Clutter.EVENT_PROPAGATE;
+            const [x, y] = event.get_coords();
+            this._folderView?.close();
+            openContextMenu(x, y, [
+                {label: 'New Folder', action: () => this._newFolder([], this._cellIndexAt(x, y))},
+            ]);
+            return Clutter.EVENT_STOP;
+        });
         this._actor.add_child(this._backdrop);
 
         this._dots = new St.BoxLayout({
@@ -103,6 +115,7 @@ export class KosDesktopGrid {
     }
 
     disable() {
+        closeContextMenu();
         for (const [obj, id] of this._signals)
             obj.disconnect(id);
         this._signals = [];
@@ -181,8 +194,9 @@ export class KosDesktopGrid {
                     items.push({type: 'app', id: e});
             } else if (e && Array.isArray(e.apps)) {
                 const apps = e.apps.filter(take);
-                if (apps.length >= 2)
-                    items.push({type: 'folder', fid: String(e.folder ?? GLib.uuid_string_random()), name: String(e.name || 'Folder'), apps});
+                const keep = e.keep === true;
+                if (apps.length >= 2 || keep)
+                    items.push({type: 'folder', fid: String(e.folder ?? GLib.uuid_string_random()), name: String(e.name || 'Folder'), apps, ...(keep ? {keep} : {})});
                 else if (apps.length === 1)
                     items.push({type: 'app', id: apps[0]});
             }
@@ -367,6 +381,7 @@ export class KosDesktopGrid {
         const source = folder
             ? {kind: 'folder-app', appId: item.id, folder}
             : {kind: 'grid-app', appId: item.id, item};
+        this._onRightClick(button, (x, y) => this._appMenu(x, y, item.id, folder));
         makeDraggableIcon(button, source, () => appIcon(item.id, iconSize), gicon);
         if (!folder) {
             // Dropping on this tile: on the icon itself makes or fills a
@@ -411,6 +426,10 @@ export class KosDesktopGrid {
         });
         button.connect('clicked', () =>
             this._folderView.open(folder, Main.layoutManager.primaryMonitor));
+        this._onRightClick(button, (x, y) => openContextMenu(x, y, [
+            {label: 'Rename', action: () => this._openFolder(folder, true)},
+            {label: 'Delete Folder', action: () => this._deleteFolder(folder)},
+        ]));
         makeDraggableIcon(button, {kind: 'grid-folder', folder},
             () => makeFolderSquare(folder, iconSize), square);
         Object.assign(button._delegate, {
@@ -418,6 +437,77 @@ export class KosDesktopGrid {
             acceptDrop: (src, _a, x, y) => this._dropOnItem(src, folder, x, y, tileW, iconSize),
         });
         return button;
+    }
+
+    // ---- right-click menus ------------------------------------------------
+
+    _onRightClick(actor, open) {
+        actor.connect('button-press-event', (_a, event) => {
+            if (event.get_button() !== Clutter.BUTTON_SECONDARY)
+                return Clutter.EVENT_PROPAGATE;
+            const [x, y] = event.get_coords();
+            open(x, y);
+            return Clutter.EVENT_STOP;
+        });
+    }
+
+    _appMenu(x, y, appId, inFolder) {
+        const source = inFolder
+            ? {kind: 'folder-app', appId, folder: inFolder}
+            : {kind: 'grid-app', appId};
+        const folders = this._items.filter(e => e.type === 'folder' && e !== inFolder);
+        const submenu = folders.map(f => ({
+            label: f.name,
+            action: () => this._place(source, -1, f),
+        }));
+        submenu.push({label: 'New Folder with this app', action: () => this._newFolderWith(appId)});
+        const entries = [{label: 'Move to Folder', submenu}];
+        if (inFolder)
+            entries.push({label: 'Remove from Folder', action: () => this._place(source, this._items.indexOf(inFolder) + 1, null)});
+        entries.push({label: 'Add to Dock', action: () => {
+            this._folderView?.close();
+            pinAt(appId, getPins().length);
+        }});
+        openContextMenu(x, y, entries);
+    }
+
+    // A kept (never auto-dissolved) folder at grid index `index`, opened
+    // with its title ready to type.
+    _newFolder(apps, index) {
+        const folder = {type: 'folder', fid: GLib.uuid_string_random(), name: 'Folder', apps, keep: true};
+        this._items.splice(clamp(index, 0, this._items.length), 0, folder);
+        this._commit();
+        later(() => this._openFolder(folder, true));
+    }
+
+    _newFolderWith(appId) {
+        let index = this._items.findIndex(e =>
+            (e.type === 'app' && e.id === appId) || (e.type === 'folder' && e.apps.includes(appId)));
+        const top = index >= 0 && this._items[index].type === 'app';
+        this._removeId(appId);
+        if (!top)
+            index = index >= 0 ? index + 1 : this._items.length;
+        this._folderView?.close();
+        this._newFolder([appId], index);
+    }
+
+    _openFolder(folder, rename) {
+        if (!this._folderView || !this._items.includes(folder))
+            return;
+        this._folderView.open(folder, Main.layoutManager.primaryMonitor);
+        if (rename)
+            this._folderView.beginRename();
+    }
+
+    // Apps go back to the grid where the folder was.
+    _deleteFolder(folder) {
+        const i = this._items.indexOf(folder);
+        if (i < 0)
+            return;
+        if (this._folderView?.folder === folder)
+            this._folderView.close();
+        this._items.splice(i, 1, ...folder.apps.map(id => ({type: 'app', id})));
+        this._commit();
     }
 
     _ensureFolderView(iconSize) {
@@ -545,6 +635,9 @@ export class KosDesktopGrid {
             }
             if (e.type === 'folder' && e.apps.includes(appId)) {
                 e.apps = e.apps.filter(id => id !== appId);
+                // Folders made from the right-click menu stay until deleted.
+                if (e.keep)
+                    return -1;
                 if (e.apps.length === 1) {
                     const last = e.apps[0];
                     for (const k of ['fid', 'name', 'apps'])

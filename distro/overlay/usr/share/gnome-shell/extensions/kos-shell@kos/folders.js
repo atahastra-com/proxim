@@ -84,7 +84,7 @@ export function loadLayout() {
 
 export function saveLayout(items) {
     const out = items.map(e => e.type === 'folder'
-        ? {folder: e.fid, name: e.name, apps: [...e.apps]}
+        ? {folder: e.fid, name: e.name, apps: [...e.apps], ...(e.keep ? {keep: true} : {})}
         : e.id);
     try {
         GLib.mkdir_with_parents(GLib.path_get_dirname(STORE), 0o755);
@@ -209,7 +209,7 @@ export class KosFolderView {
         this._grid.destroy_all_children();
 
         const cols = Math.min(FOLDER_COLS, Math.max(2, folder.apps.length));
-        const rows = Math.ceil(folder.apps.length / cols);
+        const rows = Math.max(1, Math.ceil(folder.apps.length / cols));
         const [tw, th] = this._tile;
         folder.apps.forEach((id, i) => {
             const tile = this._makeTile(id, folder);
@@ -227,6 +227,16 @@ export class KosFolderView {
         this._panel.set_position(
             Math.round((monitor.width - natW) / 2),
             Math.round((monitor.height - 72 - natH) / 2));
+    }
+
+    // Put the title in edit mode with the name selected (right-click
+    // "New Folder" / "Rename").
+    beginRename() {
+        if (!this.isOpen)
+            return;
+        global.display.unset_input_focus(global.get_current_time());
+        this._title.grab_key_focus();
+        this._title.clutter_text.set_selection(0, -1);
     }
 
     close() {
