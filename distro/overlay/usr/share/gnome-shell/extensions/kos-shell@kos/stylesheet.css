@@ -32,22 +32,22 @@
     transition-duration: 140ms;
 }
 
-#panel.kos-panel .panel-button:hover,
-#panel.kos-panel .panel-button:focus {
-    background-color: rgba(255, 255, 255, 0.12);
+#panel.kos-panel .panel-button:hover {
+    background-color: rgba(255, 255, 255, 0.10);
     box-shadow: none;
     color: #ffffff;
 }
 
-/* Open bar menus (clock, status cluster). */
+/* Open bar menus (clock, status cluster): keep flat with no box behind them. */
+#panel.kos-panel .panel-button:focus,
 #panel.kos-panel .panel-button:active,
 #panel.kos-panel .panel-button:checked,
 #panel.kos-panel .panel-button:overview,
 #panel.kos-panel .panel-button:active:hover,
 #panel.kos-panel .panel-button:checked:hover {
-    background-color: rgba(255, 255, 255, 0.20);
+    background-color: transparent;
     box-shadow: none;
-    border-radius: 12px;
+    border: none;
     color: #ffffff;
 }
 
