@@ -54,6 +54,45 @@ export function later(fn) {
     });
 }
 
+// ---- inline rename entries ------------------------------------------------
+// Like Files/Finder: a new file or folder exists on disk (or in the layout)
+// as soon as it is created, and its name entry only renames it. The entry
+// commits on Enter, on losing key focus, and on any press outside it. Clicks
+// on non-focusable actors don't move Clutter key focus, so the grid, the
+// bar and window focus changes call commitPendingEdits() (see desktopGrid.js).
+// No stage-wide handler: each caller watches only its own actors.
+
+const _pendingEdits = new Map(); // St.Entry -> commit(pressedActor | null)
+
+export function beginPendingEdit(entry, commit) {
+    _pendingEdits.set(entry, commit);
+}
+
+export function endPendingEdit(entry) {
+    _pendingEdits.delete(entry);
+}
+
+// Commit every open rename entry except the one the event happened in.
+export function commitPendingEdits(event = null) {
+    const target = event ? global.stage.get_event_actor(event) : null;
+    for (const [entry, commit] of [..._pendingEdits]) {
+        if (target && entry.contains(target))
+            continue;
+        commit(target);
+    }
+}
+
+// captured-event handler for our own containers: a press anywhere inside
+// commits pending renames, then the event goes on as usual (never stopped,
+// so clicks and drag-and-drop are unaffected).
+export function commitEditsOnPress(_actor, event) {
+    const type = event.type();
+    if (_pendingEdits.size &&
+        (type === Clutter.EventType.BUTTON_PRESS || type === Clutter.EventType.TOUCH_BEGIN))
+        commitPendingEdits(event);
+    return Clutter.EVENT_PROPAGATE;
+}
+
 export function lookupApp(appId) {
     return Shell.AppSystem.get_default().lookup_app(appId);
 }
@@ -363,9 +402,14 @@ export class KosFolderView {
             return Clutter.EVENT_PROPAGATE;
         });
         this._title.clutter_text.connect('activate', () => this._commitTitle(true));
+        this._title.clutter_text.connect('key-focus-in', () =>
+            beginPendingEdit(this._title, () => this._commitTitle(true)));
         this._title.clutter_text.connect('key-focus-out', () => this._commitTitle(false));
+        // Escape keeps the old name (the folder already exists) and closes.
         this._title.clutter_text.connect('key-press-event', (_t, event) => {
             if (event.get_key_symbol() === Clutter.KEY_Escape) {
+                if (this.folder)
+                    this._title.text = this.folder.name;
                 this.close();
                 return Clutter.EVENT_STOP;
             }
@@ -432,6 +476,7 @@ export class KosFolderView {
     }
 
     _commitTitle(unfocus) {
+        endPendingEdit(this._title);
         if (!this.folder)
             return;
         const name = this._title.text.trim() || 'Folder';
@@ -448,6 +493,7 @@ export class KosFolderView {
     }
 
     destroy() {
+        endPendingEdit(this._title);
         this.actor.destroy();
     }
 }
@@ -456,7 +502,7 @@ export class KosFolderView {
 export function makeDraggableIcon(button, delegate, dragIconFn, sourceActor) {
     button._delegate = Object.assign(delegate, {
         getDragActor: dragIconFn,
-        getDragActorSource: () => sourceActor,
+        getDragActorSource: () => (typeof sourceActor === 'function' ? sourceActor() : sourceActor),
     });
     const draggable = DND.makeDraggable(button);
     return draggable;

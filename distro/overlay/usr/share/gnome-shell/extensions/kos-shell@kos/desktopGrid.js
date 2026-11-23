@@ -23,8 +23,9 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {
-    DND, KosFolderView, appIcon, createDesktopDir, createDesktopFile,
-    deleteDesktopFile, desktopDirExists, desktopFile, desktopFileExists,
+    DND, KosFolderView, appIcon, beginPendingEdit, commitEditsOnPress,
+    commitPendingEdits, createDesktopDir, createDesktopFile,
+    deleteDesktopFile, endPendingEdit, desktopDirExists, desktopFile, desktopFileExists,
     dirIcon, fileIcon, getPins, later, listUserDesktopEntries, loadLayout,
     lookupApp, makeDraggableIcon, makeFolderSquare, moveDesktopFileToDir,
     pinAt, renameDesktopFile, saveLayout, unpin,
@@ -118,6 +119,20 @@ export class KosDesktopGrid {
         // ones come back. Reload whenever the dock's pins change.
         this._connect(global.settings, 'changed::favorite-apps', () => later(() => this._rebuild()));
         this._connect(this._actor, 'notify::allocation', () => this._logAllocation());
+        // Clicking elsewhere commits an open rename (new file/folder name,
+        // launchpad folder title): presses on the grid (icons, empty space,
+        // open folder) or on the bar (dock, clock, quick settings), and a
+        // window taking focus. Only our own actors; events always propagate.
+        // (Clutter skips non-reactive actors when it emits events, so the
+        // handler sits on the reactive backdrop, on each tile button (see
+        // _makeIcon & co.), on the open-folder view, and on the bar, not on
+        // the non-reactive grid root.)
+        this._backdrop.connect('captured-event', commitEditsOnPress);
+        this._connect(Main.panel, 'captured-event', commitEditsOnPress);
+        this._connect(global.display, 'notify::focus-window', () => {
+            if (global.display.focus_window)
+                commitPendingEdits();
+        });
     }
 
     disable() {
@@ -395,6 +410,7 @@ export class KosDesktopGrid {
             child: box,
             accessible_name: app.get_name(),
         });
+        button.connect('captured-event', commitEditsOnPress);
         button.connect('clicked', () => {
             this._folderView?.close();
             launchApp(app);
@@ -446,6 +462,7 @@ export class KosDesktopGrid {
             child: box,
             accessible_name: folder.name,
         });
+        button.connect('captured-event', commitEditsOnPress);
         button.connect('clicked', () =>
             this._folderView.open(folder, Main.layoutManager.primaryMonitor));
         this._onRightClick(button, (x, y) => openContextMenu(x, y, [
@@ -469,12 +486,40 @@ export class KosDesktopGrid {
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.START,
         });
-        const icon = isDir ? dirIcon(iconSize) : fileIcon(item.name, iconSize);
+        let icon = isDir ? dirIcon(iconSize) : fileIcon(item.name, iconSize);
         icon.add_style_class_name('kos-desktop-icon-app');
         box.add_child(icon);
 
-        const renaming = this._renamingFile === item.name;
-        if (renaming) {
+        const makeLabel = () => {
+            const label = new St.Label({
+                text: item.name,
+                style_class: 'kos-desktop-icon-label',
+                x_align: Clutter.ActorAlign.CENTER,
+            });
+            const ct = label.clutter_text;
+            ct.line_wrap = false;
+            ct.ellipsize = Pango.EllipsizeMode.END;
+            ct.line_alignment = Pango.Alignment.CENTER;
+            label.set_width(tileW - 8);
+            return label;
+        };
+
+        const button = new St.Button({
+            style_class: 'kos-desktop-icon',
+            reactive: true,
+            can_focus: false,
+            track_hover: true,
+            button_mask: St.ButtonMask.ONE,
+            child: box,
+            accessible_name: item.name,
+        });
+        button.connect('captured-event', commitEditsOnPress);
+
+        let skipClick = false;
+        if (this._renamingFile === item.name) {
+            // The file/folder already exists on disk (created by New File /
+            // New Folder); this entry only renames it. Enter, focus loss, or a
+            // press anywhere else commits; Escape keeps the current name.
             const entry = new St.Entry({
                 text: item.name,
                 style_class: 'kos-file-rename-entry',
@@ -489,18 +534,38 @@ export class KosDesktopGrid {
                 line_alignment: Pango.Alignment.CENTER,
             });
             let done = false;
+            let gone = false;
+            button.connect('destroy', () => {
+                gone = true;
+            });
             const finish = apply => {
                 if (done)
                     return;
                 done = true;
-                this._renamingFile = null;
-                global.stage.set_key_focus(null);
+                endPendingEdit(entry);
+                if (this._renamingFile === item.name)
+                    this._renamingFile = null;
                 if (apply) {
                     const next = renameDesktopFile(item.name, entry.text);
                     if (next)
                         item.name = next;
                 }
-                this._commit();
+                saveLayout(this._items);
+                if (global.stage.get_key_focus() === entry.clutter_text)
+                    global.stage.set_key_focus(null);
+                if (gone || entry.get_parent() !== box)
+                    return;
+                // Swap the entry for a label in place: no grid rebuild, so a
+                // press that committed the rename still clicks or drags
+                // whatever it landed on.
+                button.accessible_name = item.name;
+                if (!isDir) {
+                    const next = fileIcon(item.name, iconSize);
+                    next.add_style_class_name('kos-desktop-icon-app');
+                    box.replace_child(icon, next);
+                    icon = next;
+                }
+                box.replace_child(entry, makeLabel());
             };
             entry.clutter_text.connect('activate', () => finish(true));
             entry.clutter_text.connect('key-focus-out', () => finish(true));
@@ -512,8 +577,16 @@ export class KosDesktopGrid {
                 return Clutter.EVENT_PROPAGATE;
             });
             box.add_child(entry);
+            entry.connect('destroy', () => endPendingEdit(entry));
+            // A press on this tile's own icon only commits; it doesn't
+            // also open the file on release.
+            beginPendingEdit(entry, pressed => {
+                if (pressed && button.contains(pressed))
+                    skipClick = true;
+                finish(true);
+            });
             later(() => {
-                if (!entry.get_stage())
+                if (done || !entry.get_stage())
                     return;
                 global.display.unset_input_focus(global.get_current_time());
                 entry.grab_key_focus();
@@ -521,31 +594,14 @@ export class KosDesktopGrid {
                 entry.clutter_text.set_selection(0, dot > 0 ? dot : -1);
             });
         } else {
-            const label = new St.Label({
-                text: item.name,
-                style_class: 'kos-desktop-icon-label',
-                x_align: Clutter.ActorAlign.CENTER,
-            });
-            const ct = label.clutter_text;
-            ct.line_wrap = false;
-            ct.ellipsize = Pango.EllipsizeMode.END;
-            ct.line_alignment = Pango.Alignment.CENTER;
-            label.set_width(tileW - 8);
-            box.add_child(label);
+            box.add_child(makeLabel());
         }
 
-        const button = new St.Button({
-            style_class: 'kos-desktop-icon',
-            reactive: true,
-            can_focus: false,
-            track_hover: true,
-            button_mask: St.ButtonMask.ONE,
-            child: box,
-            accessible_name: item.name,
-        });
         button.connect('clicked', () => {
-            if (this._renamingFile === item.name)
+            if (skipClick || this._renamingFile === item.name) {
+                skipClick = false;
                 return;
+            }
             this._folderView?.close();
             openDesktopFile(item.name);
         });
@@ -556,7 +612,7 @@ export class KosDesktopGrid {
             {label: isDir ? 'Delete Folder' : 'Delete File', action: () => this._deleteFile(item)},
         ]));
         makeDraggableIcon(button, {kind: isDir ? 'grid-dir' : 'grid-file', item},
-            () => (isDir ? dirIcon(iconSize) : fileIcon(item.name, iconSize)), icon);
+            () => (isDir ? dirIcon(iconSize) : fileIcon(item.name, iconSize)), () => icon);
         Object.assign(button._delegate, {
             handleDragOver: src => this._dragOk(src),
             acceptDrop: (src, _a, x, y) => this._dropOnItem(src, item, x, y, tileW, iconSize),
@@ -686,11 +742,15 @@ export class KosDesktopGrid {
                 tile?.set_size(...this._tileSize);
                 return tile;
             },
+            // Only the grid tile shows the name; leave the open folder's
+            // tiles alone so a press that committed the title still lands.
             onRename: (folder, name) => {
                 folder.name = name;
-                this._commit();
+                saveLayout(this._items);
+                later(() => this._layoutIcons());
             },
         });
+        this._folderView.actor.connect('captured-event', commitEditsOnPress);
     }
 
     // ---- drag and drop ---------------------------------------------------
