@@ -1,0 +1,165 @@
+/* kos window style for GTK4 / libadwaita 1.7 apps (Settings, Files, Text
+ * Editor, ...). Deepin-like: dark, rounded, soft shadow, flat titlebar that
+ * blends into the content, round window buttons on the right, kos blue.
+ * Same file ships in /etc/skel for new users. Plain CSS overrides only. */
+
+:root {
+    --accent-bg-color: #0081ff;
+    --accent-fg-color: #ffffff;
+    --accent-color: #4aa3ff;
+    --window-bg-color: #202127;
+    --window-fg-color: rgba(255, 255, 255, 0.92);
+    --view-bg-color: #202127;
+    --view-fg-color: rgba(255, 255, 255, 0.92);
+    --headerbar-bg-color: #202127;
+    --headerbar-fg-color: rgba(255, 255, 255, 0.92);
+    --headerbar-border-color: transparent;
+    --headerbar-shade-color: transparent;
+    --sidebar-bg-color: #18191e;
+    --sidebar-fg-color: rgba(255, 255, 255, 0.90);
+    --sidebar-border-color: transparent;
+    --sidebar-shade-color: transparent;
+    --secondary-sidebar-bg-color: #18191e;
+    --card-bg-color: rgba(255, 255, 255, 0.05);
+    --card-fg-color: rgba(255, 255, 255, 0.92);
+    --popover-bg-color: #26272e;
+    --popover-fg-color: rgba(255, 255, 255, 0.92);
+    --dialog-bg-color: #24252b;
+    --dialog-fg-color: rgba(255, 255, 255, 0.92);
+    --window-radius: 16px;
+}
+
+/* Rounded window with a large soft shadow (like DDE). */
+window.csd {
+    border-radius: 16px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+window.csd.maximized,
+window.csd.fullscreen,
+window.csd.tiled {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* Flat titlebar, same color as the content below it. */
+headerbar,
+.titlebar,
+.top-bar,
+toolbarview > .top-bar headerbar {
+    background-color: transparent;
+    background-image: none;
+    border-bottom: none;
+    box-shadow: none;
+    min-height: 50px;
+}
+
+/* Window buttons: clean round icons on the right (layout comes from
+ * org.gnome.desktop.wm.preferences button-layout = ':minimize,maximize,close'). */
+windowcontrols {
+    border-spacing: 8px;
+    margin: 0 4px;
+}
+
+windowcontrols > button {
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0;
+    margin: 0;
+    border-radius: 999px;
+    background-color: rgba(255, 255, 255, 0.07);
+    box-shadow: none;
+}
+
+windowcontrols > button > image {
+    background: none;
+    box-shadow: none;
+    padding: 0;
+    -gtk-icon-size: 14px;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+windowcontrols > button:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+windowcontrols > button.close:hover {
+    background-color: #f04e4e;
+}
+
+windowcontrols > button.close:hover > image {
+    color: #ffffff;
+}
+
+/* Darker sidebar (Settings, Files), no hard divider, rounded selection. */
+.sidebar-pane,
+.navigation-sidebar,
+placessidebar,
+.sidebar {
+    background-color: #18191e;
+    border: none;
+}
+
+.sidebar-pane {
+    border-right: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.navigation-sidebar > row,
+placessidebar row {
+    border-radius: 10px;
+    margin: 2px 8px;
+    padding: 6px 10px;
+}
+
+.navigation-sidebar > row:hover,
+placessidebar row:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.navigation-sidebar > row:selected,
+.navigation-sidebar > row:selected:hover,
+placessidebar row:selected {
+    background-color: #0081ff;
+    color: #ffffff;
+}
+
+/* Cards and grouped lists: soft rounded tiles, no hard borders. */
+list.boxed-list,
+list.boxed-list-separate > row,
+.card {
+    border-radius: 12px;
+    border: none;
+    box-shadow: none;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+list.boxed-list > row:not(:last-child) {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Buttons and entries: rounded squares, not pills. */
+button:not(.circular):not(.flat):not(.image-button) {
+    border-radius: 9px;
+}
+
+entry,
+searchbar > revealer > box entry {
+    border-radius: 9px;
+}
+
+switch {
+    background-color: rgba(255, 255, 255, 0.18);
+    border: none;
+}
+
+switch:checked {
+    background-color: #0081ff;
+}
+
+switch > slider {
+    background-color: #ffffff;
+}
+
+popover > contents {
+    border-radius: 14px;
+}

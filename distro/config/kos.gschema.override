@@ -31,6 +31,7 @@ experimental-features=@as []
 
 [org.gnome.desktop.wm.preferences]
 num-workspaces=1
+button-layout=':minimize,maximize,close'
 
 [org.gnome.shell]
 disable-user-extensions=false
