@@ -24,13 +24,22 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
 
 ## Design
 - No top bar, Activities, overview, workspaces, or app-grid button.
-- One full-width bottom bar, 72px, flush to the bottom edge, dark frosted glass (rgba(16,18,24,0.72) + background blur), no border:
+- One full-width bottom bar, 72px, flush to the bottom edge, light frosted glass (rgba(246,247,250,0.78) + background blur), dark text and icons, no border:
   - left: date + time only;
-  - middle: 42px dock icons (46px on hover) sitting flat on the bar, vertically centered, no pill or outline; a small white dot under running apps; a thin divider before running non-pinned apps;
+  - middle: 42px dock icons (46px on hover) sitting flat on the bar, vertically centered, no pill or outline; a small dark dot under running apps (blue under the focused one); a thin divider before running non-pinned apps;
   - right: GNOME's system cluster only (network/volume/power). No extra wifi icon.
 - Desktop: Launchpad-style 7-column grid, centered as a block with even spacing, centered labels, no tile boxes, no search bar. Clicking an icon opens the app window.
-- Popups (quick settings, calendar, menus, OSD, dialogs) in Deepin (DDE) style: one dark translucent panel (rgba(28,30,38,0.74)), 18px radius, soft large shadow, rounded-square tiles and buttons (12-14px, not pills), thin sliders, accent #0081ff.
-- App windows in Deepin style: 16px rounded corners, big soft shadow, flat titlebar the same color as the content, minimize/maximize/close as round buttons on the RIGHT (`button-layout=':minimize,maximize,close'`, set in the gschema override, dconf defaults and extension.js), darker sidebar with rounded blue selection. No macOS traffic lights.
+- Theme is LIGHT, like Deepin (DDE 23): `color-scheme='prefer-light'` (gschema override, dconf defaults, extension.js). Don't switch back to dark.
+- Popups (calendar, menus, OSD, dialogs): one light translucent panel (rgba(248,249,251,0.90)), 18px radius, soft shadow (0 16px 44px rgba(0,0,0,0.22)), dark text, rounded-square buttons (10-12px, not pills), accent #0081ff.
+- Quick settings = Deepin control center. `quickPanel.js` switches GNOME's grid to 4 columns and reorders it; `.kos-cc*` classes style it. Top to bottom:
+  - wide tiles (2 columns) for network and bluetooth, then night light ("eye comfort"): light-gray 12px tile, icon in a circle on the left (pink #e0407a when on, gray when off), bold title, gray status line (filled in when GNOME leaves it empty), chevron on the right;
+  - small square tiles (1 column) for every other toggle, plus our own DND Mode, Screenshot, Record, System Monitor: icon on top, 10px label under it, blue #0081ff when on;
+  - each slider in its own light-gray card: thick dark filled track, white round knob, a settings button on the right (display / sound);
+  - bottom row: settings gear left, lock + power right (the screenshot button moved into a tile).
+  - New quick settings items from GNOME or other extensions are picked up automatically (sliders become cards, toggles become small tiles). `disable()` must restore every span, order and style.
+- App windows in Deepin Control Center style (`~/.config/gtk-4.0/gtk.css`, `gtk-3.0/gtk.css`, same files in `/etc/skel`): white, 14px corners, soft shadow, flat white titlebar, minimize/maximize/close on the RIGHT as thin plain glyphs (no circles; hover square on the icon, red on close) via `button-layout=':minimize,maximize,close'`; light-gray rounded header buttons, round '...' menu, light-gray pill search entry.
+  - Sidebar white like the content, 40px rows with 8px corners, selected row solid #0081ff with white text and icon.
+  - Grouped lists (`boxed-list`) are separate light-gray (#f2f3f5) 9px cards with 6px gaps, label left, value right in gray. No macOS traffic lights.
 - Icon theme Deepin2022 (`distro/overlay/usr/share/icons/Deepin2022/`, gitignored, must exist locally before a build).
 - kos wallpaper with a dim layer over the whole screen, accent #0081ff, animations off.
 
@@ -44,5 +53,8 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
 - Test with `./build.sh distro-dev` (live CSS reload) or `./build.sh distro-update` then `./build.sh distro-run`. A change is done only when a screenshot proves it.
 
 ## Limits to know
-- libadwaita has no real background blur for windows; "frosted" sidebars are just darker/translucent colors. Shell popups get translucency, not blur.
+- libadwaita has no real background blur for windows. Shell popups and the bar get a Shell.BlurEffect, but windows behind still show through.
+- GTK CSS can't move widgets: GNOME Settings keeps its own header layout (search button + '...' in the sidebar header, not Deepin's centered search entry), and sidebar icons are monochrome symbolic icons. Colorful round sidebar icons need a custom icon set.
+- Brightness only shows on hardware with a backlight, bluetooth only with an adapter, night light only where mutter supports it, so the QEMU VM shows fewer tiles than Deepin.
+- Hot reload (`distro-dev`) re-applies CSS, but GJS caches ES modules: JS changes in a new or changed module need a fresh session (re-login or reboot) to show.
 - GTK CSS is per user (~/.config), so changes reach the image only through `distro-update` (or a rebuild), not `distro-dev` hot reload.
