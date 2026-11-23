@@ -72,10 +72,10 @@
     color: rgba(255, 255, 255, 0.94);
 }
 
-/* Center dock: icons sit flat on the dark bar. */
+/* Center dock: icons sit flat on the dark bar, with wide, even slots. */
 .kos-dock {
-    spacing: 10px;
-    padding: 0 8px;
+    spacing: 8px;
+    padding: 0 12px;
     margin: 0;
     background-color: transparent;
     border: none;
@@ -85,18 +85,24 @@
 
 .kos-dock-separator {
     width: 1px;
-    height: 30px;
-    margin: 0 6px;
+    height: 36px;
+    margin: 0 8px;
     background-color: rgba(255, 255, 255, 0.18);
 }
 
-/* Pixel-exact vertical centering in the 72px bar:
- * Rest: 12px top + 42px icon + 8px dot + 4px bottom = 66px.
- * Hover: 10px top + 46px icon + 8px dot + 2px bottom = 66px (zero neighbor shift). */
-.kos-dock-item {
-    padding: 12px 8px 4px 8px;
-    border-radius: 14px;
+/* No hover/active box: the icon itself reacts (it grows). Vertical budget in
+ * the 72px bar (71px under the 1px top border):
+ *   rest : 5 + 52 icon + 7 dot + 5 = 69px, slot width 52 + 2*6 = 64px
+ *   hover: 2 + 58 icon + 7 dot + 2 = 69px, slot width 58 + 2*3 = 64px
+ * so neighbours never shift. */
+.kos-dock-item,
+.kos-dock-item:hover,
+.kos-dock-item:focus,
+.kos-dock-item:active,
+.kos-dock-item.focused {
+    padding: 5px 6px 5px 6px;
     border: none;
+    border-radius: 0;
     box-shadow: none;
     background-color: transparent;
     transition-duration: 140ms;
@@ -104,36 +110,21 @@
 
 .kos-dock-item:hover,
 .kos-dock-item:focus {
-    padding: 10px 6px 2px 6px;
-    background-color: rgba(255, 255, 255, 0.12);
-    border: none;
-    box-shadow: none;
-}
-
-.kos-dock-item:active {
-    padding: 12px 8px 4px 8px;
-    background-color: rgba(0, 129, 255, 0.30);
-    border: none;
-    box-shadow: none;
-}
-
-.kos-dock-item.focused {
-    background-color: transparent;
-    border: none;
+    padding: 2px 3px 2px 3px;
 }
 
 .kos-dock-item-icon {
-    icon-size: 42px;
+    icon-size: 52px;
     transition-duration: 140ms;
 }
 
 .kos-dock-item:hover .kos-dock-item-icon,
 .kos-dock-item:focus .kos-dock-item-icon {
-    icon-size: 46px;
+    icon-size: 58px;
 }
 
 .kos-dock-item:active .kos-dock-item-icon {
-    icon-size: 42px;
+    icon-size: 52px;
 }
 
 /* Running indicator beneath open dock icons. */
@@ -142,7 +133,7 @@
     height: 4px;
     border-radius: 4px;
     background-color: transparent;
-    margin-top: 4px;
+    margin-top: 3px;
     transition-duration: 140ms;
 }
 
