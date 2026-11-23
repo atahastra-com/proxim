@@ -23,10 +23,11 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {
-    DND, KosFolderView, appIcon, createDesktopFile, deleteDesktopFile,
-    desktopFile, desktopFileExists, fileIcon, getPins, later,
-    listUserDesktopFiles, loadLayout, lookupApp, makeDraggableIcon,
-    makeFolderSquare, pinAt, renameDesktopFile, saveLayout, unpin,
+    DND, KosFolderView, appIcon, createDesktopDir, createDesktopFile,
+    deleteDesktopFile, desktopDirExists, desktopFile, desktopFileExists,
+    dirIcon, fileIcon, getPins, later, listUserDesktopEntries, loadLayout,
+    lookupApp, makeDraggableIcon, makeFolderSquare, moveDesktopFileToDir,
+    pinAt, renameDesktopFile, saveLayout, unpin,
 } from './folders.js';
 import {closeContextMenu, openContextMenu} from './contextMenu.js';
 
@@ -81,7 +82,7 @@ export class KosDesktopGrid {
             this._folderView?.close();
             openContextMenu(x, y, [
                 {label: 'New File', action: () => this._newFile(this._cellIndexAt(x, y))},
-                {label: 'New Folder', action: () => this._newFolder([], this._cellIndexAt(x, y))},
+                {label: 'New Folder', action: () => this._newDesktopDir(this._cellIndexAt(x, y))},
             ]);
             return Clutter.EVENT_STOP;
         });
@@ -186,7 +187,7 @@ export class KosDesktopGrid {
             return home.map(id => ({type: 'app', id}));
 
         const used = new Set(pinned);
-        const seenFiles = new Set();
+        const seenEntries = new Set();
         const take = id => {
             if (typeof id !== 'string' || used.has(id) || !loadApp(id))
                 return false;
@@ -199,9 +200,14 @@ export class KosDesktopGrid {
                 if (take(e))
                     items.push({type: 'app', id: e});
             } else if (e && typeof e.file === 'string') {
-                if (!seenFiles.has(e.file) && desktopFileExists(e.file)) {
-                    seenFiles.add(e.file);
+                if (!seenEntries.has(e.file) && desktopFileExists(e.file)) {
+                    seenEntries.add(e.file);
                     items.push({type: 'file', name: e.file});
+                }
+            } else if (e && typeof e.dir === 'string') {
+                if (!seenEntries.has(e.dir) && desktopDirExists(e.dir)) {
+                    seenEntries.add(e.dir);
+                    items.push({type: 'dir', name: e.dir});
                 }
             } else if (e && Array.isArray(e.apps)) {
                 const apps = e.apps.filter(take);
@@ -218,10 +224,10 @@ export class KosDesktopGrid {
                 items.push({type: 'app', id});
             }
         }
-        for (const name of listUserDesktopFiles()) {
-            if (!seenFiles.has(name)) {
-                seenFiles.add(name);
-                items.push({type: 'file', name});
+        for (const entry of listUserDesktopEntries()) {
+            if (!seenEntries.has(entry.name)) {
+                seenEntries.add(entry.name);
+                items.push({type: entry.isDir ? 'dir' : 'file', name: entry.name});
             }
         }
         return items;
@@ -328,7 +334,7 @@ export class KosDesktopGrid {
             let icon = null;
             if (item.type === 'folder')
                 icon = this._makeFolderIcon(item, tileW, m.iconSize);
-            else if (item.type === 'file')
+            else if (item.type === 'file' || item.type === 'dir')
                 icon = this._makeFileIcon(item, tileW, m.iconSize);
             else
                 icon = this._makeIcon(item, tileW, m.iconSize);
@@ -461,13 +467,14 @@ export class KosDesktopGrid {
     }
 
     _makeFileIcon(item, tileW, iconSize) {
+        const isDir = item.type === 'dir';
         const box = new St.BoxLayout({
             vertical: true,
             x_expand: true,
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.START,
         });
-        const icon = fileIcon(item.name, iconSize);
+        const icon = isDir ? dirIcon(iconSize) : fileIcon(item.name, iconSize);
         icon.add_style_class_name('kos-desktop-icon-app');
         box.add_child(icon);
 
@@ -515,7 +522,7 @@ export class KosDesktopGrid {
                     return;
                 global.display.unset_input_focus(global.get_current_time());
                 entry.grab_key_focus();
-                const dot = item.name.lastIndexOf('.');
+                const dot = isDir ? -1 : item.name.lastIndexOf('.');
                 entry.clutter_text.set_selection(0, dot > 0 ? dot : -1);
             });
         } else {
@@ -551,10 +558,10 @@ export class KosDesktopGrid {
             {label: 'Open', action: () => openDesktopFile(item.name)},
             {label: 'Rename', action: () => this._startRenameFile(item)},
             {separator: true},
-            {label: 'Delete File', action: () => this._deleteFile(item)},
+            {label: isDir ? 'Delete Folder' : 'Delete File', action: () => this._deleteFile(item)},
         ]));
-        makeDraggableIcon(button, {kind: 'grid-file', item},
-            () => fileIcon(item.name, iconSize), icon);
+        makeDraggableIcon(button, {kind: isDir ? 'grid-dir' : 'grid-file', item},
+            () => (isDir ? dirIcon(iconSize) : fileIcon(item.name, iconSize)), icon);
         Object.assign(button._delegate, {
             handleDragOver: src => this._dragOk(src),
             acceptDrop: (src, _a, x, y) => this._dropOnItem(src, item, x, y, tileW, iconSize),
@@ -643,6 +650,16 @@ export class KosDesktopGrid {
         this._commit();
     }
 
+    _newDesktopDir(index) {
+        const name = createDesktopDir('New Folder');
+        if (!name)
+            return;
+        const item = {type: 'dir', name};
+        this._items.splice(clamp(index, 0, this._items.length), 0, item);
+        this._renamingFile = name;
+        this._commit();
+    }
+
     _startRenameFile(item) {
         if (!this._items.includes(item))
             return;
@@ -684,7 +701,7 @@ export class KosDesktopGrid {
     // ---- drag and drop ---------------------------------------------------
 
     _dragOk(source) {
-        return ['grid-app', 'grid-folder', 'grid-file', 'folder-app', 'dock-app'].includes(source?.kind)
+        return ['grid-app', 'grid-folder', 'grid-file', 'grid-dir', 'folder-app', 'dock-app'].includes(source?.kind)
             ? DND.DragMotionResult.MOVE_DROP
             : DND.DragMotionResult.CONTINUE;
     }
@@ -722,7 +739,17 @@ export class KosDesktopGrid {
             (target.type === 'app' && source.appId === target.id && source.kind !== 'folder-app');
         if (sameThing)
             return false;
-        if (onIcon && source.kind !== 'grid-folder' && source.kind !== 'grid-file' && target.type !== 'file')
+        if (onIcon && source.kind === 'grid-file' && target.type === 'dir') {
+            if (moveDesktopFileToDir(source.item.name, target.name)) {
+                const i = this._items.indexOf(source.item);
+                if (i >= 0)
+                    this._items.splice(i, 1);
+                this._commit();
+            }
+            return true;
+        }
+        if (onIcon && source.kind !== 'grid-folder' && source.kind !== 'grid-file' &&
+                source.kind !== 'grid-dir' && target.type !== 'file' && target.type !== 'dir')
             this._place(source, -1, target);
         else
             this._place(source, this._items.indexOf(target), null);
@@ -745,7 +772,7 @@ export class KosDesktopGrid {
             if (removedAt >= 0)
                 this._items.splice(removedAt, 1);
             entry = source.folder;
-        } else if (source.kind === 'grid-file') {
+        } else if (source.kind === 'grid-file' || source.kind === 'grid-dir') {
             removedAt = this._items.indexOf(source.item);
             if (removedAt >= 0)
                 this._items.splice(removedAt, 1);

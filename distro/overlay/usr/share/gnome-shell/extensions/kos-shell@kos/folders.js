@@ -89,6 +89,8 @@ export function saveLayout(items) {
             return {folder: e.fid, name: e.name, apps: [...e.apps], ...(e.keep ? {keep: true} : {})};
         if (e.type === 'file')
             return {file: e.name};
+        if (e.type === 'dir')
+            return {dir: e.name};
         return e.id;
     });
     try {
@@ -99,7 +101,7 @@ export function saveLayout(items) {
     }
 }
 
-// ---- desktop files --------------------------------------------------------
+// ---- desktop files & folders ----------------------------------------------
 
 export function desktopDirPath() {
     return GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DESKTOP) ||
@@ -110,39 +112,50 @@ export function desktopFile(name) {
     return Gio.File.new_for_path(GLib.build_filenamev([desktopDirPath(), name]));
 }
 
-export function desktopFileExists(name) {
+function desktopEntryType(name) {
     if (!name || name.includes('/'))
-        return false;
+        return null;
     const f = desktopFile(name);
     if (!f.query_exists(null))
-        return false;
+        return null;
     try {
         const info = f.query_info('standard::type', Gio.FileQueryInfoFlags.NONE, null);
-        return info.get_file_type() !== Gio.FileType.DIRECTORY;
+        return info.get_file_type() === Gio.FileType.DIRECTORY ? 'dir' : 'file';
     } catch (_e) {
-        return false;
+        return null;
     }
 }
 
-export function listUserDesktopFiles() {
+export function desktopFileExists(name) {
+    return desktopEntryType(name) === 'file';
+}
+
+export function desktopDirExists(name) {
+    return desktopEntryType(name) === 'dir';
+}
+
+export function listUserDesktopEntries() {
     const dir = Gio.File.new_for_path(desktopDirPath());
     if (!dir.query_exists(null))
         return [];
-    const names = [];
+    const entries = [];
     try {
         const en = dir.enumerate_children('standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
         let info;
         while ((info = en.next_file(null))) {
             const name = info.get_name();
-            if (!name || name.startsWith('.') || info.get_file_type() === Gio.FileType.DIRECTORY)
+            if (!name || name.startsWith('.'))
                 continue;
-            names.push(name);
+            entries.push({
+                name,
+                isDir: info.get_file_type() === Gio.FileType.DIRECTORY,
+            });
         }
     } catch (_e) {
         return [];
     }
-    names.sort((a, b) => a.localeCompare(b));
-    return names;
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    return entries;
 }
 
 export function createDesktopFile(base = 'Untitled', ext = '.txt') {
@@ -163,6 +176,39 @@ export function createDesktopFile(base = 'Untitled', ext = '.txt') {
         }
     }
     return null;
+}
+
+export function createDesktopDir(base = 'New Folder') {
+    const dir = desktopDirPath();
+    GLib.mkdir_with_parents(dir, 0o755);
+    for (let i = 1; i < 1000; i++) {
+        const name = i === 1 ? base : `${base} ${i}`;
+        const f = desktopFile(name);
+        if (f.query_exists(null))
+            continue;
+        try {
+            f.make_directory(null);
+            return name;
+        } catch (e) {
+            logError(e, `kos-shell: creating folder ${name}`);
+            return null;
+        }
+    }
+    return null;
+}
+
+export function moveDesktopFileToDir(fileName, dirName) {
+    const src = desktopFile(fileName);
+    const dst = Gio.File.new_for_path(GLib.build_filenamev([desktopDirPath(), dirName, fileName]));
+    if (!src.query_exists(null) || dst.query_exists(null))
+        return false;
+    try {
+        src.move(dst, Gio.FileCopyFlags.NONE, null, null);
+        return true;
+    } catch (e) {
+        logError(e, `kos-shell: moving ${fileName} into ${dirName}`);
+        return false;
+    }
 }
 
 export function renameDesktopFile(oldName, newName) {
@@ -195,6 +241,15 @@ export function deleteDesktopFile(name) {
             logError(e2, `kos-shell: deleting ${name}`);
         }
     }
+}
+
+export function dirIcon(size) {
+    return new St.Icon({
+        icon_name: 'folder',
+        fallback_icon_name: 'folder',
+        icon_size: size,
+        x_align: Clutter.ActorAlign.CENTER,
+    });
 }
 
 export function fileIcon(name, size) {
