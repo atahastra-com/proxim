@@ -8,10 +8,16 @@
 // status cluster (network/volume/power) left alone on the right.
 
 import Shell from 'gi://Shell';
+import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 export const PANEL_HEIGHT = 72;
+// The calendar (clock, left) and quick settings (right) popups float as
+// mirror images: the same gap above the bar and the same inset from their
+// screen edge, no arrow.
+export const POPUP_GAP = 12;
+export const POPUP_INSET = 12;
 
 export class KosPanel {
     constructor() {
@@ -25,6 +31,7 @@ export class KosPanel {
 
         this._menuBlurs = [];
         this._enableBlur();
+        this._placePopups();
         this._hideActivities();
         this._disableHotCorners();
         this._moveDateMenuToLeft();
@@ -59,6 +66,7 @@ export class KosPanel {
         this._signals = [];
 
         this._disableBlur();
+        this._restorePopups();
         this._restoreDateMenu();
         this._restorePanel();
         Main.panel.remove_style_class_name('kos-panel');
@@ -125,6 +133,35 @@ export class KosPanel {
             }
         }
         this._menuBlurs = [];
+    }
+
+    // BoxPointer would center the popup on its button and keep -arrow-rise
+    // from the screen edge; we pin it to the bar corner instead. The
+    // instance override runs GNOME's own _reposition first (arrow side,
+    // flip), then moves the box. -arrow-rise is 0 (.kos-popup-boxpointer),
+    // so the box is exactly the visible panel.
+    _placePopups() {
+        this._placed = [];
+        for (const [area, side] of [['dateMenu', St.Side.LEFT], ['quickSettings', St.Side.RIGHT]]) {
+            const pointer = Main.panel.statusArea[area]?.menu?._boxPointer;
+            if (!pointer)
+                continue;
+            pointer.add_style_class_name('kos-popup-boxpointer');
+            const reposition = pointer._reposition;
+            pointer._reposition = function (box) {
+                reposition.call(this, box);
+                placePopup(this, box, side);
+            };
+            this._placed.push(pointer);
+        }
+    }
+
+    _restorePopups() {
+        for (const pointer of this._placed || []) {
+            delete pointer._reposition;
+            pointer.remove_style_class_name('kos-popup-boxpointer');
+        }
+        this._placed = [];
     }
 
     // Hide the "Activities" button (the overview toggle in the top-left).
@@ -202,4 +239,25 @@ export class KosPanel {
         box.set_position(monitor.x, monitor.y);
         box.set_size(monitor.width, -1);
     }
+}
+
+function placePopup(pointer, box, side) {
+    const monitor = Main.layoutManager.primaryMonitor;
+    if (!monitor)
+        return;
+    // The allocation we are given is the size the popup gets drawn at
+    // (it can be smaller than the preferred size, e.g. the calendar).
+    const [width, height] = box.get_size();
+    const barTop = monitor.y + monitor.height - PANEL_HEIGHT;
+    const x = side === St.Side.LEFT
+        ? monitor.x + POPUP_INSET
+        : monitor.x + monitor.width - POPUP_INSET - width;
+    const y = barTop - POPUP_GAP - height;
+    let parent = pointer.get_parent();
+    let [ok, px, py] = [false, x, y];
+    while (!ok && parent) {
+        [ok, px, py] = parent.transform_stage_point(x, y);
+        parent = parent.get_parent();
+    }
+    box.set_origin(Math.floor(px), Math.floor(py));
 }

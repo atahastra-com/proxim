@@ -1,13 +1,15 @@
 // Deepin (DDE 23) control-center layout for GNOME's quick settings popup.
 //
 // GNOME keeps its quick settings in one grid (menu._grid) with 2 columns.
-// We switch it to 4 columns and reorder the same items, top to bottom:
-//   network + bluetooth   wide tiles (2 columns): icon circle, title, subtitle, chevron
-//   night light           wide tile ("eye comfort")
-//   every other toggle    small square tiles (1 column): icon over a label
-//   our own tiles         Do Not Disturb, Screenshot, Record, System Monitor
+// We reorder the same items into one strict grid, top to bottom:
+//   every toggle          identical tiles (1 column): icon centered over a label
+//                         (network, bluetooth, night light, other toggles, then
+//                         our own Do Not Disturb, Screenshot, Record, System Monitor)
 //   sliders               full-width cards, with a settings button on the right
 //   system row            settings gear on the left, lock + power on the right
+// The column count follows the tile count (4 or 3, whichever fills every
+// row), so rows never end short and no tile is stretched.
+// Right-click a tile that has a menu (Wi-Fi list, outputs...) to open it.
 // disable() puts every item, span and style back, so hot reload stays clean.
 
 import Clutter from 'gi://Clutter';
@@ -23,7 +25,8 @@ import {
     QuickToggle, QuickMenuToggle, QuickSlider,
 } from 'resource:///org/gnome/shell/ui/quickSettings.js';
 
-const COLUMNS = 4;
+// Preferred column counts; the first that divides the tile count wins.
+const COLUMN_CHOICES = [4, 3];
 // screenshot.js does not export UIMode; 1 is UIMode.SCREENCAST in GNOME 48.
 const SCREENCAST_MODE = 1;
 
@@ -42,7 +45,6 @@ export class KosQuickPanel {
         this._own = [];
         this._relayoutId = 0;
 
-        this._qs.menu._boxPointer.add_style_class_name('kos-cc-boxpointer');
         this._qs.menu.box.add_style_class_name('kos-cc');
 
         this._addOwnTiles();
@@ -60,15 +62,15 @@ export class KosQuickPanel {
         this._relayoutId = 0;
         this._grid.disconnect(this._childAddedId);
 
-        for (const tile of this._own)
-            tile.destroy();
-        this._own = [];
-        this._dndSettings = null;
-
         for (const fn of this._undo.reverse())
             fn();
         this._undo = [];
         this._watched = null;
+
+        for (const tile of this._own)
+            tile.destroy();
+        this._own = [];
+        this._dndSettings = null;
 
         this._layout.nColumns = this._origColumns;
         for (const [item, span] of this._origSpans) {
@@ -80,7 +82,6 @@ export class KosQuickPanel {
                 this._grid.set_child_at_index(item, i);
         });
 
-        this._qs.menu._boxPointer.remove_style_class_name('kos-cc-boxpointer');
         this._qs.menu.box.remove_style_class_name('kos-cc');
         this._grid = null;
         this._qs = null;
@@ -110,12 +111,12 @@ export class KosQuickPanel {
             this._origOrder.push(child);
         }
 
-        const wide = [...itemsOf(qs._network), ...itemsOf(qs._bluetooth)];
+        const network = [...itemsOf(qs._network), ...itemsOf(qs._bluetooth)];
         const eye = itemsOf(qs._nightLight);
         const system = itemsOf(qs._system);
         const background = itemsOf(qs._backgroundApps);
         const brightness = itemsOf(qs._brightness);
-        const known = new Set([...wide, ...eye, ...system, ...background, ...this._own]);
+        const known = new Set([...network, ...eye, ...system, ...background, ...this._own]);
 
         const small = [];
         const sliders = [];
@@ -130,17 +131,20 @@ export class KosQuickPanel {
         // Brightness card above volume, like Deepin.
         sliders.sort((a, b) => Number(brightness.includes(b)) - Number(brightness.includes(a)));
 
+        const tiles = [...network, ...eye, ...small, ...this._own]
+            .filter(c => c.get_parent() === this._grid);
+        for (const tile of tiles)
+            this._watchVisible(tile);
+        const columns = this._columnsFor(tiles.filter(c => c.visible).length);
+
         const rows = [
-            [wide.filter(c => c.get_parent() === this._grid), 2, c => this._styleWide(c)],
-            [eye.filter(c => c.get_parent() === this._grid), 2, c => this._styleWide(c)],
-            [small, 1, c => this._styleSmall(c)],
-            [this._own, 1, () => {}],
-            [sliders, COLUMNS, c => this._styleCard(c)],
-            [background, COLUMNS, () => {}],
-            [system, COLUMNS, c => this._styleSystem(c)],
+            [tiles, 1, c => this._styleSmall(c)],
+            [sliders, columns, c => this._styleCard(c)],
+            [background, columns, () => {}],
+            [system, columns, c => this._styleSystem(c)],
         ];
 
-        this._layout.nColumns = COLUMNS;
+        this._layout.nColumns = columns;
         this._grid.set_child_at_index(placeholder, 0);
         let index = 1;
         for (const [items, span, style] of rows) {
@@ -155,78 +159,37 @@ export class KosQuickPanel {
                 }
             }
         }
-        this._fillLastRow(rows.slice(0, 4));
+        this._fillLastRow(tiles, columns);
         this._layout.layout_changed();
     }
 
-    // Strict grid: tiles wrap row by row like QuickSettingsLayout does; if
-    // the last tile row is short, the last tile widens to fill it, so there
-    // is never an empty slot at the end. Re-run when a tile shows or hides.
-    _fillLastRow(tileRows) {
+    // 4 columns when the tiles fill rows of 4, else 3 when they fill rows of 3.
+    _columnsFor(count) {
+        return COLUMN_CHOICES.find(n => count > 0 && count % n === 0) ?? COLUMN_CHOICES[0];
+    }
+
+    // A tile showing or hiding changes the tile count, so lay out again.
+    _watchVisible(item) {
         this._watched ??= new Set();
-        let col = 0;
-        let last = null;
-        for (const [items, span] of tileRows) {
-            for (const item of items) {
-                if (item.get_parent() !== this._grid)
-                    continue;
-                if (!this._watched.has(item)) {
-                    this._watched.add(item);
-                    const id = item.connect('notify::visible', () => this._queueRelayout());
-                    this._undo.push(() => item.disconnect(id));
-                }
-                if (!item.visible)
-                    continue;
-                if (col + span > COLUMNS)
-                    col = 0;
-                col += span;
-                last = [item, span];
-                if (col === COLUMNS)
-                    col = 0;
-            }
-        }
-        if (last && col > 0) {
-            const [item, span] = last;
-            this._layout.child_set_property(this._grid, item, 'column-span', span + COLUMNS - col);
-        }
+        if (this._watched.has(item))
+            return;
+        this._watched.add(item);
+        const id = item.connect('notify::visible', () => this._queueRelayout());
+        this._undo.push(() => item.disconnect(id));
+    }
+
+    // Fallback for tile counts neither 4 nor 3 divide: the last tile widens
+    // to fill its row, so there is never an empty slot at the end.
+    _fillLastRow(tiles, columns) {
+        const visible = tiles.filter(c => c.visible);
+        const rest = visible.length % columns;
+        if (rest)
+            this._layout.child_set_property(this._grid, visible.at(-1), 'column-span', 1 + columns - rest);
     }
 
     _addClass(actor, name) {
         actor.add_style_class_name(name);
         this._undo.push(() => actor.remove_style_class_name(name));
-    }
-
-    // Icon circle, bold title, gray subtitle, chevron: mostly CSS. Deepin
-    // always shows a status line, so fill in one when GNOME leaves it empty.
-    _styleWide(item) {
-        this._addClass(item, 'kos-cc-wide');
-        const bluetooth = (this._qs._bluetooth?.quickSettingsItems ?? []).includes(item);
-        const network = (this._qs._network?.quickSettingsItems ?? []).includes(item);
-        let ours = null;
-        const status = () => {
-            if (!item.checked)
-                return 'Off';
-            if (bluetooth)
-                return 'Not connected';
-            return network ? 'Connected' : 'On';
-        };
-        const sync = () => {
-            if (item.subtitle && item.subtitle !== ours)
-                return;
-            ours = status();
-            if (item.subtitle !== ours)
-                item.subtitle = ours;
-        };
-        const ids = [
-            item.connect('notify::subtitle', sync),
-            item.connect('notify::checked', sync),
-        ];
-        sync();
-        this._undo.push(() => {
-            ids.forEach(id => item.disconnect(id));
-            if (ours !== null && item.subtitle === ours)
-                item.subtitle = null;
-        });
     }
 
     // Square tile: icon on top, one small label under it, no subtitle or chevron.
@@ -239,7 +202,15 @@ export class KosQuickPanel {
             hidden.forEach(c => c.hide());
             // menu-enabled re-shows the chevron; keep it hidden while we run.
             const id = item._menuButton.connect('notify::visible', b => b.visible && b.hide());
+            // The chevron is gone, so a right-click opens the tile's menu.
+            const pressId = toggle.connect('button-release-event', (_a, event) => {
+                if (event.get_button() !== Clutter.BUTTON_SECONDARY || !item.menuEnabled)
+                    return Clutter.EVENT_PROPAGATE;
+                item.menu.open();
+                return Clutter.EVENT_STOP;
+            });
             this._undo.push(() => {
+                toggle.disconnect(pressId);
                 item._menuButton.disconnect(id);
                 hidden.forEach(c => c.show());
                 item._menuButton.visible = item.menuEnabled;
@@ -250,8 +221,10 @@ export class KosQuickPanel {
 
         const titleBox = toggle._title.get_parent();
         toggle._box.orientation = Clutter.Orientation.VERTICAL;
+        toggle._box.y_align = Clutter.ActorAlign.CENTER;
         toggle._icon.x_align = Clutter.ActorAlign.CENTER;
         titleBox.x_align = Clutter.ActorAlign.CENTER;
+        titleBox.x_expand = false;
         toggle._title.x_align = Clutter.ActorAlign.CENTER;
         toggle._subtitle.hide();
         const id = toggle._subtitle.connect('notify::visible', l => l.visible && l.hide());
@@ -262,6 +235,8 @@ export class KosQuickPanel {
             titleBox.x_align = Clutter.ActorAlign.START;
             toggle._icon.x_align = Clutter.ActorAlign.FILL;
             toggle._box.orientation = Clutter.Orientation.HORIZONTAL;
+            toggle._box.y_align = Clutter.ActorAlign.FILL;
+            titleBox.x_expand = true;
         });
     }
 
@@ -299,11 +274,9 @@ export class KosQuickPanel {
     _addOwnTiles() {
         const add = (title, iconName, onClick) => {
             const tile = new QuickToggle({title, iconName, toggleMode: false});
-            tile.add_style_class_name('kos-cc-small');
             tile.connect('clicked', onClick);
             this._own.push(tile);
             this._grid.add_child(tile);
-            this._styleSmallOwn(tile);
             return tile;
         };
 
@@ -324,13 +297,6 @@ export class KosQuickPanel {
             add('System Monitor', 'utilities-system-monitor-symbolic', () => this._afterClose(
                 () => monitor.activate()));
         }
-    }
-
-    _styleSmallOwn(tile) {
-        tile._box.orientation = Clutter.Orientation.VERTICAL;
-        tile._icon.x_align = Clutter.ActorAlign.CENTER;
-        tile._title.get_parent().x_align = Clutter.ActorAlign.CENTER;
-        tile._title.x_align = Clutter.ActorAlign.CENTER;
     }
 
     // Same order GNOME's own screenshot button uses: close, then act.

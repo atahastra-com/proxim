@@ -272,7 +272,7 @@
 }
 
 /* ============================================================================
- * Popups: Deepin dark frosted glass (18px corners, soft shadow).
+ * Popups: Deepin dark frosted glass (18px corners, 1px hairline, no shadow).
  * ============================================================================ */
 .popup-menu-boxpointer,
 .candidate-popup-boxpointer {
@@ -285,10 +285,18 @@
 
 .popup-menu-content {
     background-color: rgba(30, 32, 40, 0.84);
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 18px;
-    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45);
+    box-shadow: none;
     color: rgba(255, 255, 255, 0.92);
+}
+
+/* Calendar + quick settings: no arrow and no rise; panel.js pins the box
+   12px above the bar and 12px in from its screen edge. */
+.popup-menu-boxpointer.kos-popup-boxpointer {
+    -arrow-background-color: transparent;
+    -arrow-border-width: 0;
+    -arrow-rise: 0;
 }
 
 .popup-menu-item {
@@ -318,10 +326,19 @@
 
 /* Calendar & notifications: flat, no nested boxes.
  * Spacing: ONE padding (16px) around the popup and inside each side of the
- * column divider, ONE gap (12px) between sections, rows padded 8px 12px.
- * Same values as the quick settings panel. */
+ * column divider; every text row and the day grid start 12px inside the
+ * column (28px from the popup/divider edge); sections sit 36-37px apart
+ * text to text. Same panel as the quick settings: radius, fill, border. */
 .datemenu-popover {
     padding: 16px;
+    border-radius: 18px;
+}
+
+/* One fill for both popups; the calendar used to get a second layer from
+   its arrow box, so this is the opacity both had before. */
+.datemenu-popover,
+.quick-settings.kos-cc {
+    background-color: rgba(30, 32, 40, 0.96);
 }
 
 #calendarArea {
@@ -332,7 +349,8 @@
 .message-list,
 .message-list:ltr,
 .message-list:rtl {
-    width: 22em;
+    /* narrow: it is empty most of the time */
+    width: 288px;
     margin: 0;
     padding: 0 16px 0 0;
     /* the column divider */
@@ -348,8 +366,10 @@
 }
 
 .message-list-controls {
-    /* 12px sides = same text inset as the calendar-side rows */
-    padding: 12px 12px 0 12px;
+    /* 12px sides = same text inset as the calendar-side rows; 2px at the
+       bottom puts the label on the weather row's baseline (the switch
+       makes this row taller than a text row) */
+    padding: 12px 12px 2px 12px;
     spacing: 12px;
 }
 
@@ -359,7 +379,9 @@
     border: none;
     margin: 0;
     padding: 0 0 0 16px;
-    spacing: 12px;
+    /* 8px (not 12) because the day grid and the date row carry their own
+       slack; text-to-text gaps then match the 12px displays-box gaps. */
+    spacing: 8px;
 }
 
 .datemenu-calendar-column .datemenu-displays-box {
@@ -374,13 +396,19 @@
     margin: 0;
 }
 
+.datemenu-today-button {
+    padding-bottom: 10px;
+}
+
 .events-button .events-box .events-title {
     padding-bottom: 4px;
 }
 
 .calendar {
     margin: 0;
-    padding: 0 10px;
+    /* 8px + the pill's centering slack = day pills 12px inside the column,
+       on the same edge as the row text */
+    padding: 0 8px;
 }
 
 .calendar,
@@ -513,27 +541,22 @@
 
 /* ============================================================================
  * Quick settings = Deepin control center popup. quickPanel.js lays the grid
- * out in 4 columns and tags items: .kos-cc-wide (network/bluetooth/eye
- * comfort), .kos-cc-small (square icon-over-label tiles), .kos-cc-card
- * (sliders), .kos-cc-system (gear left, power right).
+ * out in 4 or 3 equal columns and tags items: .kos-cc-small (every toggle:
+ * identical icon-over-label tiles), .kos-cc-card (sliders), .kos-cc-system
+ * (gear left, lock + power right).
  * GNOME 48 uses :ltr/:rtl corner rules, so match them where needed.
  * ============================================================================ */
-.kos-cc-boxpointer {
-    -arrow-background-color: transparent;
-    -arrow-rise: 18px;
-}
-
 .quick-settings.kos-cc {
     background-color: rgba(30, 32, 40, 0.84);
     color: rgba(255, 255, 255, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 18px;
-    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.50);
+    box-shadow: none;
     padding: 16px;
 }
 
-/* Strict grid: 4 x 84px columns, 12px gaps both ways; tiles, slider cards
-   and the bottom row all start and end on the same edges. */
+/* Strict grid, 372px: 4 x 84px or 3 x 116px columns, 12px gaps both ways;
+   tiles, slider cards and the bottom row all share the same outer edges. */
 .kos-cc .quick-settings-grid {
     width: 372px;
     spacing-rows: 12px;
@@ -571,93 +594,15 @@
     background-color: transparent;
 }
 
-/* Wide tiles: round icon on the left, bold title, gray subtitle, chevron. */
-.kos-cc .kos-cc-wide .quick-toggle,
-.kos-cc .kos-cc-wide.quick-toggle,
-.kos-cc .kos-cc-wide .quick-toggle:checked,
-.kos-cc .kos-cc-wide.quick-toggle:checked,
-.kos-cc .kos-cc-wide .quick-toggle-menu-button,
-.kos-cc .kos-cc-wide .quick-toggle-menu-button:checked {
-    min-height: 58px;
-    background-color: rgba(255, 255, 255, 0.07);
-    color: rgba(255, 255, 255, 0.92);
-}
-
-.kos-cc .kos-cc-wide .quick-toggle:hover,
-.kos-cc .kos-cc-wide.quick-toggle:hover,
-.kos-cc .kos-cc-wide .quick-toggle-menu-button:hover {
-    background-color: rgba(255, 255, 255, 0.13);
-}
-
-.kos-cc .kos-cc-wide .quick-toggle:ltr,
-.kos-cc .kos-cc-wide .quick-toggle:checked:ltr {
-    border-radius: 12px 0 0 12px;
-}
-
-.kos-cc .kos-cc-wide .quick-toggle-menu-button:ltr {
-    border-radius: 0 12px 12px 0;
-}
-
-.kos-cc .kos-cc-wide .quick-toggle:rtl {
-    border-radius: 0 12px 12px 0;
-}
-
-.kos-cc .kos-cc-wide .quick-toggle-menu-button:rtl {
-    border-radius: 12px 0 0 12px;
-}
-
-.kos-cc .kos-cc-wide.quick-toggle:ltr,
-.kos-cc .kos-cc-wide.quick-toggle:rtl {
-    border-radius: 12px;
-}
-
-.kos-cc .kos-cc-wide .quick-toggle > StBoxLayout,
-.kos-cc .kos-cc-wide.quick-toggle > StBoxLayout {
-    spacing: 10px;
-    padding: 0 4px 0 10px;
-}
-
-.kos-cc .kos-cc-wide .quick-toggle-icon {
-    icon-size: 16px;
-    padding: 8px;
-    border-radius: 999px;
-    background-color: rgba(255, 255, 255, 0.14);
-    color: rgba(255, 255, 255, 0.85);
-}
-
-.kos-cc .kos-cc-wide .quick-toggle:checked .quick-toggle-icon,
-.kos-cc .kos-cc-wide.quick-toggle:checked .quick-toggle-icon {
-    background-color: #e0407a;
-    color: #ffffff;
-}
-
-.kos-cc .kos-cc-wide .quick-toggle-title {
-    font-size: 13px;
-    font-weight: bold;
-}
-
-.kos-cc .kos-cc-wide .quick-toggle-subtitle {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.55);
-}
-
-.kos-cc .kos-cc-wide .quick-toggle-menu-button {
-    padding: 0 10px 0 4px;
-    color: rgba(255, 255, 255, 0.50);
-}
-
-.kos-cc .kos-cc-wide .quick-toggle-menu-button StIcon {
-    icon-size: 12px;
-}
-
-/* Small square tiles: icon on top, tiny label under it. */
+/* Tiles: all identical, 72px tall, icon centered over its label. */
 .kos-cc .kos-cc-small.quick-toggle,
 .kos-cc .kos-cc-small.quick-toggle:ltr,
 .kos-cc .kos-cc-small.quick-toggle:rtl,
 .kos-cc .kos-cc-small .quick-toggle,
 .kos-cc .kos-cc-small .quick-toggle:ltr,
 .kos-cc .kos-cc-small .quick-toggle:rtl {
-    min-height: 70px;
+    min-height: 72px;
+    padding: 0;
     border-radius: 12px;
     background-color: rgba(255, 255, 255, 0.07);
     color: rgba(255, 255, 255, 0.88);
@@ -680,16 +625,19 @@
 .kos-cc .kos-cc-small .quick-toggle > StBoxLayout,
 .kos-cc .kos-cc-small .quick-toggle:ltr > StBoxLayout,
 .kos-cc .kos-cc-small .quick-toggle:rtl > StBoxLayout {
-    padding: 12px 4px 8px 4px;
-    spacing: 7px;
+    /* icon + label block centered both ways (quickPanel.js y_align) */
+    padding: 0 8px;
+    spacing: 8px;
 }
 
 .kos-cc .kos-cc-small .quick-toggle-icon {
     icon-size: 20px;
+    padding: 0;
+    margin: 0;
 }
 
 .kos-cc .kos-cc-small .quick-toggle-title {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: normal;
 }
 
@@ -739,9 +687,10 @@
 
 /* Bottom row: plain icons, gear left, lock + power right. */
 .kos-cc .kos-cc-system {
-    /* 4px + the buttons' 8px = icons 12px in, like the slider-card icons
-       (card padding 12px); no extra top gap beyond the 12px grid gap. */
-    padding: 0 4px;
+    /* 10px + the buttons' 8px = icons 18px in from the grid edge, the same
+       column as the slider-card icons (card 12px + button 6px). 4px on top
+       = glyphs 24px below the card and 24px above the popup edge. */
+    padding: 4px 10px 0 10px;
     margin: 0;
 }
 
