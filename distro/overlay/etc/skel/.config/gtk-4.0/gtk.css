@@ -1,38 +1,43 @@
 /* kos window style for GTK4 / libadwaita 1.7 apps (Settings, Files, Text
- * Editor, ...). Deepin-like: dark, rounded, soft shadow, flat titlebar that
- * blends into the content, round window buttons on the right, kos blue.
+ * Editor, ...), modeled on Deepin (DDE 23) Control Center: light, 14px
+ * corners, soft shadow, flat white titlebar, thin window glyphs on the
+ * right, blue selected rows, list rows as separate light-gray cards.
+ * The light look itself comes from color-scheme='prefer-light'.
  * Same file ships in /etc/skel for new users. Plain CSS overrides only. */
 
 :root {
     --accent-bg-color: #0081ff;
     --accent-fg-color: #ffffff;
-    --accent-color: #4aa3ff;
-    --window-bg-color: #202127;
-    --window-fg-color: rgba(255, 255, 255, 0.92);
-    --view-bg-color: #202127;
-    --view-fg-color: rgba(255, 255, 255, 0.92);
-    --headerbar-bg-color: #202127;
-    --headerbar-fg-color: rgba(255, 255, 255, 0.92);
+    --accent-color: #0072e5;
+    --window-bg-color: #ffffff;
+    --window-fg-color: rgba(0, 0, 0, 0.86);
+    --view-bg-color: #ffffff;
+    --view-fg-color: rgba(0, 0, 0, 0.86);
+    --headerbar-bg-color: #ffffff;
+    --headerbar-fg-color: rgba(0, 0, 0, 0.86);
     --headerbar-border-color: transparent;
     --headerbar-shade-color: transparent;
-    --sidebar-bg-color: #18191e;
-    --sidebar-fg-color: rgba(255, 255, 255, 0.90);
+    --headerbar-darker-shade-color: transparent;
+    --sidebar-bg-color: #ffffff;
+    --sidebar-fg-color: rgba(0, 0, 0, 0.86);
     --sidebar-border-color: transparent;
     --sidebar-shade-color: transparent;
-    --secondary-sidebar-bg-color: #18191e;
-    --card-bg-color: rgba(255, 255, 255, 0.05);
-    --card-fg-color: rgba(255, 255, 255, 0.92);
-    --popover-bg-color: #26272e;
-    --popover-fg-color: rgba(255, 255, 255, 0.92);
-    --dialog-bg-color: #24252b;
-    --dialog-fg-color: rgba(255, 255, 255, 0.92);
-    --window-radius: 16px;
+    --secondary-sidebar-bg-color: #ffffff;
+    --secondary-sidebar-fg-color: rgba(0, 0, 0, 0.86);
+    --secondary-sidebar-border-color: transparent;
+    --card-bg-color: #f2f3f5;
+    --card-fg-color: rgba(0, 0, 0, 0.86);
+    --popover-bg-color: #ffffff;
+    --popover-fg-color: rgba(0, 0, 0, 0.86);
+    --dialog-bg-color: #ffffff;
+    --dialog-fg-color: rgba(0, 0, 0, 0.86);
+    --window-radius: 14px;
 }
 
-/* Rounded window with a large soft shadow (like DDE). */
+/* Rounded window with a large soft shadow. */
 window.csd {
-    border-radius: 16px;
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07);
+    border-radius: 14px;
+    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.06);
 }
 
 window.csd.maximized,
@@ -42,7 +47,7 @@ window.csd.tiled {
     box-shadow: none;
 }
 
-/* Flat titlebar, same color as the content below it. */
+/* Flat white titlebar, same color as the content below it. */
 headerbar,
 .titlebar,
 .top-bar,
@@ -54,11 +59,50 @@ toolbarview > .top-bar headerbar {
     min-height: 50px;
 }
 
-/* Window buttons: clean round icons on the right (layout comes from
- * org.gnome.desktop.wm.preferences button-layout = ':minimize,maximize,close'). */
+/* Header buttons ('...', back, search): light gray rounded squares, round
+ * when GTK marks them circular. */
+headerbar button.image-button:not(.titlebutton),
+headerbar menubutton > button {
+    background-color: #f0f1f3;
+    border-radius: 8px;
+    min-width: 32px;
+    min-height: 32px;
+}
+
+headerbar button.image-button:not(.titlebutton):hover,
+headerbar menubutton > button:hover {
+    background-color: #e4e6e9;
+}
+
+/* The '...' menu is round, like Deepin. */
+headerbar menubutton > button,
+headerbar menubutton > button.image-button {
+    border-radius: 999px;
+}
+
+/* Search: wide light-gray pill. */
+entry.search,
+searchentry,
+searchbar > revealer > box entry {
+    background-color: #f0f1f3;
+    border-radius: 999px;
+    min-height: 32px;
+    box-shadow: none;
+}
+
+searchbar > revealer > box {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* Window buttons: thin plain glyphs, no circles (layout comes from
+ * org.gnome.desktop.wm.preferences button-layout = ':minimize,maximize,close').
+ * The headerbar stretches buttons vertically, so the hover square is drawn
+ * on the icon. */
 windowcontrols {
-    border-spacing: 8px;
-    margin: 0 4px;
+    border-spacing: 2px;
+    margin: 0 2px;
 }
 
 windowcontrols > button {
@@ -70,19 +114,18 @@ windowcontrols > button {
     box-shadow: none;
 }
 
-/* The headerbar stretches buttons vertically, so draw the circle on the
- * icon (like Adwaita does), not on the button. */
 windowcontrols > button > image {
-    background-color: rgba(255, 255, 255, 0.08);
-    border-radius: 999px;
+    background: none;
+    border-radius: 7px;
     box-shadow: none;
-    padding: 6px;
+    padding: 7px;
     -gtk-icon-size: 14px;
-    color: rgba(255, 255, 255, 0.85);
+    color: rgba(0, 0, 0, 0.72);
 }
 
 windowcontrols > button:hover > image {
-    background-color: rgba(255, 255, 255, 0.18);
+    background-color: rgba(0, 0, 0, 0.07);
+    color: #000000;
 }
 
 windowcontrols > button.close:hover > image {
@@ -90,64 +133,113 @@ windowcontrols > button.close:hover > image {
     color: #ffffff;
 }
 
-/* Darker sidebar (Settings, Files), no hard divider, rounded selection. */
+/* Sidebar: white like the content, 40px rows, 8px corners, solid blue
+ * selection with white text and icon. */
 .sidebar-pane,
 .navigation-sidebar,
 placessidebar,
 .sidebar {
-    background-color: #18191e;
+    background-color: #ffffff;
     border: none;
+    box-shadow: none;
 }
 
 .sidebar-pane {
-    border-right: 1px solid rgba(255, 255, 255, 0.04);
+    border-right: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .navigation-sidebar > row,
 placessidebar row {
-    border-radius: 10px;
-    margin: 2px 8px;
-    padding: 6px 10px;
+    min-height: 40px;
+    border-radius: 8px;
+    margin: 1px 6px;
+    padding: 0 8px;
+}
+
+.navigation-sidebar > row image {
+    -gtk-icon-size: 18px;
 }
 
 .navigation-sidebar > row:hover,
 placessidebar row:hover {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: rgba(0, 0, 0, 0.05);
 }
 
 .navigation-sidebar > row:selected,
 .navigation-sidebar > row:selected:hover,
-placessidebar row:selected {
+.navigation-sidebar > row:selected image,
+.navigation-sidebar > row:selected label,
+placessidebar row:selected,
+placessidebar row:selected image,
+placessidebar row:selected label {
     background-color: #0081ff;
     color: #ffffff;
 }
 
-/* Cards and grouped lists: soft rounded tiles, no hard borders. */
-list.boxed-list,
-list.boxed-list-separate > row,
-.card {
-    border-radius: 12px;
-    border: none;
-    box-shadow: none;
-    background-color: rgba(255, 255, 255, 0.05);
+.navigation-sidebar > row:selected image,
+.navigation-sidebar > row:selected label,
+placessidebar row:selected image,
+placessidebar row:selected label {
+    background-color: transparent;
 }
 
-list.boxed-list > row:not(:last-child) {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+/* Grouped lists -> separate light-gray cards with small gaps, like Deepin
+ * (libadwaita's own .boxed-list-separate, applied to every boxed list). */
+list.boxed-list,
+list.boxed-list-separate {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+list.boxed-list > row,
+list.boxed-list > row:first-child,
+list.boxed-list > row:last-child,
+list.boxed-list > row:only-child,
+list.boxed-list-separate > row {
+    background-color: #f2f3f5;
+    border: none;
+    box-shadow: none;
+    border-radius: 9px;
+    margin-bottom: 6px;
+    min-height: 48px;
+}
+
+list.boxed-list > row:hover,
+list.boxed-list-separate > row:hover {
+    background-color: #e9ebee;
+}
+
+list.boxed-list > row:selected {
+    background-color: #0081ff;
+    color: #ffffff;
+}
+
+/* Values on the right of a row in gray. */
+row .subtitle,
+row label.dim-label,
+row .dim-label {
+    color: rgba(0, 0, 0, 0.50);
+}
+
+.card {
+    background-color: #f2f3f5;
+    border-radius: 10px;
+    border: none;
+    box-shadow: none;
 }
 
 /* Buttons and entries: rounded squares, not pills. */
 button:not(.circular):not(.flat):not(.image-button) {
-    border-radius: 9px;
+    border-radius: 8px;
 }
 
-entry,
-searchbar > revealer > box entry {
-    border-radius: 9px;
+entry {
+    border-radius: 8px;
 }
 
 switch {
-    background-color: rgba(255, 255, 255, 0.18);
+    background-color: rgba(0, 0, 0, 0.16);
     border: none;
 }
 
@@ -160,5 +252,5 @@ switch > slider {
 }
 
 popover > contents {
-    border-radius: 14px;
+    border-radius: 12px;
 }
