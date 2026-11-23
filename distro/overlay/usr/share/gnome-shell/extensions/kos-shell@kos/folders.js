@@ -9,6 +9,7 @@
 //   {kind: 'grid-app' | 'grid-folder' | 'folder-app' | 'dock-app', appId, folder}
 
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Pango from 'gi://Pango';
 import Shell from 'gi://Shell';
@@ -83,15 +84,138 @@ export function loadLayout() {
 }
 
 export function saveLayout(items) {
-    const out = items.map(e => e.type === 'folder'
-        ? {folder: e.fid, name: e.name, apps: [...e.apps], ...(e.keep ? {keep: true} : {})}
-        : e.id);
+    const out = items.map(e => {
+        if (e.type === 'folder')
+            return {folder: e.fid, name: e.name, apps: [...e.apps], ...(e.keep ? {keep: true} : {})};
+        if (e.type === 'file')
+            return {file: e.name};
+        return e.id;
+    });
     try {
         GLib.mkdir_with_parents(GLib.path_get_dirname(STORE), 0o755);
         GLib.file_set_contents(STORE, JSON.stringify({version: 1, items: out}, null, 1));
     } catch (e) {
         logError(e, 'kos-shell: saving launchpad layout');
     }
+}
+
+// ---- desktop files --------------------------------------------------------
+
+export function desktopDirPath() {
+    return GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_DESKTOP) ||
+        GLib.build_filenamev([GLib.get_home_dir(), 'Desktop']);
+}
+
+export function desktopFile(name) {
+    return Gio.File.new_for_path(GLib.build_filenamev([desktopDirPath(), name]));
+}
+
+export function desktopFileExists(name) {
+    if (!name || name.includes('/'))
+        return false;
+    const f = desktopFile(name);
+    if (!f.query_exists(null))
+        return false;
+    try {
+        const info = f.query_info('standard::type', Gio.FileQueryInfoFlags.NONE, null);
+        return info.get_file_type() !== Gio.FileType.DIRECTORY;
+    } catch (_e) {
+        return false;
+    }
+}
+
+export function listUserDesktopFiles() {
+    const dir = Gio.File.new_for_path(desktopDirPath());
+    if (!dir.query_exists(null))
+        return [];
+    const names = [];
+    try {
+        const en = dir.enumerate_children('standard::name,standard::type', Gio.FileQueryInfoFlags.NONE, null);
+        let info;
+        while ((info = en.next_file(null))) {
+            const name = info.get_name();
+            if (!name || name.startsWith('.') || info.get_file_type() === Gio.FileType.DIRECTORY)
+                continue;
+            names.push(name);
+        }
+    } catch (_e) {
+        return [];
+    }
+    names.sort((a, b) => a.localeCompare(b));
+    return names;
+}
+
+export function createDesktopFile(base = 'Untitled', ext = '.txt') {
+    const dir = desktopDirPath();
+    GLib.mkdir_with_parents(dir, 0o755);
+    for (let i = 1; i < 1000; i++) {
+        const name = i === 1 ? `${base}${ext}` : `${base} ${i}${ext}`;
+        const f = desktopFile(name);
+        if (f.query_exists(null))
+            continue;
+        try {
+            const stream = f.create(Gio.FileCreateFlags.NONE, null);
+            stream.close(null);
+            return name;
+        } catch (e) {
+            logError(e, `kos-shell: creating file ${name}`);
+            return null;
+        }
+    }
+    return null;
+}
+
+export function renameDesktopFile(oldName, newName) {
+    const clean = (newName || '').replace(/\//g, '').trim();
+    if (!clean || clean === '.' || clean === '..' || clean === oldName)
+        return null;
+    const src = desktopFile(oldName);
+    const dst = desktopFile(clean);
+    if (!src.query_exists(null) || dst.query_exists(null))
+        return null;
+    try {
+        src.move(dst, Gio.FileCopyFlags.NONE, null, null);
+        return clean;
+    } catch (e) {
+        logError(e, `kos-shell: renaming ${oldName} -> ${clean}`);
+        return null;
+    }
+}
+
+export function deleteDesktopFile(name) {
+    const f = desktopFile(name);
+    if (!f.query_exists(null))
+        return;
+    try {
+        f.trash(null);
+    } catch (_e) {
+        try {
+            f.delete(null);
+        } catch (e2) {
+            logError(e2, `kos-shell: deleting ${name}`);
+        }
+    }
+}
+
+export function fileIcon(name, size) {
+    const f = desktopFile(name);
+    let gicon = null;
+    try {
+        const info = f.query_info('standard::icon', Gio.FileQueryInfoFlags.NONE, null);
+        gicon = info.get_icon();
+    } catch (_e) {
+        // fall back to content-type guess
+    }
+    if (!gicon) {
+        const [ctype] = Gio.content_type_guess(name, null);
+        gicon = Gio.content_type_get_icon(ctype || 'text/plain');
+    }
+    return new St.Icon({
+        gicon,
+        fallback_icon_name: 'text-x-generic',
+        icon_size: size,
+        x_align: Clutter.ActorAlign.CENTER,
+    });
 }
 
 // ---- folder icon ----------------------------------------------------------

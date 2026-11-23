@@ -240,6 +240,22 @@
     background-color: rgba(255, 255, 255, 0.08);
 }
 
+.kos-file-rename-entry {
+    min-height: 22px;
+    margin-top: 4px;
+    padding: 1px 6px;
+    background-color: rgba(30, 32, 40, 0.90);
+    border: 1px solid #0081ff;
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 500;
+    text-align: center;
+    caret-color: #0081ff;
+    selected-color: #ffffff;
+    selection-background-color: #0081ff;
+}
+
 /* Page indicators under the grid, shown only when apps overflow one page. */
 .kos-page-dots {
     spacing: 10px;

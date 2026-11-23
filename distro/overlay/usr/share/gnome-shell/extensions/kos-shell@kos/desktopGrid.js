@@ -23,8 +23,10 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {
-    DND, KosFolderView, appIcon, getPins, later, loadLayout, lookupApp,
-    makeDraggableIcon, makeFolderSquare, pinAt, saveLayout, unpin,
+    DND, KosFolderView, appIcon, createDesktopFile, deleteDesktopFile,
+    desktopFile, desktopFileExists, fileIcon, getPins, later,
+    listUserDesktopFiles, loadLayout, lookupApp, makeDraggableIcon,
+    makeFolderSquare, pinAt, renameDesktopFile, saveLayout, unpin,
 } from './folders.js';
 import {closeContextMenu, openContextMenu} from './contextMenu.js';
 
@@ -46,8 +48,10 @@ export class KosDesktopGrid {
         this._backdrop = null;
         this._dots = null;
         this._page = 0;
-        // Grid entries in order: {type: 'app', id} or
-        // {type: 'folder', fid, name, apps: [ids]}. Saved in launchpad.json.
+        this._renamingFile = null;
+        // Grid entries in order: {type: 'app', id},
+        // {type: 'folder', fid, name, apps: [ids]}, or {type: 'file', name}.
+        // Saved in launchpad.json.
         this._items = [];
     }
 
@@ -69,13 +73,14 @@ export class KosDesktopGrid {
         // Empty desktop space is a drop target: move an icon there, or drop
         // a dock icon there to unpin it.
         this._backdrop._delegate = this;
-        // Right-click on empty desktop space: "New Folder".
+        // Right-click on empty desktop space: "New File" / "New Folder".
         this._backdrop.connect('button-press-event', (_a, event) => {
             if (event.get_button() !== Clutter.BUTTON_SECONDARY)
                 return Clutter.EVENT_PROPAGATE;
             const [x, y] = event.get_coords();
             this._folderView?.close();
             openContextMenu(x, y, [
+                {label: 'New File', action: () => this._newFile(this._cellIndexAt(x, y))},
                 {label: 'New Folder', action: () => this._newFolder([], this._cellIndexAt(x, y))},
             ]);
             return Clutter.EVENT_STOP;
@@ -181,6 +186,7 @@ export class KosDesktopGrid {
             return home.map(id => ({type: 'app', id}));
 
         const used = new Set(pinned);
+        const seenFiles = new Set();
         const take = id => {
             if (typeof id !== 'string' || used.has(id) || !loadApp(id))
                 return false;
@@ -192,6 +198,11 @@ export class KosDesktopGrid {
             if (typeof e === 'string') {
                 if (take(e))
                     items.push({type: 'app', id: e});
+            } else if (e && typeof e.file === 'string') {
+                if (!seenFiles.has(e.file) && desktopFileExists(e.file)) {
+                    seenFiles.add(e.file);
+                    items.push({type: 'file', name: e.file});
+                }
             } else if (e && Array.isArray(e.apps)) {
                 const apps = e.apps.filter(take);
                 const keep = e.keep === true;
@@ -205,6 +216,12 @@ export class KosDesktopGrid {
             if (!used.has(id) && !pinned.has(id)) {
                 used.add(id);
                 items.push({type: 'app', id});
+            }
+        }
+        for (const name of listUserDesktopFiles()) {
+            if (!seenFiles.has(name)) {
+                seenFiles.add(name);
+                items.push({type: 'file', name});
             }
         }
         return items;
@@ -308,9 +325,13 @@ export class KosDesktopGrid {
         pageItems.forEach((item, i) => {
             const col = i % GRID_COLS;
             const row = Math.floor(i / GRID_COLS);
-            const icon = item.type === 'folder'
-                ? this._makeFolderIcon(item, tileW, m.iconSize)
-                : this._makeIcon(item, tileW, m.iconSize);
+            let icon = null;
+            if (item.type === 'folder')
+                icon = this._makeFolderIcon(item, tileW, m.iconSize);
+            else if (item.type === 'file')
+                icon = this._makeFileIcon(item, tileW, m.iconSize);
+            else
+                icon = this._makeIcon(item, tileW, m.iconSize);
             if (!icon)
                 return;
             icon.set_size(tileW, tileH);
@@ -439,6 +460,108 @@ export class KosDesktopGrid {
         return button;
     }
 
+    _makeFileIcon(item, tileW, iconSize) {
+        const box = new St.BoxLayout({
+            vertical: true,
+            x_expand: true,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.START,
+        });
+        const icon = fileIcon(item.name, iconSize);
+        icon.add_style_class_name('kos-desktop-icon-app');
+        box.add_child(icon);
+
+        const renaming = this._renamingFile === item.name;
+        if (renaming) {
+            const entry = new St.Entry({
+                text: item.name,
+                style_class: 'kos-file-rename-entry',
+                can_focus: true,
+                width: tileW - 8,
+                x_align: Clutter.ActorAlign.CENTER,
+            });
+            entry.clutter_text.set({
+                max_length: 120,
+                single_line_mode: true,
+                ellipsize: Pango.EllipsizeMode.END,
+                line_alignment: Pango.Alignment.CENTER,
+            });
+            let done = false;
+            const finish = apply => {
+                if (done)
+                    return;
+                done = true;
+                this._renamingFile = null;
+                global.stage.set_key_focus(null);
+                if (apply) {
+                    const next = renameDesktopFile(item.name, entry.text);
+                    if (next)
+                        item.name = next;
+                }
+                this._commit();
+            };
+            entry.clutter_text.connect('activate', () => finish(true));
+            entry.clutter_text.connect('key-focus-out', () => finish(true));
+            entry.clutter_text.connect('key-press-event', (_t, event) => {
+                if (event.get_key_symbol() === Clutter.KEY_Escape) {
+                    finish(false);
+                    return Clutter.EVENT_STOP;
+                }
+                return Clutter.EVENT_PROPAGATE;
+            });
+            box.add_child(entry);
+            later(() => {
+                if (!entry.get_stage())
+                    return;
+                global.display.unset_input_focus(global.get_current_time());
+                entry.grab_key_focus();
+                const dot = item.name.lastIndexOf('.');
+                entry.clutter_text.set_selection(0, dot > 0 ? dot : -1);
+            });
+        } else {
+            const label = new St.Label({
+                text: item.name,
+                style_class: 'kos-desktop-icon-label',
+                x_align: Clutter.ActorAlign.CENTER,
+            });
+            const ct = label.clutter_text;
+            ct.line_wrap = false;
+            ct.ellipsize = Pango.EllipsizeMode.END;
+            ct.line_alignment = Pango.Alignment.CENTER;
+            label.set_width(tileW - 8);
+            box.add_child(label);
+        }
+
+        const button = new St.Button({
+            style_class: 'kos-desktop-icon',
+            reactive: true,
+            can_focus: false,
+            track_hover: true,
+            button_mask: St.ButtonMask.ONE,
+            child: box,
+            accessible_name: item.name,
+        });
+        button.connect('clicked', () => {
+            if (this._renamingFile === item.name)
+                return;
+            this._folderView?.close();
+            openDesktopFile(item.name);
+        });
+        this._onRightClick(button, (x, y) => openContextMenu(x, y, [
+            {label: 'Open', action: () => openDesktopFile(item.name)},
+            {label: 'Rename', action: () => this._startRenameFile(item)},
+            {separator: true},
+            {label: 'Delete File', action: () => this._deleteFile(item)},
+        ]));
+        makeDraggableIcon(button, {kind: 'grid-file', item},
+            () => fileIcon(item.name, iconSize), icon);
+        Object.assign(button._delegate, {
+            handleDragOver: src => this._dragOk(src),
+            acceptDrop: (src, _a, x, y) => this._dropOnItem(src, item, x, y, tileW, iconSize),
+        });
+        return button;
+    }
+
     // ---- right-click menus ------------------------------------------------
 
     _onRightClick(actor, open) {
@@ -510,6 +633,34 @@ export class KosDesktopGrid {
         this._commit();
     }
 
+    _newFile(index) {
+        const name = createDesktopFile('Untitled', '.txt');
+        if (!name)
+            return;
+        const item = {type: 'file', name};
+        this._items.splice(clamp(index, 0, this._items.length), 0, item);
+        this._renamingFile = name;
+        this._commit();
+    }
+
+    _startRenameFile(item) {
+        if (!this._items.includes(item))
+            return;
+        this._renamingFile = item.name;
+        this._layoutIcons();
+    }
+
+    _deleteFile(item) {
+        const i = this._items.indexOf(item);
+        if (i < 0)
+            return;
+        if (this._renamingFile === item.name)
+            this._renamingFile = null;
+        deleteDesktopFile(item.name);
+        this._items.splice(i, 1);
+        this._commit();
+    }
+
     _ensureFolderView(iconSize) {
         if (this._folderView)
             return;
@@ -533,7 +684,7 @@ export class KosDesktopGrid {
     // ---- drag and drop ---------------------------------------------------
 
     _dragOk(source) {
-        return ['grid-app', 'grid-folder', 'folder-app', 'dock-app'].includes(source?.kind)
+        return ['grid-app', 'grid-folder', 'grid-file', 'folder-app', 'dock-app'].includes(source?.kind)
             ? DND.DragMotionResult.MOVE_DROP
             : DND.DragMotionResult.CONTINUE;
     }
@@ -571,7 +722,7 @@ export class KosDesktopGrid {
             (target.type === 'app' && source.appId === target.id && source.kind !== 'folder-app');
         if (sameThing)
             return false;
-        if (onIcon && source.kind !== 'grid-folder')
+        if (onIcon && source.kind !== 'grid-folder' && source.kind !== 'grid-file' && target.type !== 'file')
             this._place(source, -1, target);
         else
             this._place(source, this._items.indexOf(target), null);
@@ -594,6 +745,11 @@ export class KosDesktopGrid {
             if (removedAt >= 0)
                 this._items.splice(removedAt, 1);
             entry = source.folder;
+        } else if (source.kind === 'grid-file') {
+            removedAt = this._items.indexOf(source.item);
+            if (removedAt >= 0)
+                this._items.splice(removedAt, 1);
+            entry = source.item;
         } else {
             removedAt = this._removeId(source.appId);
             entry = {type: 'app', id: source.appId};
@@ -795,6 +951,15 @@ export function launchApp(app) {
         app.activate();
     } catch (e) {
         log(`kos-shell: failed to launch ${app.get_id()}: ${e}`);
+    }
+}
+
+export function openDesktopFile(name) {
+    try {
+        const uri = desktopFile(name).get_uri();
+        Gio.AppInfo.launch_default_for_uri(uri, null);
+    } catch (e) {
+        logError(e, `kos-shell: opening file ${name}`);
     }
 }
 
