@@ -42,6 +42,15 @@ export class KosPanel {
         });
         this._connect(Main.layoutManager.panelBox, 'notify::allocation', () => this._movePanelToBottom());
         this._connect(Main.panel, 'notify::height', () => this._movePanelToBottom());
+        // Locking and unlocking rebuilds the stock panel for the new session
+        // mode (clock back to the center, Activities back on the left).
+        // GNOME's own handler runs first; put the kos layout back after it.
+        this._connect(Main.sessionMode, 'updated', () => {
+            this._hideActivities();
+            this._disableHotCorners();
+            this._moveDateMenuToLeft();
+            this._movePanelToBottom();
+        });
     }
 
     disable() {

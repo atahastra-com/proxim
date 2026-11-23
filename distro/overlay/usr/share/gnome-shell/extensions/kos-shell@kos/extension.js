@@ -16,6 +16,7 @@ import {KosPanel} from './panel.js';
 import {KosQuickPanel} from './quickPanel.js';
 import {KosDock} from './dock.js';
 import {KosDesktopGrid, KosAllAppsOverlay} from './desktopGrid.js';
+import {KosHomeBlur, KosLockScreen} from './lockScreen.js';
 
 export default class KosShellExtension extends Extension {
     enable() {
@@ -63,6 +64,16 @@ export default class KosShellExtension extends Extension {
         this._quickPanel.enable();
         this._dock.enable();
         this._grid.enable();
+        this._homeBlur = new KosHomeBlur();
+        this._homeBlur.enable();
+        this._lockScreen = new KosLockScreen();
+        this._lockScreen.enable();
+
+        // metadata.json keeps us enabled on the lock screen (so the lock
+        // screen gets the kos look). Hide what must not show or be usable
+        // there: the dock and the all-apps sheet.
+        this._sessionId = Main.sessionMode.connect('updated', () => this._onSessionMode());
+        this._onSessionMode();
 
     }
 
@@ -76,6 +87,14 @@ export default class KosShellExtension extends Extension {
             Main.overview.disconnect(id);
         this._overviewIds = [];
 
+        if (this._sessionId) {
+            Main.sessionMode.disconnect(this._sessionId);
+            this._sessionId = 0;
+        }
+        this._lockScreen?.disable();
+        this._lockScreen = null;
+        this._homeBlur?.disable();
+        this._homeBlur = null;
         this._allApps?.hide();
         this._allApps = null;
         this._grid?.disable();
@@ -90,6 +109,13 @@ export default class KosShellExtension extends Extension {
         // Session settings stay as they are (they live in dconf). We don't
         // un-set them on disable so a reload doesn't flicker workspaces back.
         this._settingsHandles = [];
+    }
+
+    _onSessionMode() {
+        const locked = Main.sessionMode.isLocked;
+        if (locked)
+            this._allApps?.hide();
+        this._dock?.setVisible(!locked);
     }
 
     _restoreHasOverview() {

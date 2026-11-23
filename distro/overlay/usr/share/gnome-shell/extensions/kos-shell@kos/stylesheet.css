@@ -702,3 +702,44 @@
     background-color: #e0407a;
     color: #ffffff;
 }
+
+/* ---- Lock screen (iPhone style): sharp wallpaper, date above a big thin
+   time near the top; the password page is dark frosted (lockScreen.js). */
+.kos-lock .unlock-dialog-clock {
+    spacing: 0;
+}
+.kos-lock .unlock-dialog-clock-date {
+    font-size: 22px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.92);
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+}
+.kos-lock .unlock-dialog-clock-time {
+    font-size: 112px;
+    font-weight: 200;
+    color: rgba(255, 255, 255, 0.96);
+    text-shadow: 0 2px 14px rgba(0, 0, 0, 0.30);
+    padding: 0;
+    margin: 0;
+}
+.kos-lock .unlock-dialog-clock-hint {
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.70);
+    padding-top: 12px;
+}
+.kos-lock .login-dialog-prompt-entry {
+    background-color: rgba(30, 32, 40, 0.84);
+    color: #ffffff;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    caret-color: #ffffff;
+}
+.kos-lock .login-dialog-prompt-entry:focus {
+    border-color: rgba(0, 129, 255, 0.85);
+}
+.kos-lock .login-dialog-button.cancel-button,
+.kos-lock .login-dialog-button.switch-user-button {
+    background-color: rgba(30, 32, 40, 0.84);
+    color: #ffffff;
+}

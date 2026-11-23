@@ -45,6 +45,13 @@ export class KosDock {
         this._connect(tracker, 'notify::focus-app', () => this._syncRunning());
     }
 
+    // Hidden on the lock screen (the bar itself stays for status icons).
+    setVisible(visible) {
+        this._visible = visible;
+        if (this._actor)
+            this._actor.visible = visible;
+    }
+
     disable() {
         for (const [obj, id] of this._signals)
             obj.disconnect(id);

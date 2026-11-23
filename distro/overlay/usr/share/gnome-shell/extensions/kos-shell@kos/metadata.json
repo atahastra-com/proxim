@@ -3,6 +3,11 @@
   "name": "kos shell",
   "description": "kos desktop: a full-width bottom bar with time, network, and a dock, plus an iOS-like app grid on the wallpaper. Built for GNOME 48 (Debian 13).",
   "version": 1,
-  "shell-version": ["48"],
-  "session-modes": ["user"]
+  "shell-version": [
+    "48"
+  ],
+  "session-modes": [
+    "user",
+    "unlock-dialog"
+  ]
 }
