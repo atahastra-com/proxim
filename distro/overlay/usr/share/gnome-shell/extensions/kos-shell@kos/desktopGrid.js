@@ -22,6 +22,11 @@ import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
+import {
+    DND, KosFolderView, appIcon, later, loadLayout, lookupApp,
+    makeDraggableIcon, makeFolderSquare, saveLayout, unpin,
+} from './folders.js';
+
 export const GRID_COLS = 7;
 export const ICON_SIZE = 72; // all-apps overlay only; the home grid sizes from the screen
 export const MAX_GRID_WIDTH = 1100;
@@ -40,7 +45,9 @@ export class KosDesktopGrid {
         this._backdrop = null;
         this._dots = null;
         this._page = 0;
-        this._apps = [];
+        // Grid entries in order: {type: 'app', id} or
+        // {type: 'folder', fid, name, apps: [ids]}. Saved in launchpad.json.
+        this._items = [];
     }
 
     enable() {
@@ -58,6 +65,9 @@ export class KosDesktopGrid {
             reactive: true,
         });
         this._backdrop.connect('scroll-event', this._onScroll.bind(this));
+        // Empty desktop space is a drop target: move an icon there, or drop
+        // a dock icon there to unpin it.
+        this._backdrop._delegate = this;
         this._actor.add_child(this._backdrop);
 
         this._dots = new St.BoxLayout({
@@ -66,6 +76,8 @@ export class KosDesktopGrid {
             visible: false,
         });
         this._actor.add_child(this._dots);
+
+        this._folderView = null;
 
         const bg = Main.layoutManager._backgroundGroup;
         bg.add_child(this._actor);
@@ -91,6 +103,7 @@ export class KosDesktopGrid {
         for (const [obj, id] of this._signals)
             obj.disconnect(id);
         this._signals = [];
+        this._folderView = null;
         if (this._actor) {
             this._actor.destroy();
             this._actor = null;
@@ -126,10 +139,65 @@ export class KosDesktopGrid {
     _rebuild() {
         if (!this._actor)
             return;
-        this._apps = listHomeApps(this._extensionPath);
+        this._items = this._loadItems();
         if (this._page < 0)
             this._page = 0;
         this._layout();
+    }
+
+    // Saved layout first (order, folders), then any home app it doesn't
+    // mention yet. Apps that are gone are dropped; a folder left with one
+    // app turns back into that app.
+    _loadItems() {
+        const home = listHomeApps(this._extensionPath).map(a => a.get_id());
+        const saved = loadLayout();
+        if (!saved)
+            return home.map(id => ({type: 'app', id}));
+
+        const used = new Set();
+        const take = id => {
+            if (typeof id !== 'string' || used.has(id) || !loadApp(id))
+                return false;
+            used.add(id);
+            return true;
+        };
+        const items = [];
+        for (const e of saved) {
+            if (typeof e === 'string') {
+                if (take(e))
+                    items.push({type: 'app', id: e});
+            } else if (e && Array.isArray(e.apps)) {
+                const apps = e.apps.filter(take);
+                if (apps.length >= 2)
+                    items.push({type: 'folder', fid: String(e.folder ?? GLib.uuid_string_random()), name: String(e.name || 'Folder'), apps});
+                else if (apps.length === 1)
+                    items.push({type: 'app', id: apps[0]});
+            }
+        }
+        for (const id of home) {
+            if (!used.has(id)) {
+                used.add(id);
+                items.push({type: 'app', id});
+            }
+        }
+        return items;
+    }
+
+    // Save, then redraw after the current drop has finished.
+    _commit() {
+        saveLayout(this._items);
+        later(() => {
+            if (!this._actor)
+                return;
+            this._layoutIcons();
+            if (this._folderView?.isOpen) {
+                const f = this._items.find(e => e.type === 'folder' && e === this._folderView.folder);
+                if (f)
+                    this._folderView.open(f, Main.layoutManager.primaryMonitor);
+                else
+                    this._folderView.close();
+            }
+        });
     }
 
     _workArea() {
@@ -170,7 +238,7 @@ export class KosDesktopGrid {
         const band = Math.max(rowH, wa.h - 2 * padY - DOTS_HEIGHT);
         const rows = Math.max(1, Math.floor(band / rowH));
         const perPage = GRID_COLS * rows;
-        const count = appCount ?? this._apps.length;
+        const count = appCount ?? this._items.length;
         const onPage = Math.min(perPage, Math.max(0, count));
         const usedRows = Math.max(1, Math.ceil(onPage / GRID_COLS));
         const blockW = colW * GRID_COLS;
@@ -185,45 +253,60 @@ export class KosDesktopGrid {
         if (!this._actor)
             return;
 
-        // Drop previous icon actors; keep backdrop and dots.
-        const keep = new Set([this._backdrop, this._dots]);
+        // Drop previous icon actors; keep backdrop, dots and the folder view.
+        const keep = new Set([this._backdrop, this._dots, this._folderView?.actor]);
         for (const child of this._actor.get_children()) {
             if (!keep.has(child))
                 child.destroy();
         }
 
         const wa = this._workArea();
-        const apps = this._apps;
-        const m = this._metrics(wa, apps.length);
-        const pages = Math.max(1, Math.ceil(apps.length / m.perPage));
+        const items = this._items;
+        const m = this._metrics(wa, items.length);
+        this._m = m;
+        const pages = Math.max(1, Math.ceil(items.length / m.perPage));
         if (this._page >= pages)
             this._page = pages - 1;
 
         const start = this._page * m.perPage;
-        const pageApps = apps.slice(start, start + m.perPage);
+        const pageItems = items.slice(start, start + m.perPage);
         // The button (and its hover highlight) is a tidy tile centered in
         // its cell, not the whole cell.
         const tileW = Math.min(m.colW - 12, m.iconSize + 64);
         const tileH = m.iconSize + m.labelH + 16;
+        this._tileSize = [tileW, tileH];
 
-        pageApps.forEach((app, i) => {
+        this._ensureFolderView(m.iconSize);
+
+        pageItems.forEach((item, i) => {
             const col = i % GRID_COLS;
             const row = Math.floor(i / GRID_COLS);
-            const icon = this._makeIcon(app, tileW, m.iconSize);
+            const icon = item.type === 'folder'
+                ? this._makeFolderIcon(item, tileW, m.iconSize)
+                : this._makeIcon(item, tileW, m.iconSize);
+            if (!icon)
+                return;
             icon.set_size(tileW, tileH);
             icon.set_position(
                 m.left + col * m.colW + Math.round((m.colW - tileW) / 2),
                 m.top + row * m.rowH + Math.round((m.rowH - tileH) / 2));
             this._actor.add_child(icon);
         });
+        if (this._folderView)
+            this._actor.set_child_above_sibling(this._folderView.actor, null);
 
         this._layoutDots(pages, wa, m);
-        log(`kos-shell: launchpad ${apps.length} apps, page ${this._page + 1}/${pages}, ` +
+        log(`kos-shell: launchpad ${items.length} items, page ${this._page + 1}/${pages}, ` +
             `${m.rows} rows x ${GRID_COLS} cols, icon ${m.iconSize}px, cell ${m.colW}x${m.rowH}, ` +
             `block at ${m.left},${m.top}`);
     }
 
-    _makeIcon(app, tileW, iconSize) {
+    // An app tile. `item` is a grid entry ({type: 'app', id}); inside an
+    // open folder `folder` is set and the tile drags out of that folder.
+    _makeIcon(item, tileW, iconSize, folder = null) {
+        const app = lookupApp(item.id);
+        if (!app)
+            return null;
         const box = new St.BoxLayout({
             vertical: true,
             x_expand: true,
@@ -263,8 +346,210 @@ export class KosDesktopGrid {
             child: box,
             accessible_name: app.get_name(),
         });
-        button.connect('clicked', () => launchApp(app));
+        button.connect('clicked', () => {
+            this._folderView?.close();
+            launchApp(app);
+        });
+
+        const source = folder
+            ? {kind: 'folder-app', appId: item.id, folder}
+            : {kind: 'grid-app', appId: item.id, item};
+        makeDraggableIcon(button, source, () => appIcon(item.id, iconSize), gicon);
+        if (!folder) {
+            // Dropping on this tile: on the icon itself makes or fills a
+            // folder; on the rest of the tile it moves the icon here.
+            Object.assign(button._delegate, {
+                handleDragOver: src => this._dragOk(src),
+                acceptDrop: (src, _a, x, y) => this._dropOnItem(src, item, x, y, tileW, iconSize),
+            });
+        }
         return button;
+    }
+
+    _makeFolderIcon(folder, tileW, iconSize) {
+        const box = new St.BoxLayout({
+            vertical: true,
+            x_expand: true,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.START,
+        });
+        const square = makeFolderSquare(folder, iconSize);
+        const label = new St.Label({
+            text: folder.name,
+            style_class: 'kos-desktop-icon-label',
+            x_align: Clutter.ActorAlign.CENTER,
+        });
+        const ct = label.clutter_text;
+        ct.line_wrap = false;
+        ct.ellipsize = Pango.EllipsizeMode.END;
+        ct.line_alignment = Pango.Alignment.CENTER;
+        label.set_width(tileW - 8);
+        box.add_child(square);
+        box.add_child(label);
+
+        const button = new St.Button({
+            style_class: 'kos-desktop-icon',
+            reactive: true,
+            can_focus: false,
+            track_hover: true,
+            button_mask: St.ButtonMask.ONE,
+            child: box,
+            accessible_name: folder.name,
+        });
+        button.connect('clicked', () =>
+            this._folderView.open(folder, Main.layoutManager.primaryMonitor));
+        makeDraggableIcon(button, {kind: 'grid-folder', folder},
+            () => makeFolderSquare(folder, iconSize), square);
+        Object.assign(button._delegate, {
+            handleDragOver: src => this._dragOk(src),
+            acceptDrop: (src, _a, x, y) => this._dropOnItem(src, folder, x, y, tileW, iconSize),
+        });
+        return button;
+    }
+
+    _ensureFolderView(iconSize) {
+        if (this._folderView)
+            return;
+        this._folderView = new KosFolderView({
+            parent: this._actor,
+            tileSize: this._tileSize,
+            iconSize,
+            makeTile: (id, folder) => {
+                const [tw] = this._tileSize;
+                const tile = this._makeIcon({type: 'app', id}, tw, iconSize, folder);
+                tile?.set_size(...this._tileSize);
+                return tile;
+            },
+            onRename: (folder, name) => {
+                folder.name = name;
+                this._commit();
+            },
+        });
+    }
+
+    // ---- drag and drop ---------------------------------------------------
+
+    _dragOk(source) {
+        return ['grid-app', 'grid-folder', 'folder-app', 'dock-app'].includes(source?.kind)
+            ? DND.DragMotionResult.MOVE_DROP
+            : DND.DragMotionResult.CONTINUE;
+    }
+
+    // Empty space: dnd.js calls these on the backdrop's _delegate (this).
+    handleDragOver(source) {
+        return this._dragOk(source);
+    }
+
+    acceptDrop(source) {
+        if (this._dragOk(source) === DND.DragMotionResult.CONTINUE)
+            return false;
+        const [px, py] = global.get_pointer();
+        this._place(source, this._cellIndexAt(px, py), null);
+        return true;
+    }
+
+    // Grid index of the cell under a stage point (clamped to the list end).
+    _cellIndexAt(px, py) {
+        const m = this._m;
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!m)
+            return this._items.length;
+        const col = clamp(Math.floor((px - monitor.x - m.left) / m.colW), 0, GRID_COLS - 1);
+        const row = clamp(Math.floor((py - monitor.y - m.top) / m.rowH), 0, m.rows - 1);
+        return Math.min(this._page * m.perPage + row * GRID_COLS + col, this._items.length);
+    }
+
+    _dropOnItem(source, target, x, y, tileW, iconSize) {
+        if (this._dragOk(source) === DND.DragMotionResult.CONTINUE)
+            return false;
+        // The icon image is centered at the top of the tile, 8px down.
+        const onIcon = Math.abs(x - tileW / 2) <= iconSize / 2 && y <= 8 + iconSize;
+        const sameThing = source.item === target || source.folder === target ||
+            (target.type === 'app' && source.appId === target.id && source.kind !== 'folder-app');
+        if (sameThing)
+            return false;
+        if (onIcon && source.kind !== 'grid-folder')
+            this._place(source, -1, target);
+        else
+            this._place(source, this._items.indexOf(target), null);
+        return true;
+    }
+
+    // Move `source` to grid index `index`, or into `folderTarget` (an app
+    // entry becomes a new folder; a folder entry gains the app).
+    _place(source, index, folderTarget) {
+        if (source.kind === 'dock-app')
+            later(() => unpin(source.appId));
+
+        let entry;
+        let removedAt = -1;
+        if (source.kind === 'grid-folder') {
+            removedAt = this._items.indexOf(source.folder);
+            if (removedAt >= 0)
+                this._items.splice(removedAt, 1);
+            entry = source.folder;
+        } else {
+            // dock icon already in the grid with no folder target: unpinning is all.
+            if (source.kind === 'dock-app' && !folderTarget && this._contains(source.appId)) {
+                return;
+            }
+            removedAt = this._removeId(source.appId);
+            entry = {type: 'app', id: source.appId};
+        }
+
+        if (folderTarget) {
+            if (folderTarget.type === 'folder') {
+                if (!folderTarget.apps.includes(entry.id))
+                    folderTarget.apps.push(entry.id);
+            } else {
+                // Turn the target app entry into a folder in place.
+                const first = folderTarget.id;
+                delete folderTarget.id;
+                Object.assign(folderTarget, {
+                    type: 'folder',
+                    fid: GLib.uuid_string_random(),
+                    name: 'Folder',
+                    apps: [first, entry.id],
+                });
+            }
+        } else {
+            if (removedAt >= 0 && removedAt < index)
+                index--;
+            index = clamp(index, 0, this._items.length);
+            this._items.splice(index, 0, entry);
+        }
+        this._commit();
+    }
+
+    _contains(appId) {
+        return this._items.some(e => e.type === 'folder' ? e.apps.includes(appId) : e.id === appId);
+    }
+
+    // Remove an app from the top level or from its folder. A folder left
+    // with one app turns into that app in place. Returns the top-level
+    // index it was removed from, or -1.
+    _removeId(appId) {
+        for (let i = 0; i < this._items.length; i++) {
+            const e = this._items[i];
+            if (e.type === 'app' && e.id === appId) {
+                this._items.splice(i, 1);
+                return i;
+            }
+            if (e.type === 'folder' && e.apps.includes(appId)) {
+                e.apps = e.apps.filter(id => id !== appId);
+                if (e.apps.length === 1) {
+                    const last = e.apps[0];
+                    for (const k of ['fid', 'name', 'apps'])
+                        delete e[k];
+                    Object.assign(e, {type: 'app', id: last});
+                } else if (e.apps.length === 0) {
+                    this._items.splice(i, 1);
+                    return i;
+                }
+                return -1;
+            }
+        }
+        return -1;
     }
 
     _layoutDots(pages, wa, m) {
@@ -289,9 +574,9 @@ export class KosDesktopGrid {
     }
 
     _setPage(page) {
-        const apps = this._apps;
-        const {perPage} = this._metrics(this._workArea(), apps.length);
-        const pages = Math.max(1, Math.ceil(apps.length / perPage));
+        const items = this._items;
+        const {perPage} = this._metrics(this._workArea(), items.length);
+        const pages = Math.max(1, Math.ceil(items.length / perPage));
         const next = Math.max(0, Math.min(pages - 1, page));
         if (next === this._page)
             return;
@@ -338,7 +623,7 @@ function listDesktopFiles() {
     return files;
 }
 
-function loadApp(id) {
+export function loadApp(id) {
     const info = Gio.DesktopAppInfo.new(id);
     if (!info || !info.should_show())
         return null;

@@ -10,6 +10,8 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
 
+import {DND, appIcon, getPins, later, makeDraggableIcon, pinAt} from './folders.js';
+
 export class KosDock {
     constructor() {
         this._signals = [];
@@ -23,6 +25,9 @@ export class KosDock {
             y_align: Clutter.ActorAlign.CENTER,
             reactive: true,
         });
+        // Drop target: a grid icon dropped here is pinned at that spot; a
+        // dock icon dropped here moves. dnd.js finds this via _delegate.
+        this._actor._delegate = this;
         this._rebuild();
         Main.panel._centerBox.add_child(this._actor);
 
@@ -61,10 +66,7 @@ export class KosDock {
             if (!app)
                 continue;
             pinnedIds.add(app.get_id());
-            this._actor.add_child(new DockItem({
-                app,
-                onClick: () => this._activate(app),
-            }));
+            this._actor.add_child(this._makeItem(app, true));
         }
 
         // Also show open apps that aren't pinned, so you can always get
@@ -80,14 +82,52 @@ export class KosDock {
             }));
         }
 
-        for (const app of runningExtras) {
-            this._actor.add_child(new DockItem({
-                app,
-                onClick: () => this._activate(app),
-            }));
-        }
+        for (const app of runningExtras)
+            this._actor.add_child(this._makeItem(app, false));
 
         this._syncRunning();
+    }
+
+    _makeItem(app, pinned) {
+        const item = new DockItem({
+            app,
+            onClick: () => this._activate(app),
+        });
+        item.pinned = pinned;
+        makeDraggableIcon(item, {kind: 'dock-app', appId: app.get_id()},
+            () => appIcon(app.get_id(), 42), item._kosIcon);
+        Object.assign(item._delegate, {
+            handleDragOver: src => this.handleDragOver(src),
+            acceptDrop: src => this.acceptDrop(src),
+        });
+        return item;
+    }
+
+    handleDragOver(source) {
+        return source?.appId && ['grid-app', 'folder-app', 'dock-app'].includes(source.kind)
+            ? DND.DragMotionResult.MOVE_DROP
+            : DND.DragMotionResult.CONTINUE;
+    }
+
+    // Pin (or move) the app to the slot under the pointer: before the first
+    // pinned icon whose center is right of the pointer.
+    acceptDrop(source) {
+        if (this.handleDragOver(source) === DND.DragMotionResult.CONTINUE)
+            return false;
+        const [px] = global.get_pointer();
+        const pinnedItems = this._actor.get_children().filter(c => c.pinned);
+        let pos = pinnedItems.findIndex(c => {
+            const [x] = c.get_transformed_position();
+            return px < x + c.width / 2;
+        });
+        if (pos < 0)
+            pos = pinnedItems.length;
+        // Moving right past its own slot: the slot shifts once it's removed.
+        const current = getPins().indexOf(source.appId);
+        if (current >= 0 && current < pos)
+            pos--;
+        later(() => pinAt(source.appId, pos));
+        return true;
     }
 
     _activate(app) {
@@ -138,7 +178,7 @@ class DockItem extends St.Button {
             y_align: Clutter.ActorAlign.CENTER,
         });
 
-        const icon = new St.Icon({
+        const icon = this._kosIcon = new St.Icon({
             style_class: 'kos-dock-item-icon',
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
