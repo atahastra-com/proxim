@@ -24,6 +24,13 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
   - middle: 42px dock icons (46px on hover) sitting flat on the bar, vertically centered, no pill or outline; a small white dot under running apps (blue under the focused one); a thin divider before running non-pinned apps;
   - right: GNOME's system cluster only (network/volume/power). No extra wifi icon.
 - Desktop: Launchpad-style 7-column grid, centered as a block with even spacing, centered labels, no tile boxes, no search bar. Clicking an icon opens the app window.
+- Folders and drag and drop (`folders.js`, `desktopGrid.js`, `dock.js`), macOS Launchpad style:
+  - Drag an icon onto another icon's image -> a folder named "Folder" with both; onto a folder -> added. Dropping on the label area or empty space moves the icon to that cell.
+  - Folder icon: dark frosted 18px rounded square with 2x2 (3x3 above 4 apps) mini icons. Click opens a centered dark frosted panel above the grid (below windows) with an editable title (click it, type, Enter/Escape); clicking outside closes it; clicking an app launches it.
+  - Dragging an app out of the open panel closes it and drops on the grid underneath; a folder left with one app turns back into that app.
+  - Grid icon -> dock pins it at the drop slot; dock icon -> desktop unpins it (added to the grid if it isn't there). Dock icons reorder by drag.
+  - Grid order and folders persist in `~/.config/kos/launchpad.json` (`{"version":1,"items":["app.desktop",{"folder","name","apps"}]}`); new apps from `apps.txt` are appended. Pins are `org.gnome.shell favorite-apps`, written directly (AppFavorites' add/remove would show a notification).
+  - DnD only through GNOME's dnd.js: `DND.makeDraggable(actor)` plus `_delegate.handleDragOver/acceptDrop` on targets. No stage handlers or drag monitors. Change models in `acceptDrop`, but rebuild actors later (`later()` in folders.js) so dnd.js never loses its source or target mid-drop.
 - Theme is DARK everywhere (Deepin DDE 23 dark): `color-scheme='prefer-dark'` in the gschema override and dconf defaults. extension.js switches an existing user to dark once (marker `~/.config/kos/dark-default-v1`), then leaves the Dark Style tile in charge. Don't switch to light unless asked.
 - Popups (calendar, menus, OSD, dialogs, quick settings): one dark frosted panel (rgba(30,32,40,0.84) + blur), 18px radius, soft shadow (0 16px 44px rgba(0,0,0,0.45-0.50)), white text, rounded-square buttons (10-12px, not pills), accent #0081ff.
 - Quick settings = Deepin control center. `quickPanel.js` switches GNOME's grid to 4 columns and reorders it; `.kos-cc*` classes style it. Top to bottom:
