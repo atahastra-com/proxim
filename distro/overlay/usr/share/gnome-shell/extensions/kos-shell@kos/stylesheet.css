@@ -328,7 +328,7 @@
  * column divider, ONE gap (12px) between sections, rows padded 8px 12px.
  * Same values as the quick settings panel. */
 .datemenu-popover {
-    padding: 14px;
+    padding: 16px;
 }
 
 #calendarArea {
@@ -341,7 +341,7 @@
 .message-list:rtl {
     width: 22em;
     margin: 0;
-    padding: 0 14px 0 0;
+    padding: 0 16px 0 0;
     /* the column divider */
     border-width: 0 1px 0 0;
     border-style: solid;
@@ -355,9 +355,9 @@
 }
 
 .message-list-controls {
-    /* 10px sides = same text inset as the calendar-side rows */
-    padding: 10px 10px 0 10px;
-    spacing: 10px;
+    /* 12px sides = same text inset as the calendar-side rows */
+    padding: 12px 12px 0 12px;
+    spacing: 12px;
 }
 
 .datemenu-calendar-column,
@@ -365,19 +365,19 @@
 .datemenu-calendar-column:rtl {
     border: none;
     margin: 0;
-    padding: 0 0 0 14px;
-    spacing: 8px;
+    padding: 0 0 0 16px;
+    spacing: 12px;
 }
 
 .datemenu-calendar-column .datemenu-displays-box {
-    spacing: 6px;
+    spacing: 12px;
 }
 
 .datemenu-today-button,
 .events-button,
 .world-clocks-button,
 .weather-button {
-    padding: 6px 10px;
+    padding: 8px 12px;
     margin: 0;
 }
 
