@@ -86,13 +86,13 @@ export class KosPanel {
         };
 
         if (!this._blurEffect) {
-            const pair = addBlur(Main.panel, 36, 0.90);
+            const pair = addBlur(Main.panel, 36, 1.0);
             if (pair)
                 this._blurEffect = pair[1];
         }
         for (const area of ['dateMenu', 'quickSettings']) {
             const box = Main.panel.statusArea[area]?.menu?.box;
-            const pair = addBlur(box, 36, 0.88);
+            const pair = addBlur(box, 36, 1.0);
             if (pair)
                 this._menuBlurs.push(pair);
         }

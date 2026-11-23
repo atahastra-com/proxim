@@ -13,6 +13,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {KosPanel} from './panel.js';
+import {KosQuickPanel} from './quickPanel.js';
 import {KosDock} from './dock.js';
 import {KosDesktopGrid, KosAllAppsOverlay} from './desktopGrid.js';
 
@@ -58,6 +59,8 @@ export default class KosShellExtension extends Extension {
         });
 
         this._panel.enable();
+        this._quickPanel = new KosQuickPanel();
+        this._quickPanel.enable();
         this._dock.enable();
         this._grid.enable();
 
@@ -79,6 +82,8 @@ export default class KosShellExtension extends Extension {
         this._grid = null;
         this._dock?.disable();
         this._dock = null;
+        this._quickPanel?.disable();
+        this._quickPanel = null;
         this._panel?.disable();
         this._panel = null;
 
@@ -136,6 +141,8 @@ export default class KosShellExtension extends Extension {
 
         const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
         iface.set_string('icon-theme', 'Deepin2022');
+        // Deepin is light: light apps (libadwaita) and GNOME's light shell theme.
+        iface.set_string('color-scheme', 'prefer-light');
         if (iface.list_keys().includes('enable-hot-corners'))
             iface.set_boolean('enable-hot-corners', false);
         iface.set_boolean('clock-show-date', true);
