@@ -474,13 +474,13 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 18px;
     box-shadow: 0 16px 44px rgba(0, 0, 0, 0.50);
-    padding: 12px;
+    padding: 16px;
 }
 
 .kos-cc .quick-settings-grid {
-    width: 348px;
-    spacing-rows: 10px;
-    spacing-columns: 10px;
+    width: 372px;
+    spacing-rows: 12px;
+    spacing-columns: 12px;
 }
 
 /* Base for every tile: translucent gray rounded rect, white text. */
@@ -640,11 +640,11 @@
 .kos-cc .kos-cc-card {
     background-color: rgba(255, 255, 255, 0.07);
     border-radius: 12px;
-    padding: 6px 8px;
+    padding: 8px 12px;
 }
 
 .kos-cc .kos-cc-card > StBoxLayout {
-    spacing: 8px;
+    spacing: 10px;
 }
 
 .kos-cc .kos-cc-card .slider-bin,
@@ -682,7 +682,7 @@
 
 /* Bottom row: plain icons, gear left, lock + power right. */
 .kos-cc .kos-cc-system {
-    padding: 2px 2px 0 2px;
+    padding: 6px 4px 0 4px;
 }
 
 .kos-cc .kos-cc-system .icon-button,
