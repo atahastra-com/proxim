@@ -119,15 +119,15 @@ export DEBIAN_FRONTEND=noninteractive
 if [[ "${KOS_SKIP_APT:-0}" == 1 ]]; then
   echo "Skipping apt (KOS_SKIP_APT=1)"
 else
-  need_pkg() { dpkg -s "$1" >/dev/null 2>&1; }
+  need_pkg() { dpkg -s "\$1" >/dev/null 2>&1; }
   if ! need_pkg inotify-tools || ! need_pkg deepin-icon-theme; then
     pkgs=()
     need_pkg inotify-tools || pkgs+=(inotify-tools)
     need_pkg deepin-icon-theme || pkgs+=(deepin-icon-theme)
-    if apt-get update && apt-get install -y --no-install-recommends "${pkgs[@]}"; then
+    if apt-get update && apt-get install -y --no-install-recommends "\${pkgs[@]}"; then
       :
     else
-      echo "WARN: could not install ${pkgs[*]} (network?)."
+      echo "WARN: could not install \${pkgs[*]} (network?)."
       if ! need_pkg deepin-icon-theme; then
         echo "missing deepin-icon-theme: run sudo apt install -y deepin-icon-theme"
       fi
