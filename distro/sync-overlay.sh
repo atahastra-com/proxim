@@ -22,6 +22,11 @@ else
   SUDO=(sudo)
 fi
 
+# Rebuild kos-icons from local macosicons.com sources when they are present.
+if [[ -x "${DISTRO}/icons/build-theme.sh" && -d "${DISTRO}/icons/sources" ]]; then
+  "${DISTRO}/icons/build-theme.sh"
+fi
+
 if [[ -d "$OVERLAY" ]]; then
   echo "Syncing ${OVERLAY} -> ${MNT}"
   # --chown so we never apply the host user's uid to the image root

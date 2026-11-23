@@ -166,7 +166,7 @@ export default class KosShellExtension extends Extension {
         wm.set_string('button-layout', ':minimize,maximize,close');
 
         const iface = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
-        iface.set_string('icon-theme', 'Deepin2022');
+        iface.set_string('icon-theme', 'kos-icons');
         // kos is dark everywhere. Switch an existing user to dark once (an
         // earlier kos build set prefer-light); after that the Dark Style
         // tile in quick settings stays in charge.

@@ -131,6 +131,7 @@ if id '${KOS_USER}' >/dev/null 2>&1; then
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/wm/preferences/num-workspaces 1 || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/enable-hot-corners false || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/clock-show-date true || true
+  sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/icon-theme "'kos-icons'" || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/enable-animations false || true
   sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/mutter/experimental-features "@as []" || true
 fi
