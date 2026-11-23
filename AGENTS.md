@@ -19,9 +19,9 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
 
 ## Design
 - No top bar, Activities, overview, workspaces, or app-grid button.
-- One full-width bottom bar, 72px, flush to the bottom edge, light frosted glass (rgba(246,247,250,0.78) + background blur), dark text and icons, no border:
+- One full-width bottom bar, 72px, flush to the bottom edge, DARK blurred glass (rgba(20,22,30,0.60) tint + Shell.BlurEffect radius 60, brightness 0.75 in panel.js), white icons, text and clock, no border. Only the bar is dark; popups, quick settings and windows stay light:
   - left: date + time only;
-  - middle: 42px dock icons (46px on hover) sitting flat on the bar, vertically centered, no pill or outline; a small dark dot under running apps (blue under the focused one); a thin divider before running non-pinned apps;
+  - middle: 42px dock icons (46px on hover) sitting flat on the bar, vertically centered, no pill or outline; a small white dot under running apps (blue under the focused one); a thin divider before running non-pinned apps;
   - right: GNOME's system cluster only (network/volume/power). No extra wifi icon.
 - Desktop: Launchpad-style 7-column grid, centered as a block with even spacing, centered labels, no tile boxes, no search bar. Clicking an icon opens the app window.
 - Theme is LIGHT, like Deepin (DDE 23): `color-scheme='prefer-light'` (gschema override, dconf defaults, extension.js). Don't switch back to dark.

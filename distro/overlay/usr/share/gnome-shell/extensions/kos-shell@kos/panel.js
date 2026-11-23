@@ -85,8 +85,9 @@ export class KosPanel {
             }
         };
 
+        // Dark bar: strong blur, slightly dimmed so white icons read well.
         if (!this._blurEffect) {
-            const pair = addBlur(Main.panel, 36, 1.0);
+            const pair = addBlur(Main.panel, 60, 0.75);
             if (pair)
                 this._blurEffect = pair[1];
         }

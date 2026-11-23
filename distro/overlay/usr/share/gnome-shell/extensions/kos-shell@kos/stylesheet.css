@@ -1,12 +1,14 @@
-/* kos-shell styles: Deepin (DDE 23) light frosted glass, #0081ff accent.
- * The bar, its menus and the quick settings popup are light. The launchpad
- * grid sits on the wallpaper, so its labels stay white. */
+/* kos-shell styles: Deepin (DDE 23) look, #0081ff accent.
+ * The bottom bar is dark blurred glass; its menus and the quick settings
+ * popup are light. The launchpad grid sits on the wallpaper, so its labels
+ * stay white. */
 
-/* Full-width bottom bar, flush to the bottom edge, light frosted glass. */
+/* Full-width bottom bar, flush to the bottom edge, dark blurred glass
+ * (panel.js adds the background blur). */
 #panel.kos-panel {
-    background-color: rgba(246, 247, 250, 0.78);
+    background-color: rgba(20, 22, 30, 0.60);
     border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.55);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 0;
     box-shadow: none;
     height: 72px;
@@ -18,7 +20,7 @@
 }
 
 #panel.kos-panel .panel-button {
-    color: rgba(0, 0, 0, 0.86);
+    color: rgba(255, 255, 255, 0.94);
     background-color: transparent;
     border: none;
     box-shadow: none;
@@ -32,9 +34,9 @@
 
 #panel.kos-panel .panel-button:hover,
 #panel.kos-panel .panel-button:focus {
-    background-color: rgba(0, 0, 0, 0.07);
+    background-color: rgba(255, 255, 255, 0.12);
     box-shadow: none;
-    color: #000000;
+    color: #ffffff;
 }
 
 /* Open bar menus (clock, status cluster). */
@@ -43,10 +45,10 @@
 #panel.kos-panel .panel-button:overview,
 #panel.kos-panel .panel-button:active:hover,
 #panel.kos-panel .panel-button:checked:hover {
-    background-color: rgba(0, 0, 0, 0.11);
+    background-color: rgba(255, 255, 255, 0.20);
     box-shadow: none;
     border-radius: 12px;
-    color: #000000;
+    color: #ffffff;
 }
 
 #panel.kos-panel .system-status-icon {
@@ -67,10 +69,10 @@
     border-radius: 0;
     padding: 0;
     margin: 0;
-    color: rgba(0, 0, 0, 0.86);
+    color: rgba(255, 255, 255, 0.94);
 }
 
-/* Center dock: icons sit flat on the frosted bar. */
+/* Center dock: icons sit flat on the dark bar. */
 .kos-dock {
     spacing: 10px;
     padding: 0 8px;
@@ -85,7 +87,7 @@
     width: 1px;
     height: 30px;
     margin: 0 6px;
-    background-color: rgba(0, 0, 0, 0.14);
+    background-color: rgba(255, 255, 255, 0.18);
 }
 
 /* Pixel-exact vertical centering in the 72px bar:
@@ -103,14 +105,14 @@
 .kos-dock-item:hover,
 .kos-dock-item:focus {
     padding: 10px 6px 2px 6px;
-    background-color: rgba(0, 0, 0, 0.07);
+    background-color: rgba(255, 255, 255, 0.12);
     border: none;
     box-shadow: none;
 }
 
 .kos-dock-item:active {
     padding: 12px 8px 4px 8px;
-    background-color: rgba(0, 129, 255, 0.20);
+    background-color: rgba(0, 129, 255, 0.30);
     border: none;
     box-shadow: none;
 }
@@ -145,7 +147,7 @@
 }
 
 .kos-dock-dot.running {
-    background-color: rgba(0, 0, 0, 0.45);
+    background-color: rgba(255, 255, 255, 0.80);
 }
 
 .kos-dock-item.focused .kos-dock-dot.running {
