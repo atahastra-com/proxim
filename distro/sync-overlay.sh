@@ -31,6 +31,16 @@ if [[ -d "$OVERLAY" ]]; then
   "${SUDO[@]}" rsync -a --exclude '.git' --chown=root:root --chmod=D755,Fu=rwX,go=rX "${OVERLAY}/" "${MNT}/"
 fi
 
+# Files under overlay/home/<user> (e.g. ~/.config/gtk-4.0/gtk.css) were
+# copied as root above; give them back to that user, or GNOME can't write ~/.config.
+if [[ -d "$OVERLAY/home" ]]; then
+  for d in "$OVERLAY"/home/*/; do
+    u="$(basename "$d")"
+    ids="$(awk -F: -v u="$u" '$1 == u {print $3 ":" $4}' "$MNT/etc/passwd")"
+    [[ -n "$ids" && -d "$MNT/home/$u" ]] && "${SUDO[@]}" chown -R "$ids" "$MNT/home/$u"
+  done
+fi
+
 # dconf system defaults (user profile + local database)
 "${SUDO[@]}" mkdir -p "$MNT/etc/dconf/profile" "$MNT/etc/dconf/db/local.d"
 "${SUDO[@]}" cp "${CFG}/dconf-user-profile" "$MNT/etc/dconf/profile/user"
