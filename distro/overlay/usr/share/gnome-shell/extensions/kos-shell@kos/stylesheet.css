@@ -472,10 +472,13 @@
     color: #ffffff;
 }
 
-/* Bottom-right status cluster: subtle highlight, no blue pill. */
-#panel.kos-panel .panel-button.quick-settings:checked,
-#panel.kos-panel .quick-settings:checked,
-#panel.kos-panel .panel-button:checked {
-    background-color: rgba(255, 255, 255, 0.14);
+/* Open bar menus (clock, status cluster): a neutral solid gray rounded
+ * square. A translucent white tinted blue over the blurred wallpaper. */
+#panel.kos-panel .panel-button:active,
+#panel.kos-panel .panel-button:checked,
+#panel.kos-panel .panel-button:active:hover,
+#panel.kos-panel .panel-button:checked:hover {
+    background-color: #2f3139;
     box-shadow: none;
+    border-radius: 12px;
 }

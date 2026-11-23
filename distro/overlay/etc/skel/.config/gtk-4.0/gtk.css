@@ -62,32 +62,31 @@ windowcontrols {
 }
 
 windowcontrols > button {
-    min-width: 26px;
-    min-height: 26px;
+    min-width: 30px;
+    min-height: 30px;
     padding: 0;
     margin: 0;
-    border-radius: 999px;
-    background-color: rgba(255, 255, 255, 0.07);
+    background: none;
     box-shadow: none;
 }
 
+/* The headerbar stretches buttons vertically, so draw the circle on the
+ * icon (like Adwaita does), not on the button. */
 windowcontrols > button > image {
-    background: none;
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
     box-shadow: none;
-    padding: 0;
+    padding: 6px;
     -gtk-icon-size: 14px;
     color: rgba(255, 255, 255, 0.85);
 }
 
-windowcontrols > button:hover {
-    background-color: rgba(255, 255, 255, 0.16);
-}
-
-windowcontrols > button.close:hover {
-    background-color: #f04e4e;
+windowcontrols > button:hover > image {
+    background-color: rgba(255, 255, 255, 0.18);
 }
 
 windowcontrols > button.close:hover > image {
+    background-color: #f04e4e;
     color: #ffffff;
 }
 
