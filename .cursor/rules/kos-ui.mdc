@@ -18,6 +18,8 @@ Only in `distro/overlay/usr/share/gnome-shell/extensions/kos-shell@kos/`:
 - `apps.txt`: which apps show on the home screen, one .desktop id per line.
 - `metadata.json`: extension id and supported shell version.
 
+App window style (GTK, not the shell): `distro/overlay/home/pratham/.config/gtk-4.0/gtk.css` (libadwaita/GTK4) and `gtk-3.0/gtk.css`, with copies in `distro/overlay/etc/skel/.config/` for new users. Keep the two locations identical.
+
 Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Defaults (animations off, enabled extension): `distro/config/kos.gschema.override` and `distro/config/dconf-kos-shell.ini`.
 
 ## Design
@@ -27,7 +29,10 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
   - middle: 42px dock icons (46px on hover) sitting flat on the bar, vertically centered, no pill or outline; a small white dot under running apps; a thin divider before running non-pinned apps;
   - right: GNOME's system cluster only (network/volume/power). No extra wifi icon.
 - Desktop: Launchpad-style 7-column grid, centered as a block with even spacing, centered labels, no tile boxes, no search bar. Clicking an icon opens the app window.
-- Dark navy wallpaper with a dim layer over the whole screen, kos blue accent (#3b82f6), animations off.
+- Popups (quick settings, calendar, menus, OSD, dialogs) in Deepin (DDE) style: one dark translucent panel (rgba(28,30,38,0.74)), 18px radius, soft large shadow, rounded-square tiles and buttons (12-14px, not pills), thin sliders, accent #0081ff.
+- App windows in Deepin style: 16px rounded corners, big soft shadow, flat titlebar the same color as the content, minimize/maximize/close as round buttons on the RIGHT (`button-layout=':minimize,maximize,close'`, set in the gschema override, dconf defaults and extension.js), darker sidebar with rounded blue selection. No macOS traffic lights.
+- Icon theme Deepin2022 (`distro/overlay/usr/share/icons/Deepin2022/`, gitignored, must exist locally before a build).
+- kos wallpaper with a dim layer over the whole screen, accent #0081ff, animations off.
 
 ## Hard rules
 - No stage-level click/key handlers or global event capture. Desktop icons are reactive `St.Button`s inside `Main.layoutManager._backgroundGroup` (above the wallpaper, below windows).
@@ -38,5 +43,6 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
 - Make small commits; leave nothing uncommitted.
 - Test with `./build.sh distro-dev` (live CSS reload) or `./build.sh distro-update` then `./build.sh distro-run`. A change is done only when a screenshot proves it.
 
-## Planned
-- Custom icon theme from `distro/icons/<appid>.svg` (folder not created yet).
+## Limits to know
+- libadwaita has no real background blur for windows; "frosted" sidebars are just darker/translucent colors. Shell popups get translucency, not blur.
+- GTK CSS is per user (~/.config), so changes reach the image only through `distro-update` (or a rebuild), not `distro-dev` hot reload.
