@@ -50,8 +50,13 @@ if command -v magick >/dev/null; then
 elif command -v convert >/dev/null; then
   IM=(convert)
 else
-  echo "missing ImageMagick (magick or convert)" >&2
+  echo "missing ImageMagick (magick or convert): run sudo apt install -y imagemagick" >&2
   exit 1
+fi
+
+# Same kos-icons preflight as update-image.sh: before any disk work.
+if [[ -x "${DISTRO}/icons/build-theme.sh" && -d "${DISTRO}/icons/sources" ]]; then
+  "${DISTRO}/icons/build-theme.sh"
 fi
 
 mkdir -p "$OUT" "$MNT"

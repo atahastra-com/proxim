@@ -14,15 +14,24 @@ THEME_NAME="kos-icons"
 DEST="${KOS}/distro/overlay/usr/share/icons/${THEME_NAME}"
 ATTR="${ICONS}/ATTRIBUTION.txt"
 
-need() { command -v "$1" >/dev/null || { echo "missing command: $1" >&2; exit 1; }; }
-need python3
-need icns2png
+missing=0
+command -v python3 >/dev/null || { echo "missing python3: run sudo apt install -y python3" >&2; missing=1; }
+command -v icns2png >/dev/null || { echo "missing icns2png: run sudo apt install -y icnsutils" >&2; missing=1; }
 if command -v magick >/dev/null; then
   IM=(magick)
 elif command -v convert >/dev/null; then
   IM=(convert)
-else
-  echo "missing ImageMagick (magick or convert)" >&2
+fi
+# identify(1) is used to validate extracted PNGs; it ships with imagemagick.
+if [[ -z "${IM:-}" ]] || ! command -v identify >/dev/null; then
+  echo "missing ImageMagick (magick or convert): run sudo apt install -y imagemagick" >&2
+  missing=1
+fi
+if (( missing )); then
+  if [[ -f "${DEST}/index.theme" ]]; then
+    echo "warning: using the existing kos-icons theme (install the tools above to rebuild it)" >&2
+    exit 0
+  fi
   exit 1
 fi
 

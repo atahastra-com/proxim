@@ -35,6 +35,14 @@ need_cmd qemu-nbd
 need_cmd rsync
 need_cmd e2fsck
 
+# Rebuild kos-icons before mounting, so a missing icns2png/ImageMagick
+# fails with a clear apt hint instead of after e2fsck has the image open.
+# If those tools are missing but the generated theme already exists,
+# build-theme.sh keeps it and continues.
+if [[ -x "${DISTRO}/icons/build-theme.sh" && -d "${DISTRO}/icons/sources" ]]; then
+  "${DISTRO}/icons/build-theme.sh"
+fi
+
 mkdir -p "$MNT"
 NBD=/dev/nbd0
 MOUNTED=0

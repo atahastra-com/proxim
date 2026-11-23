@@ -29,8 +29,11 @@ the machine that runs `./build.sh distro` / `distro-update` (see
 
 This extracts PNGs from each `.icns`, scales 16–512px, writes
 `distro/overlay/usr/share/icons/kos-icons/`, and refreshes
-`ATTRIBUTION.txt`. `distro/sync-overlay.sh` runs it automatically when
-sources are present, then installs the theme into the image.
+`ATTRIBUTION.txt`. Host tools: `icns2png` (`sudo apt install -y icnsutils`),
+ImageMagick (`sudo apt install -y imagemagick`), and python3.
+`./build.sh distro-update` and `distro` run it before mounting the
+image. If those tools are missing but the generated theme is already
+there, the existing theme is kept.
 
 The desktop default is `icon-theme='kos-icons'` in
 `distro/config/kos.gschema.override` and `dconf-kos-shell.ini`.
