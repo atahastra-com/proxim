@@ -401,3 +401,81 @@
     background-color: #0081ff;
     color: #ffffff;
 }
+
+/* ============================================================================
+ * Quick settings (bottom-right) in Deepin control-center style: one frosted
+ * panel, rounded-square tiles and buttons instead of GNOME pills.
+ * GNOME 48 uses :ltr/:rtl corner rules for split toggles, so match them.
+ * ============================================================================ */
+.quick-settings {
+    padding: 14px;
+    border-radius: 18px;
+}
+
+.quick-settings .quick-settings-grid {
+    spacing-rows: 10px;
+    spacing-columns: 10px;
+}
+
+.quick-toggle,
+.quick-toggle:ltr,
+.quick-toggle:rtl {
+    border-radius: 14px;
+    min-height: 46px;
+}
+
+.quick-menu-toggle .quick-toggle:ltr {
+    border-radius: 14px 0 0 14px;
+}
+
+.quick-menu-toggle .quick-toggle-menu-button:ltr {
+    border-radius: 0 14px 14px 0;
+}
+
+.quick-menu-toggle .quick-toggle:rtl {
+    border-radius: 0 14px 14px 0;
+}
+
+.quick-menu-toggle .quick-toggle-menu-button:rtl {
+    border-radius: 14px 0 0 14px;
+}
+
+.quick-menu-toggle .quick-toggle:checked + .quick-toggle-separator {
+    background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Screenshot / settings / lock / power: rounded squares, not circles. */
+.quick-settings-system-item .icon-button,
+.quick-settings-system-item .button,
+.quick-settings .icon-button {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: none;
+    border-radius: 12px;
+    box-shadow: none;
+    padding: 10px;
+}
+
+.quick-settings-system-item .icon-button:hover,
+.quick-settings .icon-button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Cleaner sliders: thin track, small white knob. */
+.quick-slider .slider-bin {
+    border-radius: 14px;
+    padding: 10px 12px;
+}
+
+.quick-slider .slider {
+    -barlevel-height: 4px;
+    -slider-handle-radius: 7px;
+    color: #ffffff;
+}
+
+/* Bottom-right status cluster: subtle highlight, no blue pill. */
+#panel.kos-panel .panel-button.quick-settings:checked,
+#panel.kos-panel .quick-settings:checked,
+#panel.kos-panel .panel-button:checked {
+    background-color: rgba(255, 255, 255, 0.14);
+    box-shadow: none;
+}
