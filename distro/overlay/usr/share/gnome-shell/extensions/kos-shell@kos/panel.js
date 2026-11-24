@@ -103,15 +103,16 @@ export class KosPanel {
             }
         };
 
-        // Dark bar: strong blur, slightly dimmed so white icons read well.
+        // Liquid Glass bar & popovers: strong blur with high luminosity so
+        // wallpaper light and color refract through the glass cleanly.
         if (!this._blurEffect) {
-            const pair = addBlur(Main.panel, 60, 0.75);
+            const pair = addBlur(Main.panel, 64, 0.84);
             if (pair)
                 this._blurEffect = pair[1];
         }
         for (const area of ['dateMenu', 'quickSettings']) {
             const box = Main.panel.statusArea[area]?.menu?.box;
-            const pair = addBlur(box, 48, 0.80);
+            const pair = addBlur(box, 56, 0.86);
             if (pair)
                 this._menuBlurs.push(pair);
         }

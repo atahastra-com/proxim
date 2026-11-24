@@ -3,14 +3,14 @@
  * popup are dark frosted glass. The launchpad grid sits on the wallpaper, so its labels
  * stay white. */
 
-/* Full-width bottom bar, flush to the bottom edge, dark blurred glass
+/* Full-width bottom bar, flush to the bottom edge, iOS 26 Liquid Glass
  * (panel.js adds the background blur). */
 #panel.kos-panel {
-    background-color: rgba(20, 22, 30, 0.60);
+    background-color: rgba(24, 28, 40, 0.48);
     border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 0;
-    box-shadow: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
     height: 72px;
     min-height: 72px;
     margin: 0;
@@ -131,14 +131,14 @@
 
 /* App name, placed in JS just above the magnified icon. */
 .kos-dock-tooltip {
-    padding: 5px 10px;
-    border-radius: 8px;
-    background-color: rgba(30, 32, 40, 0.92);
+    padding: 5px 12px;
+    border-radius: 12px;
+    background-color: rgba(28, 32, 44, 0.68);
     color: rgba(255, 255, 255, 0.96);
     font-size: 12px;
     font-weight: 500;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: none;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
 
@@ -178,26 +178,26 @@
     padding-top: 8px; /* = ICON_LABEL_GAP; JS caps width and wraps to 2 lines */
 }
 
-/* Launchpad folders: a dark frosted rounded square of mini icons on the
- * grid; opened, a centered dark frosted panel with an editable title. */
+/* Launchpad folders: Liquid Glass rounded square of mini icons on the
+ * grid; opened, a centered Liquid Glass panel with an editable title. */
 .kos-folder-icon {
-    background-color: rgba(30, 32, 40, 0.62);
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    background-color: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.24);
     /* Corner radius is also set in JS from the icon size so it matches
        the app-icon squircle at every grid scale. */
     border-radius: 22.3%;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 20px rgba(0, 0, 0, 0.28);
 }
 
 .kos-folder-backdrop {
-    background-color: rgba(0, 0, 0, 0.35);
+    background-color: rgba(0, 0, 0, 0.28);
 }
 
 .kos-folder-panel {
-    background-color: rgba(30, 32, 40, 0.86);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(28, 32, 44, 0.58);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 24px;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.50);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 20px 50px rgba(0, 0, 0, 0.40);
     padding: 20px; /* even on all sides; title and grid are centered */
     spacing: 16px;
 }
@@ -271,11 +271,11 @@
 }
 
 /* ============================================================================
- * Popups: Deepin dark frosted glass (18px corners, 1px hairline, no shadow).
+ * Popups: iOS 26 Liquid Glass (18px corners, luminous rim, no outer shadow).
  * ============================================================================ */
 .popup-menu-boxpointer,
 .candidate-popup-boxpointer {
-    -arrow-background-color: rgba(30, 32, 40, 0.84);
+    -arrow-background-color: rgba(28, 32, 44, 0.64);
     -arrow-border-color: transparent;
     -arrow-border-width: 0;
     -arrow-border-radius: 18px;
@@ -283,11 +283,11 @@
 }
 
 .popup-menu-content {
-    background-color: rgba(30, 32, 40, 0.84);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(28, 32, 44, 0.64);
+    border: 1px solid rgba(255, 255, 255, 0.20);
     border-radius: 18px;
-    box-shadow: none;
-    color: rgba(255, 255, 255, 0.92);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20);
+    color: rgba(255, 255, 255, 0.94);
 }
 
 /* Calendar + quick settings: no arrow and no rise; panel.js pins the box
@@ -333,11 +333,12 @@
     border-radius: 18px;
 }
 
-/* One fill for both popups; the calendar used to get a second layer from
-   its arrow box, so this is the opacity both had before. */
+/* One Liquid Glass fill for both popups (no outer shadow). */
 .datemenu-popover,
 .quick-settings.kos-cc {
-    background-color: rgba(30, 32, 40, 0.96);
+    background-color: rgba(28, 32, 44, 0.64);
+    border: 1px solid rgba(255, 255, 255, 0.20);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20);
 }
 
 #calendarArea {
@@ -509,11 +510,11 @@
 .modal-dialog,
 .switcher-list,
 .resize-popup {
-    background-color: rgba(30, 32, 40, 0.88);
-    border: none;
+    background-color: rgba(28, 32, 44, 0.68);
+    border: 1px solid rgba(255, 255, 255, 0.22);
     border-radius: 18px;
-    box-shadow: 0 16px 44px rgba(0, 0, 0, 0.50);
-    color: rgba(255, 255, 255, 0.92);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 18px 44px rgba(0, 0, 0, 0.42);
+    color: rgba(255, 255, 255, 0.94);
 }
 
 .switcher-list .item-box:selected,
@@ -546,11 +547,11 @@
  * GNOME 48 uses :ltr/:rtl corner rules, so match them where needed.
  * ============================================================================ */
 .quick-settings.kos-cc {
-    background-color: rgba(30, 32, 40, 0.84);
-    color: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(28, 32, 44, 0.64);
+    color: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.20);
     border-radius: 18px;
-    box-shadow: none;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20);
     padding: 16px;
 }
 
@@ -593,7 +594,7 @@
     background-color: transparent;
 }
 
-/* Tiles: all identical, 72px tall, icon centered over its label. */
+/* Tiles: all identical, 72px tall, Liquid Glass specular rim. */
 .kos-cc .kos-cc-small.quick-toggle,
 .kos-cc .kos-cc-small.quick-toggle:ltr,
 .kos-cc .kos-cc-small.quick-toggle:rtl,
@@ -603,18 +604,22 @@
     min-height: 72px;
     padding: 0;
     border-radius: 12px;
-    background-color: rgba(255, 255, 255, 0.07);
-    color: rgba(255, 255, 255, 0.88);
+    background-color: rgba(255, 255, 255, 0.11);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.92);
 }
 
 .kos-cc .kos-cc-small.quick-toggle:hover,
 .kos-cc .kos-cc-small .quick-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.13);
+    background-color: rgba(255, 255, 255, 0.18);
 }
 
 .kos-cc .kos-cc-small.quick-toggle:checked,
 .kos-cc .kos-cc-small .quick-toggle:checked {
-    background-color: #0081ff;
+    background-color: rgba(0, 129, 255, 0.85);
+    border: 1px solid rgba(130, 200, 255, 0.45);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
     color: #ffffff;
 }
 
@@ -640,9 +645,11 @@
     font-weight: normal;
 }
 
-/* Sliders: one card each, light filled track, white round knob. */
+/* Sliders: one Liquid Glass card each, light filled track, white round knob. */
 .kos-cc .kos-cc-card {
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: rgba(255, 255, 255, 0.11);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
     border-radius: 12px;
     padding: 8px 12px;
 }
@@ -710,11 +717,11 @@
 
 /* Submenus that open from a tile chevron (Wi-Fi list, outputs, ...). */
 .quick-toggle-menu {
-    background-color: rgba(44, 47, 56, 0.96);
-    color: rgba(255, 255, 255, 0.92);
-    border: none;
+    background-color: rgba(34, 38, 52, 0.72);
+    color: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(255, 255, 255, 0.20);
     border-radius: 14px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20);
 }
 
 .quick-toggle-menu .header .icon {
@@ -753,10 +760,11 @@
     padding-top: 12px;
 }
 .kos-lock .login-dialog-prompt-entry {
-    background-color: rgba(30, 32, 40, 0.84);
+    background-color: rgba(255, 255, 255, 0.14);
     color: #ffffff;
     border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
     caret-color: #ffffff;
 }
 .kos-lock .login-dialog-prompt-entry:focus {
@@ -764,6 +772,8 @@
 }
 .kos-lock .login-dialog-button.cancel-button,
 .kos-lock .login-dialog-button.switch-user-button {
-    background-color: rgba(30, 32, 40, 0.84);
+    background-color: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
     color: #ffffff;
 }
