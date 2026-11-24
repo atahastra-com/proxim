@@ -126,30 +126,11 @@ export class KosLockScreen {
 export class KosHomeBlur {
     enable() {
         this._group = Main.layoutManager._backgroundGroup;
-        for (const child of this._group.get_children())
-            this._blur(child);
-        // Wallpaper actors are re-created on wallpaper or monitor changes.
-        this._addedId = this._group.connect('child-added', (_g, child) => this._blur(child));
+        for (const child of this._group?.get_children() ?? [])
+            child.remove_effect_by_name(HOME_EFFECT);
     }
 
     disable() {
-        if (this._addedId) {
-            this._group.disconnect(this._addedId);
-            this._addedId = 0;
-        }
-        for (const child of this._group?.get_children() ?? [])
-            child.remove_effect_by_name(HOME_EFFECT);
         this._group = null;
-    }
-
-    _blur(actor) {
-        if (!(actor instanceof Meta.BackgroundActor) || actor.get_effect(HOME_EFFECT))
-            return;
-        const {scaleFactor} = St.ThemeContext.get_for_stage(global.stage);
-        actor.add_effect_with_name(HOME_EFFECT, new Shell.BlurEffect({
-            radius: HOME_RADIUS * scaleFactor,
-            brightness: HOME_BRIGHTNESS,
-            mode: Shell.BlurMode.ACTOR,
-        }));
     }
 }

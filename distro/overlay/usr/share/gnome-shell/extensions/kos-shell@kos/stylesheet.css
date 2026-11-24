@@ -148,7 +148,7 @@
 
 /* Subtle dimmer so Deepin2022 icons pop cleanly over any wallpaper. */
 .kos-launchpad-dim {
-    background-color: rgba(10, 12, 18, 0.18);
+    background-color: transparent;
 }
 
 /* App icon + label. No tile box at rest or on hover — the icon scales smoothly. */
