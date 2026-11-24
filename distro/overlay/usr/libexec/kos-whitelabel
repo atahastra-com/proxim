@@ -1,6 +1,8 @@
 #!/bin/bash
 # Idempotent. Drop GNOME Help / Tour / first-run setup so the image looks
-# like kos, not stock GNOME, and keep apt from pulling them back.
+# like Proxim OS, not stock GNOME, and keep apt from pulling them back.
+# Also applies the OS name/logo steps that must run inside the image
+# (see apply_branding at the end).
 #
 # yelp and gnome-user-docs are hard Depends of the gnome-core metapackage.
 # Other gnome-core Depends are marked manual first so purging Help only
@@ -236,19 +238,74 @@ prune_backgrounds() {
 }
 prune_backgrounds
 
-# Icon cache for the kos logo, if the theme dir exists.
-if command -v gtk-update-icon-cache >/dev/null && [[ -d /usr/share/icons/hicolor ]]; then
-  gtk-update-icon-cache -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
-fi
+# --- OS name and logo (Proxim OS by Atahastra) --------------------------
+# Files are copied in by distro/apply-branding.sh from
+# distro/branding/branding.env; these are the steps that must run inside
+# the image. Each one is a no-op when already applied.
+apply_branding() {
+  local env=/usr/share/kos/branding.env
+  [[ -f "$env" ]] || return 0
+  # shellcheck disable=SC1090
+  source "$env"
+
+  # Settings About (Debian build) paints the vendor-logos emblem, not
+  # os-release LOGO. Register ours above Debian's (priority 50).
+  local V=/usr/share/kos/vendor-logos E=/usr/share/icons/vendor
+  if [[ -f "$V/emblem.svg" ]] && command -v update-alternatives >/dev/null; then
+    local args=(--install /usr/share/images/vendor-logos vendor-logos "$V" 100)
+    local kind s
+    for kind in "" -white -symbolic; do
+      args+=(--slave "$E/scalable/emblems/emblem-vendor${kind}.svg" "emblem-vendor${kind}-scalable" "$V/emblem.svg")
+      for s in 64 128 256; do
+        args+=(--slave "$E/${s}x${s}/emblems/emblem-vendor${kind}.png" "emblem-vendor${kind}-${s}" "$V/emblem-${s}.png")
+      done
+    done
+    update-alternatives --quiet "${args[@]}" || echo "WARN: kos-whitelabel: vendor-logos alternative failed"
+  fi
+
+  if command -v gtk-update-icon-cache >/dev/null && [[ -d /usr/share/icons/hicolor ]]; then
+    gtk-update-icon-cache -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+  fi
+
+  # Boot splash. Rebuilding the initramfs takes a while, so only when the
+  # theme or its files changed.
+  local theme_dir="/usr/share/plymouth/themes/${PLYMOUTH_THEME}"
+  if [[ -d "$theme_dir" ]] && command -v plymouth-set-default-theme >/dev/null; then
+    local want cur stamp=/var/lib/kos/plymouth-theme
+    want="${PLYMOUTH_THEME} $(cat "$theme_dir"/* | sha256sum | cut -c1-16)"
+    cur="$(plymouth-set-default-theme 2>/dev/null || true)"
+    if [[ "$cur" != "$PLYMOUTH_THEME" || "$(cat "$stamp" 2>/dev/null)" != "$want" ]]; then
+      echo "kos-whitelabel: boot splash -> ${PLYMOUTH_THEME}, rebuilding initramfs"
+      plymouth-set-default-theme "$PLYMOUTH_THEME"
+      if update-initramfs -u -k all; then
+        mkdir -p "$(dirname "$stamp")"
+        echo "$want" > "$stamp"
+      else
+        echo "WARN: kos-whitelabel: update-initramfs failed; splash not updated"
+      fi
+    fi
+  fi
+
+  # GRUB: name, hidden menu, quiet splash cmdline (/etc/default/grub).
+  if [[ -f /boot/grub/grub.cfg ]] && command -v update-grub >/dev/null; then
+    local gwant gstamp=/var/lib/kos/grub-brand
+    gwant="$(cat /etc/default/grub "$env" /usr/libexec/kos-grub-brand | sha256sum | cut -c1-16)"
+    if [[ "$(cat "$gstamp" 2>/dev/null)" != "$gwant" ]] \
+       || ! grep -q "menuentry '${OS_NAME}'" /boot/grub/grub.cfg; then
+      if update-grub; then
+        /usr/libexec/kos-grub-brand || true
+        mkdir -p "$(dirname "$gstamp")"
+        echo "$gwant" > "$gstamp"
+      else
+        echo "WARN: kos-whitelabel: update-grub failed; GRUB keeps its old entry"
+      fi
+    fi
+  fi
+}
+apply_branding
 
 if command -v update-desktop-database >/dev/null && [[ -d /usr/share/applications ]]; then
   update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
-fi
-
-if command -v update-initramfs >/dev/null && [[ -f /usr/share/plymouth/themes/kos/logo.png ]]; then
-  if [[ -n "$(find /boot -maxdepth 1 -name 'initrd.img-*' ! -newer /usr/share/plymouth/themes/kos/logo.png -print -quit 2>/dev/null)" ]]; then
-    update-initramfs -u >/dev/null 2>&1 || true
-  fi
 fi
 
 echo "kos-whitelabel: done (purged=${purged})"

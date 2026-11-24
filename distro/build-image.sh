@@ -83,9 +83,7 @@ packages_list() {
 generate_art() {
   local wall="${OUT}/kos-wallpaper.png"
   local overlay_wall="${DISTRO}/overlay/usr/share/backgrounds/kos/kos-wallpaper.png"
-  local logo="${OUT}/kos-logo.png"
-  local splash="${OUT}/kos-splash-bg.png"
-  echo "Generating kos splash art"
+  echo "Preparing wallpaper (logo and splash art: distro/branding/gen)"
   if [[ -f "$overlay_wall" ]]; then
     cp "$overlay_wall" "$wall"
   else
@@ -96,10 +94,6 @@ generate_art() {
       -compose multiply -composite \
       "$wall"
   fi
-  "${IM[@]}" -size 1280x800 gradient:'#0b1020-#1a2744' "$splash"
-  "${IM[@]}" -size 640x240 xc:none \
-    -gravity center -fill '#eef2ff' -font DejaVu-Sans-Bold -pointsize 120 -annotate +0+0 'kos' \
-    "$logo"
 }
 
 partition_and_mount() {
@@ -182,18 +176,10 @@ install_overlays() {
 
   "${SUDO[@]}" mkdir -p "$MNT/usr/share/backgrounds/kos"
   "${SUDO[@]}" cp "${OUT}/kos-wallpaper.png" "$MNT/usr/share/backgrounds/kos/kos-wallpaper.png"
-  "${SUDO[@]}" mkdir -p "$MNT/usr/share/pixmaps"
-  "${SUDO[@]}" cp "${OUT}/kos-logo.png" "$MNT/usr/share/pixmaps/kos-logo.png"
   "${SUDO[@]}" mkdir -p "$MNT/usr/share/gnome-background-properties"
   "${SUDO[@]}" cp "${CFG}/kos-backgrounds.xml" "$MNT/usr/share/gnome-background-properties/kos.xml"
   "${SUDO[@]}" mkdir -p "$MNT/usr/share/glib-2.0/schemas"
   "${SUDO[@]}" cp "${CFG}/kos.gschema.override" "$MNT/usr/share/glib-2.0/schemas/90-kos.gschema.override"
-
-  "${SUDO[@]}" mkdir -p "$MNT/usr/share/plymouth/themes/kos"
-  "${SUDO[@]}" cp "${CFG}/kos.plymouth" "$MNT/usr/share/plymouth/themes/kos/kos.plymouth"
-  "${SUDO[@]}" cp "${CFG}/kos.script" "$MNT/usr/share/plymouth/themes/kos/kos.script"
-  "${SUDO[@]}" cp "${OUT}/kos-splash-bg.png" "$MNT/usr/share/plymouth/themes/kos/background.png"
-  "${SUDO[@]}" cp "${OUT}/kos-logo.png" "$MNT/usr/share/plymouth/themes/kos/logo.png"
 
   # Extension, dconf defaults, and schema overrides (shared with distro-update).
   "${DISTRO}/sync-overlay.sh" "$MNT"
@@ -256,9 +242,7 @@ MOD
     if command -v dconf >/dev/null; then
       dconf update
     fi
-    if command -v plymouth-set-default-theme >/dev/null; then
-      plymouth-set-default-theme -R kos || plymouth-set-default-theme -R spinner || true
-    fi
+    # Plymouth default theme + initramfs: kos-whitelabel (above).
 
     systemctl enable gdm3 || systemctl enable gdm || true
     systemctl enable NetworkManager || true
@@ -274,6 +258,7 @@ MOD
 
     update-initramfs -u
     update-grub
+    /usr/libexec/kos-grub-brand
     grub-install --target=i386-pc --recheck ${LOOP}
   "
 
@@ -319,11 +304,11 @@ finalize() {
   ls -lh "$IMG"
   umask 077
   cat > "$LOGIN" << LOGIN
-kos 0.1
+Proxim OS 0.1
 username: ${KOS_USER}
 password: ${KOS_PASSWORD}
-hostname: kos
-desktop: kos (autologin)
+hostname: proxim
+desktop: Proxim OS (autologin)
 Change the password after the first login (Settings → Users, or passwd).
 LOGIN
   chmod 600 "$LOGIN"

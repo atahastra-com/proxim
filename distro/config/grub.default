@@ -1,7 +1,12 @@
 GRUB_DEFAULT=0
-GRUB_TIMEOUT=2
+# No menu at power-on: a blank second, then the Proxim OS splash. Press
+# Esc in that second to get the GRUB menu.
+GRUB_TIMEOUT_STYLE=hidden
+GRUB_TIMEOUT=1
 GRUB_DISTRIBUTOR="Proxim OS"
-GRUB_CMDLINE_LINUX_DEFAULT="quiet splash console=tty0 console=ttyS0"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash loglevel=3 plymouth.ignore-serial-consoles console=tty0 console=ttyS0"
 GRUB_CMDLINE_LINUX=""
 GRUB_TERMINAL_OUTPUT=gfxterm
 GRUB_GFXMODE=auto
+GRUB_BACKGROUND=/usr/share/kos/grub-bg.png
+GRUB_GFXPAYLOAD_LINUX=keep

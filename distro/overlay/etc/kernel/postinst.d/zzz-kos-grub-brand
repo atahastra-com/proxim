@@ -1,0 +1,3 @@
+#!/bin/sh
+# Runs after zz-update-grub on kernel installs; keeps the GRUB entry branded.
+exec /usr/libexec/kos-grub-brand

@@ -1,0 +1,14 @@
+#!/bin/sh
+# Post-process /boot/grub/grub.cfg after update-grub: Debian's 10_linux
+# names the entry "$GRUB_DISTRIBUTOR GNU/Linux" and prints "Loading Linux
+# ..." before the splash. Make it just "Proxim OS" and boot silently.
+# Run by kos-whitelabel and by /etc/kernel/postinst.d/zzz-kos-grub-brand.
+set -e
+cfg=/boot/grub/grub.cfg
+[ -f "$cfg" ] || exit 0
+[ -f /usr/share/kos/branding.env ] || exit 0
+. /usr/share/kos/branding.env
+sed -i \
+  -e "s|${OS_NAME} GNU/Linux|${OS_NAME}|g" \
+  -e "/^[[:space:]]*echo[[:space:]]*'Loading /d" \
+  "$cfg"
