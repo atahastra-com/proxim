@@ -35,7 +35,7 @@ elif full_name:
 # 2. Set password securely via chpasswd stdin.
 subprocess.run(["chpasswd"], input=f"{username}:{password}\n", text=True, check=True)
 
-# 3. Copy kos skel configs if home is missing them.
+# 3. Copy kos skel configs if home is missing them, and populate Files bookmarks.
 home = f"/home/{username}"
 for rel in (".config/gtk-3.0", ".config/gtk-4.0"):
     src = f"/etc/skel/{rel}"
@@ -43,6 +43,10 @@ for rel in (".config/gtk-3.0", ".config/gtk-4.0"):
     if os.path.isdir(src) and not os.path.exists(dst):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copytree(src, dst)
+os.makedirs(f"{home}/.config/gtk-3.0", exist_ok=True)
+with open(f"{home}/.config/gtk-3.0/bookmarks", "w", encoding="utf-8") as bf:
+    for folder in ("Desktop", "Documents", "Downloads", "Music", "Pictures", "Public", "Templates", "Videos"):
+        bf.write(f"file://{home}/{folder}\n")
 subprocess.run(["chown", "-R", f"{username}:{username}", f"{home}/.config"], check=False)
 
 # 4. Apply hostname if provided.
