@@ -108,14 +108,14 @@ find_ui_resource() {
   return 1
 }
 
-patch_software_update_row() {
+patch_system_panel_ui() {
   python3 - "$1" "$2" "$3" << 'PY'
 import os, re, sys
 import xml.etree.ElementTree as ET
 
 src, dest, btn_id = sys.argv[1], sys.argv[2], sys.argv[3]
 text = open(src, encoding="utf-8").read()
-marker = "<!-- kos: Embedded Software Update row injected by kos-appearance. -->\n"
+marker = "<!-- kos: Embedded Software Update row injected & stock Software Updates hidden by kos-appearance. -->\n"
 
 # Strip any previous link-button version so upgrades replace it cleanly.
 text = re.sub(
@@ -124,6 +124,59 @@ text = re.sub(
     text,
     flags=re.S,
 )
+
+def hide_stock_software_updates(xml_text):
+    # Find top-level <child><object class="AdwPreferencesGroup"...> blocks
+    # that contain GNOME's stock "Software Updates" row (with or without '_'
+    # mnemonics) and wrap them in an unreferenced hidden AdwPreferencesGroup
+    # so C template bindings keep working while the group stays invisible.
+    token_re = re.compile(r'<(/?)child\b[^>]*>')
+    pos = 0
+    while True:
+        m = re.search(r'<child>\s*<object class="AdwPreferencesGroup"\b', xml_text[pos:])
+        if not m:
+            break
+        start = pos + m.start()
+        obj_start = pos + m.end() - len('<object class="AdwPreferencesGroup"')
+        depth = 0
+        end = -1
+        for tm in token_re.finditer(xml_text, start):
+            if tm.group(1) == '/':
+                depth -= 1
+                if depth == 0:
+                    end = tm.end()
+                    break
+            else:
+                depth += 1
+        if end < 0:
+            break
+        block = xml_text[start:end]
+        plain = block.replace('_', '')
+        if (
+            'kos-open-software-update-btn' not in block
+            and 'kos-hidden-stock-updates' not in block
+            and ('Software Updates' in plain or 'software-update' in block or 'updates_row' in block)
+        ):
+            inner_start = xml_text.find('<object', start)
+            inner_end = xml_text.rfind('</child>', start, end)
+            inner_obj = xml_text[inner_start:inner_end].strip()
+            wrapped = (
+                '<child>\n'
+                '  <object class="AdwPreferencesGroup" id="kos-hidden-stock-updates">\n'
+                '    <property name="visible">False</property>\n'
+                '    <child>\n'
+                f'      {inner_obj}\n'
+                '    </child>\n'
+                '  </object>\n'
+                '</child>'
+            )
+            xml_text = xml_text[:start] + wrapped + xml_text[end:]
+            pos = start + len(wrapped)
+        else:
+            pos = obj_start + 1
+    return xml_text
+
+text = hide_stock_software_updates(text)
 
 if btn_id not in text:
     snippet = (
@@ -287,23 +340,23 @@ if src="$(find_source)"; then
     esac
   }
 
-  for spec_pair in "*/cc-system-panel.ui:kos_sys_software_update_btn" "*/cc-about-page.ui:kos_about_software_update_btn"; do
-    pat="${spec_pair%%:*}"
-    bid="${spec_pair##*:}"
-    if ui_res="$(find_ui_resource "$src" "$pat")"; then
-      rel="${ui_res#/org/gnome/control-center/}"
-      ui_dest="${OVERLAY_ROOT}/${rel}"
-      ui_dir="$(dirname "$ui_dest")"
-      if gresource extract "$src" "$ui_res" > "$about_tmp" && [[ -s "$about_tmp" ]]; then
-        if patch_software_update_row "$about_tmp" "$ui_dest" "$bid"; then
-          add_spec "${ui_res%/*}=${ui_dir}"
-          log "added embedded Software Update row to ${ui_res}"
-        else
-          log "WARN: skipping Software Update overlay for ${ui_res}"
-        fi
+  # Clean up any old About-page duplicate overlay so Software Update appears
+  # only once at the top of Settings -> System.
+  rm -rf "${OVERLAY_ROOT}/about" "${OVERLAY_ROOT}/system/about"
+
+  if ui_res="$(find_ui_resource "$src" "*/cc-system-panel.ui")"; then
+    rel="${ui_res#/org/gnome/control-center/}"
+    ui_dest="${OVERLAY_ROOT}/${rel}"
+    ui_dir="$(dirname "$ui_dest")"
+    if gresource extract "$src" "$ui_res" > "$about_tmp" && [[ -s "$about_tmp" ]]; then
+      if patch_system_panel_ui "$about_tmp" "$ui_dest" "kos_sys_software_update_btn"; then
+        add_spec "${ui_res%/*}=${ui_dir}"
+        log "configured Software Update row and hid stock Software Updates in ${ui_res}"
+      else
+        log "WARN: skipping Software Update overlay for ${ui_res}"
       fi
     fi
-  done
+  fi
 else
   log "WARN: gnome-control-center appearance UI not found"
 fi
