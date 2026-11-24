@@ -224,10 +224,11 @@ prune_backgrounds() {
   fi
   apt-mark hold gnome-backgrounds >/dev/null 2>&1 || true
 
-  local xml
+  local xml base
   for xml in /usr/share/gnome-background-properties/*.xml; do
     [[ -e "$xml" ]] || continue
-    if [[ "$(basename "$xml")" != "kos-backgrounds.xml" ]]; then
+    base="$(basename "$xml")"
+    if [[ "$base" != "kos.xml" && "$base" != "kos-backgrounds.xml" ]]; then
       rm -f "$xml"
     fi
   done
