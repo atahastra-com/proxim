@@ -1,7 +1,8 @@
-/* Hide the built-in "Home" row in GNOME Files (Nautilus) sidebar.
+/* Hide only the built-in "Home" row in GNOME Files (Nautilus) sidebar,
+ * keeping Recent, Starred, Network, Trash, and all folder bookmarks visible.
  *
  * Loaded via LD_PRELOAD only by /usr/bin/nautilus wrapper.
- * Resolves GTK4/GLib symbols via dlsym() so it needs no -dev headers.
+ * Resolves GTK4/GIO/GObject/GLib symbols via dlsym() so it needs no -dev headers.
  */
 
 #define _GNU_SOURCE
@@ -19,101 +20,58 @@ typedef void *gpointer;
 #define TRUE 1
 
 static struct {
-    guint (*g_idle_add)(gboolean (*)(gpointer), gpointer);
-    guint (*g_signal_lookup)(const char *, GType);
-    gulong (*g_signal_add_emission_hook)(guint, guint, gboolean (*)(gpointer, guint, const gpointer, gpointer), gpointer, gpointer);
-    gpointer (*g_value_get_object)(const gpointer);
+    guint (*g_timeout_add)(guint, gboolean (*)(gpointer), gpointer);
+    gulong (*g_signal_connect_data)(gpointer, const char *, void (*)(void), gpointer, gpointer, int);
     gboolean (*g_type_check_instance_is_a)(gpointer, GType);
-    gpointer (*g_object_ref)(gpointer);
     void (*g_object_unref)(gpointer);
+    gpointer (*g_object_get_data)(gpointer, const char *);
+    void (*g_object_set_data)(gpointer, const char *, gpointer);
+    guint (*g_list_model_get_n_items)(gpointer);
+    gpointer (*g_list_model_get_item)(gpointer, guint);
 
     GType (*gtk_list_box_row_get_type)(void);
     GType (*gtk_label_get_type)(void);
+    gpointer (*gtk_window_get_toplevels)(void);
     const char *(*gtk_label_get_text)(gpointer);
     gpointer (*gtk_widget_get_first_child)(gpointer);
     gpointer (*gtk_widget_get_next_sibling)(gpointer);
-    gpointer (*gtk_widget_get_parent)(gpointer);
-    const char *(*gtk_widget_get_css_name)(gpointer);
-    void (*gtk_widget_add_css_class)(gpointer, const char *);
+    gboolean (*gtk_widget_get_visible)(gpointer);
     void (*gtk_widget_set_visible)(gpointer, gboolean);
 } api;
 
 #define LOAD_SYM(name) do { \
     *(void **)(&api.name) = dlsym(RTLD_DEFAULT, #name); \
-    if (!api.name) return FALSE; \
+    if (!api.name) { fprintf(stderr, "kos-nautilus: missing symbol %s\n", #name); return FALSE; } \
 } while (0)
 
 static gboolean load_symbols(void) {
-    LOAD_SYM(g_idle_add);
-    LOAD_SYM(g_signal_lookup);
-    LOAD_SYM(g_signal_add_emission_hook);
-    LOAD_SYM(g_value_get_object);
+    LOAD_SYM(g_timeout_add);
+    LOAD_SYM(g_signal_connect_data);
     LOAD_SYM(g_type_check_instance_is_a);
-    LOAD_SYM(g_object_ref);
     LOAD_SYM(g_object_unref);
+    LOAD_SYM(g_object_get_data);
+    LOAD_SYM(g_object_set_data);
+    LOAD_SYM(g_list_model_get_n_items);
+    LOAD_SYM(g_list_model_get_item);
 
     LOAD_SYM(gtk_list_box_row_get_type);
     LOAD_SYM(gtk_label_get_type);
+    LOAD_SYM(gtk_window_get_toplevels);
     LOAD_SYM(gtk_label_get_text);
     LOAD_SYM(gtk_widget_get_first_child);
     LOAD_SYM(gtk_widget_get_next_sibling);
-    LOAD_SYM(gtk_widget_get_parent);
-    LOAD_SYM(gtk_widget_get_css_name);
-    LOAD_SYM(gtk_widget_add_css_class);
+    LOAD_SYM(gtk_widget_get_visible);
     LOAD_SYM(gtk_widget_set_visible);
     return TRUE;
 }
 
-static gboolean contains_list(gpointer w, int depth) {
-    if (depth > 6)
-        return FALSE;
-    for (gpointer c = api.gtk_widget_get_first_child(w); c; c = api.gtk_widget_get_next_sibling(c)) {
-        const char *css = api.gtk_widget_get_css_name(c);
-        if (css && strcmp(css, "list") == 0)
-            return TRUE;
-        if (contains_list(c, depth + 1))
-            return TRUE;
-    }
-    return FALSE;
-}
-
-static gboolean is_places_row(gpointer row) {
-    const char *row_css = api.gtk_widget_get_css_name(row);
-    if (!row_css || strcmp(row_css, "row") != 0)
-        return FALSE;
-    if (contains_list(row, 0))
-        return FALSE;
-    gpointer list = api.gtk_widget_get_parent(row);
-    if (!list)
-        return FALSE;
-    const char *list_css = api.gtk_widget_get_css_name(list);
-    if (!list_css || strcmp(list_css, "list") != 0)
-        return FALSE;
-    int n_rows = 0;
-    for (gpointer c = api.gtk_widget_get_first_child(list); c; c = api.gtk_widget_get_next_sibling(c)) {
-        const char *ccss = api.gtk_widget_get_css_name(c);
-        if (ccss && strcmp(ccss, "row") == 0 && ++n_rows >= 2)
-            break;
-    }
-    if (n_rows < 2)
-        return FALSE;
-    gpointer cur = api.gtk_widget_get_parent(list);
-    for (int depth = 0; cur && depth < 6; depth++) {
-        const char *css = api.gtk_widget_get_css_name(cur);
-        if (css && strcmp(css, "placessidebar") == 0)
-            return TRUE;
-        cur = api.gtk_widget_get_parent(cur);
-    }
-    return FALSE;
-}
-
 static gboolean has_home_label(gpointer w, int depth) {
-    if (depth > 6)
+    if (depth > 8)
         return FALSE;
     for (gpointer c = api.gtk_widget_get_first_child(w); c; c = api.gtk_widget_get_next_sibling(c)) {
         if (api.g_type_check_instance_is_a(c, api.gtk_label_get_type())) {
             const char *txt = api.gtk_label_get_text(c);
-            if (txt && strcmp(txt, "Home") == 0)
+            if (txt && (strcmp(txt, "Home") == 0 || strcmp(txt, "_Home") == 0))
                 return TRUE;
         }
         if (has_home_label(c, depth + 1))
@@ -122,42 +80,85 @@ static gboolean has_home_label(gpointer w, int depth) {
     return FALSE;
 }
 
-static gboolean collapse_row_idle(gpointer row) {
-    api.gtk_widget_add_css_class(row, "kos-hidden-home");
-    gpointer child = api.gtk_widget_get_first_child(row);
-    if (child)
-        api.gtk_widget_set_visible(child, FALSE);
-    api.g_object_unref(row);
+static void on_home_row_notify_visible(gpointer row, gpointer pspec, gpointer data) {
+    (void)pspec;
+    (void)data;
+    if (api.gtk_widget_get_visible(row))
+        api.gtk_widget_set_visible(row, FALSE);
+}
+
+static void hide_if_home_row(gpointer row) {
+    if (!api.g_type_check_instance_is_a(row, api.gtk_list_box_row_get_type()))
+        return;
+    if (!has_home_label(row, 0))
+        return;
+    if (api.gtk_widget_get_visible(row))
+        api.gtk_widget_set_visible(row, FALSE);
+    if (!api.g_object_get_data(row, "kos-home-hidden")) {
+        api.g_object_set_data(row, "kos-home-hidden", (gpointer)1);
+        api.g_signal_connect_data(
+            row, "notify::visible",
+            (void (*)(void))on_home_row_notify_visible,
+            NULL, NULL, 0);
+    }
+}
+
+static void walk_widget(gpointer w, int depth) {
+    if (!w || depth > 24)
+        return;
+    hide_if_home_row(w);
+    for (gpointer c = api.gtk_widget_get_first_child(w); c; c = api.gtk_widget_get_next_sibling(c))
+        walk_widget(c, depth + 1);
+}
+
+static gboolean scan_toplevels(gpointer data) {
+    (void)data;
+    gpointer list = api.gtk_window_get_toplevels();
+    if (!list)
+        return FALSE;
+    guint n = api.g_list_model_get_n_items(list);
+    for (guint i = 0; i < n; i++) {
+        gpointer win = api.g_list_model_get_item(list, i);
+        if (win) {
+            walk_widget(win, 0);
+            api.g_object_unref(win);
+        }
+    }
     return FALSE;
 }
 
-static gboolean on_row_mapped(gpointer ihint, guint n_params, const gpointer params, gpointer data) {
-    (void)ihint;
-    (void)n_params;
+static void on_toplevels_changed(gpointer list, guint pos, guint removed, guint added, gpointer data) {
+    (void)list;
+    (void)pos;
+    (void)removed;
     (void)data;
-    gpointer row = api.g_value_get_object(params);
-    if (!row)
-        return TRUE;
-    if (is_places_row(row) && has_home_label(row, 0)) {
-        api.g_object_ref(row);
-        api.g_idle_add(collapse_row_idle, row);
+    if (added > 0) {
+        api.g_timeout_add(50, scan_toplevels, NULL);
+        api.g_timeout_add(200, scan_toplevels, NULL);
+        api.g_timeout_add(600, scan_toplevels, NULL);
     }
-    return TRUE;
 }
 
 static gboolean install_hook_idle(gpointer data) {
     (void)data;
     if (!load_symbols())
         return FALSE;
-    guint map_sig = api.g_signal_lookup("map", api.gtk_list_box_row_get_type());
-    if (map_sig != 0)
-        api.g_signal_add_emission_hook(map_sig, 0, on_row_mapped, NULL, NULL);
+    gpointer list = api.gtk_window_get_toplevels();
+    if (list) {
+        api.g_signal_connect_data(
+            list, "items-changed",
+            (void (*)(void))on_toplevels_changed,
+            NULL, NULL, 0);
+    }
+    api.g_timeout_add(100, scan_toplevels, NULL);
+    api.g_timeout_add(400, scan_toplevels, NULL);
+    api.g_timeout_add(1200, scan_toplevels, NULL);
     return FALSE;
 }
 
 __attribute__((constructor))
 static void kos_nautilus_init(void) {
-    guint (*idle_add)(gboolean (*)(gpointer), gpointer) = dlsym(RTLD_DEFAULT, "g_idle_add");
-    if (idle_add)
-        idle_add(install_hook_idle, NULL);
+    guint (*timeout_add)(guint, gboolean (*)(gpointer), gpointer) = dlsym(RTLD_DEFAULT, "g_timeout_add");
+    if (timeout_add)
+        timeout_add(50, install_hook_idle, NULL);
 }
