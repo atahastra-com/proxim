@@ -156,13 +156,7 @@ placessidebar,
     border-right: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.navigation-sidebar > row {
-    min-height: 36px;
-    border-radius: 8px;
-    margin: 1px 6px;
-    padding: 0 8px;
-}
-
+.navigation-sidebar > row,
 placessidebar row {
     min-height: 30px;
     border-radius: 7px;
@@ -170,6 +164,7 @@ placessidebar row {
     padding: 0 8px;
 }
 
+.navigation-sidebar separator,
 placessidebar separator {
     margin: 5px 12px;
     min-height: 1px;
@@ -177,7 +172,7 @@ placessidebar separator {
 }
 
 .navigation-sidebar > row image {
-    -gtk-icon-size: 18px;
+    -gtk-icon-size: 16px;
 }
 
 .navigation-sidebar > row:hover,
@@ -220,9 +215,9 @@ list.boxed-list-separate > row {
     background-color: #2c2f38;
     border: none;
     box-shadow: none;
-    border-radius: 9px;
-    margin-bottom: 6px;
-    min-height: 48px;
+    border-radius: 8px;
+    margin-bottom: 4px;
+    min-height: 42px;
 }
 
 list.boxed-list > row:hover,
