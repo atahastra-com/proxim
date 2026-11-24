@@ -3,6 +3,7 @@
 // A blue dot under the icon means the app has an open window.
 
 import Clutter from 'gi://Clutter';
+import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -13,10 +14,33 @@ import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
 import {DND, appIcon, getPins, later, makeDraggableIcon, pinAt} from './folders.js';
 import {squircleIcon} from './icons.js';
 
+// Hover magnification is a scale transform, not a size reflow, so the
+// bar width never jumps. The icon grows upward out of the dock (pivot
+// at its bottom-center). Neighbours rise a little for a soft wave.
+const ICON_SIZE = 52;
+const HOVER_SCALE = 1.42;
+const NEIGHBOR_SCALE = 1.16;
+const GROW_MS = 280;
+const SHRINK_MS = 220;
+const LABEL_DELAY_MS = 180;
+
+// Global animations are off (enable-animations=false), so actor.ease()
+// would snap. A monotonic GLib timer with ease-out cubic still grows
+// smoothly (Clutter.Timeline also needs a frame clock in Mutter 48).
+function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+}
+
 export class KosDock {
     constructor() {
         this._signals = [];
         this._actor = null;
+        this._label = null;
+        this._labelTimeout = 0;
+        this._labelItem = null;
+        this._clipRestore = null;
+        this._dragZoom = false;
+        this._visible = true;
     }
 
     enable() {
@@ -37,6 +61,12 @@ export class KosDock {
         Main.panel._delegate = this;
         this._rebuild();
         Main.panel._centerBox.add_child(this._actor);
+        this._unclipForZoom();
+        this._ensureLabel();
+        this._connect(this._actor, 'notify::hover', () => {
+            if (!this._actor?.hover)
+                this._updateZoom();
+        });
 
         const fav = AppFavorites.getAppFavorites();
         const appsys = Shell.AppSystem.get_default();
@@ -51,6 +81,10 @@ export class KosDock {
         this._visible = visible;
         if (this._actor)
             this._actor.visible = visible;
+        if (!visible) {
+            this._resetZoom(true);
+            this._hideLabel();
+        }
     }
 
     disable() {
@@ -63,6 +97,16 @@ export class KosDock {
             else
                 delete Main.panel._delegate;
         }
+        this._labelItem = null;
+        if (this._labelTimeout) {
+            GLib.source_remove(this._labelTimeout);
+            this._labelTimeout = 0;
+        }
+        if (this._label) {
+            this._label.destroy();
+            this._label = null;
+        }
+        this._restoreClip();
         if (this._actor) {
             this._actor.destroy();
             this._actor = null;
@@ -78,6 +122,7 @@ export class KosDock {
     _rebuild() {
         if (!this._actor)
             return;
+        this._hideLabel();
         this._actor.destroy_all_children();
 
         const favorites = AppFavorites.getAppFavorites().getFavorites();
@@ -114,12 +159,25 @@ export class KosDock {
             onClick: () => this._activate(app),
         });
         item.pinned = pinned;
-        makeDraggableIcon(item, {kind: 'dock-app', appId: app.get_id()},
+        const draggable = makeDraggableIcon(item, {kind: 'dock-app', appId: app.get_id()},
             () => appIcon(app.get_id(), 42), item._kosIcon);
         Object.assign(item._delegate, {
             handleDragOver: src => this.handleDragOver(src),
             acceptDrop: src => this.acceptDrop(src),
         });
+        // These die with the item on rebuild; don't store them on the dock.
+        item.connect('notify::hover', () => this._updateZoom());
+        draggable.connect('drag-begin', () => {
+            this._dragZoom = true;
+            this._resetZoom(true);
+            this._hideLabel();
+        });
+        const endDrag = () => {
+            this._dragZoom = false;
+            this._updateZoom();
+        };
+        draggable.connect('drag-end', endDrag);
+        draggable.connect('drag-cancelled', endDrag);
         return item;
     }
 
@@ -176,6 +234,144 @@ export class KosDock {
                 child.syncRunning(focusApp);
         }
     }
+
+    _items() {
+        return this._actor
+            ? this._actor.get_children().filter(c => typeof c.setZoom === 'function')
+            : [];
+    }
+
+    _updateZoom() {
+        if (!this._actor || this._dragZoom || this._visible === false) {
+            this._resetZoom(true);
+            this._hideLabel();
+            return;
+        }
+        const items = this._items();
+        const hovered = items.findIndex(c => c.hover);
+        for (let i = 0; i < items.length; i++) {
+            let scale = 1;
+            if (hovered >= 0) {
+                const d = Math.abs(i - hovered);
+                if (d === 0)
+                    scale = HOVER_SCALE;
+                else if (d === 1)
+                    scale = NEIGHBOR_SCALE;
+            }
+            items[i].setZoom(scale);
+            items[i].z_position = scale === HOVER_SCALE ? 2 : scale > 1 ? 1 : 0;
+        }
+        if (hovered >= 0)
+            this._showLabel(items[hovered]);
+        else
+            this._hideLabel();
+    }
+
+    _resetZoom(snap = false) {
+        for (const item of this._items()) {
+            item.setZoom(1, snap);
+            item.z_position = 0;
+        }
+    }
+
+    // Scale is a paint transform, so overflowing icons must not be clipped
+    // by the dock, the 72px bar, or panelBox.
+    _unclipForZoom() {
+        if (this._clipRestore)
+            return;
+        this._clipRestore = [];
+        let actor = this._actor;
+        while (actor) {
+            this._clipRestore.push([actor, actor.clip_to_allocation]);
+            actor.clip_to_allocation = false;
+            actor = actor.get_parent();
+        }
+    }
+
+    _restoreClip() {
+        for (const [actor, value] of this._clipRestore || []) {
+            try {
+                actor.clip_to_allocation = value;
+            } catch (_e) {
+                // actor already destroyed
+            }
+        }
+        this._clipRestore = null;
+    }
+
+    _ensureLabel() {
+        if (this._label)
+            return;
+        this._label = new St.Label({
+            style_class: 'kos-dock-tooltip',
+            opacity: 0,
+            visible: false,
+        });
+        Main.layoutManager.uiGroup.add_child(this._label);
+    }
+
+    _showLabel(item) {
+        const name = item._app ? item._app.get_name() : '';
+        if (!name || !this._label)
+            return;
+        if (this._labelItem === item && this._label.visible && this._label.opacity > 0)
+            return;
+        this._labelItem = item;
+        if (this._labelTimeout) {
+            GLib.source_remove(this._labelTimeout);
+            this._labelTimeout = 0;
+        }
+        this._label.text = name;
+        this._labelTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, LABEL_DELAY_MS, () => {
+            this._labelTimeout = 0;
+            if (this._labelItem !== item || !this._label)
+                return GLib.SOURCE_REMOVE;
+            this._placeLabel(item);
+            this._label.show();
+            this._label.ease({
+                opacity: 255,
+                duration: 140,
+                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            });
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _placeLabel(item) {
+        const icon = item._kosIcon;
+        const label = this._label;
+        if (!icon || !label)
+            return;
+        const [, natW] = label.get_preferred_width(-1);
+        const [, natH] = label.get_preferred_height(-1);
+        const [ix, iy] = icon.get_transformed_position();
+        const scale = icon.scale_y || 1;
+        const visualTop = iy - icon.height * (scale - 1);
+        const cx = ix + icon.width / 2;
+        const x = Math.round(cx - natW / 2);
+        const y = Math.round(visualTop - 8 - natH);
+        label.set_size(natW, natH);
+        label.set_position(x, y);
+    }
+
+    _hideLabel() {
+        this._labelItem = null;
+        if (this._labelTimeout) {
+            GLib.source_remove(this._labelTimeout);
+            this._labelTimeout = 0;
+        }
+        if (!this._label)
+            return;
+        this._label.ease({
+            opacity: 0,
+            duration: 120,
+            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+            onComplete: () => {
+                if (this._label && this._label.opacity === 0)
+                    this._label.hide();
+            },
+        });
+    }
 }
 
 const DockItem = GObject.registerClass(
@@ -204,9 +400,16 @@ class DockItem extends St.Button {
             gicon,
             icon_name: gicon ? null : (iconName || 'application-x-executable'),
             fallback_icon_name: 'application-x-executable',
-            icon_size: 52,
+            icon_size: ICON_SIZE,
             style_class: 'kos-dock-item-icon',
         });
+        icon.set_pivot_point(0.5, 1.0);
+        icon.set_scale(1, 1);
+        this._zoomTarget = 1;
+        this._zoomTick = 0;
+        this.clip_to_allocation = false;
+        box.clip_to_allocation = false;
+        icon.clip_to_allocation = false;
         box.add_child(icon);
 
         this._dot = new St.Widget({
@@ -216,9 +419,11 @@ class DockItem extends St.Button {
         box.add_child(this._dot);
 
         this.set_child(box);
-        this.tooltip_text = app ? app.get_name() : label;
+        // Name label is drawn above the magnified icon by KosDock; a
+        // built-in tooltip would sit on the unscaled slot and overlap.
 
         this.connect('clicked', () => this._onClick?.());
+        this.connect('destroy', () => this._stopZoomAnim());
         this.syncRunning(null);
     }
 
@@ -234,5 +439,51 @@ class DockItem extends St.Button {
             this.add_style_class_name('focused');
         else
             this.remove_style_class_name('focused');
+    }
+
+    // Animate from the current scale so moving across icons just retargets.
+    // actor.ease() jumps when enable-animations is false, so we tick our
+    // own ease-out cubic from the monotonic clock.
+    setZoom(scale, snap = false) {
+        if (!this._kosIcon)
+            return;
+        if (!snap && this._zoomTarget === scale)
+            return;
+        this._zoomTarget = scale;
+        this._stopZoomAnim();
+        const icon = this._kosIcon;
+        if (snap) {
+            icon.set_scale(scale, scale);
+            return;
+        }
+        const from = icon.scale_x || 1;
+        const to = scale;
+        if (Math.abs(to - from) < 0.001) {
+            icon.set_scale(to, to);
+            return;
+        }
+        const duration = to > from + 0.001 ? GROW_MS : SHRINK_MS;
+        const start = GLib.get_monotonic_time();
+        this._zoomTick = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+            if (!this._kosIcon) {
+                this._zoomTick = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            const t = Math.min(1, (GLib.get_monotonic_time() - start) / (duration * 1000));
+            const s = from + (to - from) * easeOutCubic(t);
+            this._kosIcon.set_scale(s, s);
+            if (t >= 1) {
+                this._zoomTick = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopZoomAnim() {
+        if (!this._zoomTick)
+            return;
+        GLib.source_remove(this._zoomTick);
+        this._zoomTick = 0;
     }
 });

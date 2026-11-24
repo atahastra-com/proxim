@@ -21,7 +21,7 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
 - No top bar, Activities, overview, workspaces, or app-grid button.
 - One full-width bottom bar, 72px, flush to the bottom edge, DARK blurred glass (rgba(20,22,30,0.60) tint + Shell.BlurEffect radius 60, brightness 0.75 in panel.js), white icons, text and clock, no border.:
   - left: date + time only;
-  - middle: 42px dock icons (46px on hover) sitting flat on the bar, vertically centered, no pill or outline; a small white dot under running apps (blue under the focused one); a thin divider before running non-pinned apps;
+  - middle: 52px dock icons sitting flat on the bar, vertically centered, no pill or outline; a small white dot under running apps (blue under the focused one); a thin divider before running non-pinned apps. Hover magnification is a scale transform in dock.js, not a size reflow: hovered icon 1.42x, immediate neighbours 1.16x, pivot at the icon's bottom-center so it grows upward out of the dock; 280ms grow / 220ms shrink, ease-out cubic on a GLib timer (actor.ease() would snap because enable-animations is false), easing from the current scale (no layout jump, clip_to_allocation off on the dock/bar/panelBox). The app name sits just above the enlarged icon. Reset on leave, drag start, and when the dock hides (lock screen).
   - right: GNOME's system cluster only (network/volume/power). No extra wifi icon.
 - Desktop: Launchpad-style 7-column grid, centered as a block with even spacing, centered labels, no tile boxes, no search bar. Clicking an icon opens the app window.
 - Folders and drag and drop (`folders.js`, `desktopGrid.js`, `dock.js`), macOS Launchpad style:

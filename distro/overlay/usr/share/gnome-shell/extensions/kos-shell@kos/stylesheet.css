@@ -90,11 +90,10 @@
     background-color: rgba(255, 255, 255, 0.18);
 }
 
-/* No hover/active box: the icon itself reacts (it grows). Vertical budget in
- * the 72px bar (71px under the 1px top border):
- *   rest : 5 + 52 icon + 7 dot + 5 = 69px, slot width 52 + 2*6 = 64px
- *   hover: 2 + 58 icon + 7 dot + 2 = 69px, slot width 58 + 2*3 = 64px
- * so neighbours never shift. */
+/* Slot size stays fixed. Hover magnification is a scale transform in
+ * dock.js (pivot at the icon's bottom-center) so the bar width never
+ * jumps. Vertical budget in the 72px bar (71px under the 1px top border):
+ *   5 + 52 icon + 7 dot + 5 = 69px, slot width 52 + 2*6 = 64px. */
 .kos-dock-item,
 .kos-dock-item:hover,
 .kos-dock-item:focus,
@@ -105,25 +104,9 @@
     border-radius: 0;
     box-shadow: none;
     background-color: transparent;
-    transition-duration: 140ms;
-}
-
-.kos-dock-item:hover,
-.kos-dock-item:focus {
-    padding: 2px 3px 2px 3px;
 }
 
 .kos-dock-item-icon {
-    icon-size: 52px;
-    transition-duration: 140ms;
-}
-
-.kos-dock-item:hover .kos-dock-item-icon,
-.kos-dock-item:focus .kos-dock-item-icon {
-    icon-size: 58px;
-}
-
-.kos-dock-item:active .kos-dock-item-icon {
     icon-size: 52px;
 }
 
@@ -144,6 +127,18 @@
 .kos-dock-item.focused .kos-dock-dot.running {
     width: 16px;
     background-color: #0081ff;
+}
+
+/* App name, placed in JS just above the magnified icon. */
+.kos-dock-tooltip {
+    padding: 5px 10px;
+    border-radius: 8px;
+    background-color: rgba(30, 32, 40, 0.92);
+    color: rgba(255, 255, 255, 0.96);
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: none;
 }
 
 
