@@ -113,15 +113,25 @@ export class KosPanel {
         // Liquid Glass bar & popovers: strong blur with high luminosity so
         // wallpaper light and color refract through the glass cleanly.
         if (!this._blurEffect) {
-            const pair = addBlur(Main.panel, 64, 0.84);
+            const pair = addBlur(Main.panel, 48, 0.84);
             if (pair)
                 this._blurEffect = pair[1];
         }
         for (const area of ['dateMenu', 'quickSettings']) {
-            const box = Main.panel.statusArea[area]?.menu?.box;
-            const pair = addBlur(box, 56, 0.78);
-            if (pair)
+            const menu = Main.panel.statusArea[area]?.menu;
+            const box = menu?.box;
+            const pointer = menu?._boxPointer;
+            const pair = addBlur(box, 44, 0.78);
+            if (pair) {
+                const [, effect] = pair;
+                if (pointer) {
+                    effect.enabled = Boolean(pointer.visible);
+                    this._connect(pointer, 'notify::visible', () => {
+                        effect.enabled = Boolean(pointer.visible);
+                    });
+                }
                 this._menuBlurs.push(pair);
+            }
         }
     }
 

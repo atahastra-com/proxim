@@ -62,6 +62,25 @@ const EXTS = ['.svg', '.png'];
 
 const _pathCache = new Map();
 const _giconCache = new Map();
+let _ifaceSettings = null;
+let _cacheDirReady = null;
+
+function cacheDir() {
+    if (!_cacheDirReady) {
+        _cacheDirReady = GLib.build_filenamev([GLib.get_user_cache_dir(), 'kos-icons']);
+        GLib.mkdir_with_parents(_cacheDirReady, 0o755);
+    }
+    return _cacheDirReady;
+}
+
+function fnv1a(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16);
+}
 
 // ~13% padding on each side of artwork that sits on the shared tile.
 const INSET = 0.74;
@@ -125,8 +144,14 @@ function iconRoots() {
 function themeList() {
     const themes = [...THEMES];
     try {
-        const cur = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'})
-            .get_string('icon-theme');
+        if (!_ifaceSettings) {
+            _ifaceSettings = new Gio.Settings({schema_id: 'org.gnome.desktop.interface'});
+            _ifaceSettings.connect('changed::icon-theme', () => {
+                _pathCache.clear();
+                _giconCache.clear();
+            });
+        }
+        const cur = _ifaceSettings.get_string('icon-theme');
         if (cur && cur !== 'kos-icons')
             themes.unshift(cur);
     } catch (_e) {}
@@ -199,12 +224,13 @@ function pixbufFromPixels(w, h, stride, pixels) {
     return out;
 }
 
-function contentBBox(pb, minAlpha = 16) {
-    const {w, h, stride, ch, pixels} = pixbufBytes(pb);
+function contentBBoxFromData(data, minAlpha = 16) {
+    const {w, h, stride, ch, pixels} = data;
     let x0 = w, y0 = h, x1 = 0, y1 = 0;
     for (let y = 0; y < h; y++) {
+        const row = y * stride;
         for (let x = 0; x < w; x++) {
-            if (pixels[y * stride + x * ch + 3] > minAlpha) {
+            if (pixels[row + x * ch + 3] > minAlpha) {
                 if (x < x0) x0 = x;
                 if (y < y0) y0 = y;
                 if (x > x1) x1 = x;
@@ -217,6 +243,10 @@ function contentBBox(pb, minAlpha = 16) {
     return [x0, y0, x1 + 1, y1 + 1];
 }
 
+function contentBBox(pb, minAlpha = 16) {
+    return contentBBoxFromData(pixbufBytes(pb), minAlpha);
+}
+
 // True when the artwork already is a rounded square: the opaque bbox is
 // nearly square, and each of its four edges is mostly filled. Circles
 // only touch the mid-edge; a contacts book / map / shopping bag leaves
@@ -224,14 +254,15 @@ function contentBBox(pb, minAlpha = 16) {
 // alone is not enough — those irregular icons are densely packed inside
 // their box and used to take the cover path, so they rendered bare.
 function isFullBleedSquircle(pb) {
-    const [x0, y0, x1, y1] = contentBBox(pb);
+    const data = pixbufBytes(pb);
+    const [x0, y0, x1, y1] = contentBBoxFromData(data);
     const bw = x1 - x0;
     const bh = y1 - y0;
     if (bw < 4 || bh < 4)
         return false;
     if (Math.min(bw, bh) / Math.max(bw, bh) < 0.80)
         return false;
-    const {stride, ch, pixels} = pixbufBytes(pb);
+    const {stride, ch, pixels} = data;
     const ix = Math.max(1, Math.round(EDGE_SAMPLE_INSET * bw));
     const iy = Math.max(1, Math.round(EDGE_SAMPLE_INSET * bh));
     const edgeFill = (count, alphaAt) => {
@@ -255,29 +286,47 @@ function applySquircleMask(pb, addGlass = false) {
     const cy = (h - 1) / 2;
     const a = Math.min(cx, cy);
     const aa = 1 + 2.5 / a;
-    const rimIn = Math.pow(Math.max(0, 1 - 1.6 / a), SQUIRCLE_N);
-    const n = SQUIRCLE_N;
+    const invAa = 1 / (aa - 1);
+    const uIn = Math.max(0, 1 - 1.6 / a);
+    const rimIn = uIn * uIn * uIn * uIn * uIn;
+    const invRim = 1 / Math.max(0.001, 1 - rimIn);
+    const px5 = new Float32Array(w);
+    const py5 = new Float32Array(h);
+    for (let x = 0; x < w; x++) {
+        const u = Math.abs(x - cx) / a;
+        const u2 = u * u;
+        px5[x] = u2 * u2 * u;
+    }
+    for (let y = 0; y < h; y++) {
+        const u = Math.abs(y - cy) / a;
+        const u2 = u * u;
+        py5[y] = u2 * u2 * u;
+    }
     const denom = Math.max(1, h - 1);
     for (let y = 0; y < h; y++) {
         const yt = y / denom;
-        const gr0 = 68 - 32 * yt;
-        const gg0 = 74 - 34 * yt;
-        const gb0 = 94 - 40 * yt;
-        const ga0 = (148 + 20 * yt) / 255;
-        const rimAlpha = 0.14 * (1 - 0.55 * yt);
-        for (let x = 0; x < w; x++) {
-            const v = Math.pow(Math.abs(x - cx) / a, n) + Math.pow(Math.abs(y - cy) / a, n);
-            let m = 1;
-            if (v > 1)
-                m = v >= aa ? 0 : 1 - (v - 1) / (aa - 1);
-            const i = y * stride + x * ch;
-            if (addGlass) {
+        const vy = py5[y];
+        const row = y * stride;
+        if (addGlass) {
+            const gr0 = 68 - 32 * yt;
+            const gg0 = 74 - 34 * yt;
+            const gb0 = 94 - 40 * yt;
+            const ga0 = (148 + 20 * yt) / 255;
+            const rimAlpha = 0.14 * (1 - 0.55 * yt);
+            for (let x = 0; x < w; x++) {
+                const v = vy + px5[x];
+                const m = v <= 1 ? 1 : (v >= aa ? 0 : 1 - (v - 1) * invAa);
+                const i = row + x * ch;
+                if (m === 0) {
+                    pixels[i + 3] = 0;
+                    continue;
+                }
                 let gr = gr0, gg = gg0, gb = gb0, ga = ga0;
-                if (v >= rimIn && v < aa) {
-                    const rim = rimAlpha * (v <= 1 ? (v - rimIn) / Math.max(0.001, 1 - rimIn) : 1);
-                    gr = gr + (255 - gr) * rim;
-                    gg = gg + (255 - gg) * rim;
-                    gb = gb + (255 - gb) * rim;
+                if (v >= rimIn) {
+                    const rim = rimAlpha * (v <= 1 ? (v - rimIn) * invRim : 1);
+                    gr += (255 - gr) * rim;
+                    gg += (255 - gg) * rim;
+                    gb += (255 - gb) * rim;
                     ga = Math.min(1, ga + (1 - ga) * rim * 0.6);
                 }
                 const ia = pixels[i + 3] / 255;
@@ -289,8 +338,15 @@ function applySquircleMask(pb, addGlass = false) {
                     pixels[i + 2] = Math.round((pixels[i + 2] * ia + gb * inv) / outA);
                 }
                 pixels[i + 3] = Math.round(outA * 255 * m);
-            } else {
-                pixels[i + 3] = Math.round(pixels[i + 3] * m);
+            }
+        } else {
+            for (let x = 0; x < w; x++) {
+                const v = vy + px5[x];
+                if (v > 1) {
+                    const m = v >= aa ? 0 : 1 - (v - 1) * invAa;
+                    const i = row + x * ch + 3;
+                    pixels[i] = Math.round(pixels[i] * m);
+                }
             }
         }
     }
@@ -344,27 +400,22 @@ function tilePixbuf(src, size) {
     return applySquircleMask(dest, !fullBleed);
 }
 
-function pixbufToGIcon(pb) {
-    const dir = GLib.build_filenamev([GLib.get_user_cache_dir(), 'kos-icons']);
-    GLib.mkdir_with_parents(dir, 0o755);
-    // Unique name from a cheap checksum of pixels so icons don't overwrite.
-    const {pixels} = pixbufBytes(pb);
-    let h = 2166136261;
-    for (let i = 0; i < pixels.length; i += 17) {
-        h ^= pixels[i];
-        h = Math.imul(h, 16777619);
-    }
-    const path = GLib.build_filenamev([dir, `${(h >>> 0).toString(16)}.png`]);
-    pb.savev(path, 'png', [], []);
-    return Gio.FileIcon.new(Gio.File.new_for_path(path));
-}
-
 function rasterSize(size) {
     let scale = 1;
     try {
         scale = St.ThemeContext.get_for_stage(global.stage).scale_factor || 1;
     } catch (_e) {}
     return Math.max(64, Math.min(256, Math.round(size * Math.max(2, scale))));
+}
+
+function fileMtime(path) {
+    try {
+        const info = Gio.File.new_for_path(path).query_info(
+            'time::modified', Gio.FileQueryInfoFlags.NONE, null);
+        return info.get_modification_date_time()?.to_unix() ?? 0;
+    } catch (_e) {
+        return 0;
+    }
 }
 
 export function squircleGIcon(gicon, iconName, size) {
@@ -374,14 +425,20 @@ export function squircleGIcon(gicon, iconName, size) {
     } catch (e) {
         logError(e, 'kos-shell: findIconFile');
     }
-    const key = `${path || iconName || '?'}@${size}`;
+    const rSize = rasterSize(size);
+    const key = `${path || iconName || '?'}@${rSize}`;
     if (_giconCache.has(key))
         return _giconCache.get(key);
     let out = null;
     try {
         if (path) {
-            const src = loadPixbuf(path, rasterSize(size));
-            out = pixbufToGIcon(tilePixbuf(src, rasterSize(size)));
+            const cacheKey = fnv1a(`v3|${path}|${fileMtime(path)}|${rSize}`);
+            const diskPath = GLib.build_filenamev([cacheDir(), `v3-${cacheKey}.png`]);
+            if (!GLib.file_test(diskPath, GLib.FileTest.IS_REGULAR)) {
+                const src = loadPixbuf(path, rSize);
+                tilePixbuf(src, rSize).savev(diskPath, 'png', [], []);
+            }
+            out = Gio.FileIcon.new(Gio.File.new_for_path(diskPath));
         }
     } catch (e) {
         logError(e, `kos-shell: squircle icon ${path || iconName}`);

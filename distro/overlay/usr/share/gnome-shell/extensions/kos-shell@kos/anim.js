@@ -47,6 +47,9 @@ export function reduceMotion() {
     return GLib.getenv('KOS_REDUCE_MOTION') === '1';
 }
 
+const _active = new Set();
+let _tickId = 0;
+
 function sourceRemove(id) {
     if (!id)
         return;
@@ -57,13 +60,54 @@ function sourceRemove(id) {
     }
 }
 
+function ensureTicker() {
+    if (_tickId || _active.size === 0)
+        return;
+    // Single shared high-priority 16ms frame loop so all concurrent tweens
+    // advance in lockstep ahead of Clutter redraws, with zero idle timers.
+    _tickId = GLib.timeout_add(GLib.PRIORITY_HIGH, 16, () => {
+        if (_active.size === 0) {
+            _tickId = 0;
+            return GLib.SOURCE_REMOVE;
+        }
+        const now = GLib.get_monotonic_time();
+        for (const actor of [..._active]) {
+            const st = actor._kosAnimState;
+            if (!st) {
+                _active.delete(actor);
+                continue;
+            }
+            try {
+                if (!alive(actor)) {
+                    settle(actor);
+                    continue;
+                }
+                const t = Math.min(1, (now - st.start) / st.durUs);
+                const e = st.easing(t);
+                for (const key of st.keys)
+                    write(actor, key, st.from[key] + (st.to[key] - st.from[key]) * e);
+                if (t >= 1)
+                    settle(actor);
+            } catch (err) {
+                logError(err, 'kos-shell: anim tick');
+                settle(actor);
+            }
+        }
+        if (_active.size === 0) {
+            _tickId = 0;
+            return GLib.SOURCE_REMOVE;
+        }
+        return GLib.SOURCE_CONTINUE;
+    });
+}
+
 export function stop(actor) {
     if (!actor)
         return;
-    sourceRemove(actor._kosAnim);
+    _active.delete(actor);
     sourceRemove(actor._kosAnimSafety);
-    actor._kosAnim = 0;
     actor._kosAnimSafety = 0;
+    actor._kosAnimState = null;
     actor._kosAnimProps = null;
     actor._kosAnimComplete = null;
 }
@@ -76,10 +120,10 @@ function hookDestroy(actor) {
     try {
         actor._kosAnimDestroyId = actor.connect('destroy', () => {
             actor._kosAnimDestroyId = 0;
-            sourceRemove(actor._kosAnim);
+            _active.delete(actor);
             sourceRemove(actor._kosAnimSafety);
-            actor._kosAnim = 0;
             actor._kosAnimSafety = 0;
+            actor._kosAnimState = null;
             actor._kosAnimProps = null;
             actor._kosAnimComplete = null;
         });
@@ -157,10 +201,10 @@ function settle(actor) {
         return;
     const props = actor._kosAnimProps;
     const cb = actor._kosAnimComplete;
-    sourceRemove(actor._kosAnim);
+    _active.delete(actor);
     sourceRemove(actor._kosAnimSafety);
-    actor._kosAnim = 0;
     actor._kosAnimSafety = 0;
+    actor._kosAnimState = null;
     actor._kosAnimProps = null;
     actor._kosAnimComplete = null;
     try {
@@ -218,28 +262,16 @@ export function tween(actor, {
             settle(actor);
             return;
         }
-        const start = GLib.get_monotonic_time();
-        actor._kosAnim = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
-            try {
-                if (!alive(actor)) {
-                    settle(actor);
-                    return GLib.SOURCE_REMOVE;
-                }
-                const t = Math.min(1, (GLib.get_monotonic_time() - start) / (duration * 1000));
-                const e = easing(t);
-                for (const key of keys)
-                    write(actor, key, from[key] + (props[key] - from[key]) * e);
-                if (t >= 1) {
-                    settle(actor);
-                    return GLib.SOURCE_REMOVE;
-                }
-                return GLib.SOURCE_CONTINUE;
-            } catch (e) {
-                logError(e, 'kos-shell: anim tick');
-                settle(actor);
-                return GLib.SOURCE_REMOVE;
-            }
-        });
+        actor._kosAnimState = {
+            start: GLib.get_monotonic_time(),
+            durUs: duration * 1000,
+            easing,
+            keys,
+            from,
+            to: props,
+        };
+        _active.add(actor);
+        ensureTicker();
         actor._kosAnimSafety = GLib.timeout_add(GLib.PRIORITY_DEFAULT, duration + 80, () => {
             actor._kosAnimSafety = 0;
             if (actor._kosAnimProps)

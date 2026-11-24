@@ -178,12 +178,12 @@ export class KosDesktopGrid {
         this._rebuild();
 
         const appsys = Shell.AppSystem.get_default();
-        this._connect(appsys, 'installed-changed', () => this._rebuild());
-        this._connect(Main.layoutManager, 'monitors-changed', () => this._rebuild());
-        this._connect(Main.layoutManager, 'startup-complete', () => this._rebuild());
+        this._connect(appsys, 'installed-changed', () => this._scheduleRebuild());
+        this._connect(Main.layoutManager, 'monitors-changed', () => this._scheduleRebuild());
+        this._connect(Main.layoutManager, 'startup-complete', () => this._scheduleRebuild());
         // An app lives in one place: pinned apps leave the grid, unpinned
         // ones come back. Reload whenever the dock's pins change.
-        this._connect(global.settings, 'changed::favorite-apps', () => later(() => this._rebuild()));
+        this._connect(global.settings, 'changed::favorite-apps', () => this._scheduleRebuild());
         this._connect(this._actor, 'notify::allocation', () => this._logAllocation());
         // Clicking elsewhere commits an open rename (new file/folder name,
         // launchpad folder title): presses on the grid (icons, empty space,
@@ -202,6 +202,10 @@ export class KosDesktopGrid {
     }
 
     disable() {
+        if (this._rebuildIdleId) {
+            GLib.source_remove(this._rebuildIdleId);
+            this._rebuildIdleId = 0;
+        }
         this._cancelSlide(true);
         closeContextMenu();
         for (const [obj, id] of this._signals)
@@ -219,6 +223,17 @@ export class KosDesktopGrid {
     _connect(obj, signal, cb) {
         const id = obj.connect(signal, cb);
         this._signals.push([obj, id]);
+    }
+
+    _scheduleRebuild() {
+        if (this._rebuildIdleId || !this._actor)
+            return;
+        this._rebuildIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._rebuildIdleId = 0;
+            if (this._actor)
+                this._rebuild();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _raise() {

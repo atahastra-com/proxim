@@ -58,6 +58,7 @@ export class KosDock {
         this._actor = null;
         this._label = null;
         this._labelTimeout = 0;
+        this._rebuildIdleId = 0;
         this._labelItem = null;
         this._clipRestore = null;
         this._dragZoom = false;
@@ -93,8 +94,8 @@ export class KosDock {
         const fav = AppFavorites.getAppFavorites();
         const appsys = Shell.AppSystem.get_default();
         const tracker = Shell.WindowTracker.get_default();
-        this._connect(fav, 'changed', () => this._rebuild());
-        this._connect(appsys, 'app-state-changed', () => this._rebuild());
+        this._connect(fav, 'changed', () => this._scheduleRebuild());
+        this._connect(appsys, 'app-state-changed', () => this._scheduleRebuild());
         this._connect(tracker, 'notify::focus-app', () => this._syncRunning());
     }
 
@@ -121,6 +122,10 @@ export class KosDock {
             else
                 delete Main.panel._delegate;
         }
+        if (this._rebuildIdleId) {
+            GLib.source_remove(this._rebuildIdleId);
+            this._rebuildIdleId = 0;
+        }
         this._labelItem = null;
         if (this._labelTimeout) {
             GLib.source_remove(this._labelTimeout);
@@ -141,6 +146,17 @@ export class KosDock {
         const id = obj.connect(signal, cb);
         this._signals.push([obj, id]);
         return id;
+    }
+
+    _scheduleRebuild() {
+        if (this._rebuildIdleId || !this._actor)
+            return;
+        this._rebuildIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._rebuildIdleId = 0;
+            if (this._actor)
+                this._rebuild();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     _rebuild() {
