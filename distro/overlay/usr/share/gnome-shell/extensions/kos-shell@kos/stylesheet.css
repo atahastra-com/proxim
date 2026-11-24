@@ -286,7 +286,7 @@
 }
 
 .popup-menu-content {
-    background-color: rgba(28, 32, 44, 0.72);
+    background-color: rgba(26, 29, 38, 0.84);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 18px;
     box-shadow: none;
@@ -339,7 +339,7 @@
 /* One Liquid Glass fill for both popups (no outer shadow). */
 .datemenu-popover,
 .quick-settings.kos-cc {
-    background-color: rgba(28, 32, 44, 0.72);
+    background-color: rgba(26, 29, 38, 0.84);
     border: 1px solid rgba(255, 255, 255, 0.07);
     box-shadow: none;
 }
@@ -440,6 +440,7 @@
 .calendar .calendar-month-header .pager-button,
 .calendar .calendar-day,
 .calendar .calendar-day-base,
+.calendar .calendar-day-heading,
 .calendar .calendar-nonwork-day,
 .calendar .calendar-other-month-day,
 .calendar .calendar-week-number,
@@ -450,6 +451,11 @@
     box-shadow: none;
     border-radius: 99px;
     color: rgba(255, 255, 255, 0.90);
+}
+
+.calendar .calendar-day-heading {
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 600;
 }
 
 .calendar .calendar-other-month-day,
@@ -550,7 +556,7 @@
  * GNOME 48 uses :ltr/:rtl corner rules, so match them where needed.
  * ============================================================================ */
 .quick-settings.kos-cc {
-    background-color: rgba(28, 32, 44, 0.72);
+    background-color: rgba(26, 29, 38, 0.84);
     color: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 18px;
