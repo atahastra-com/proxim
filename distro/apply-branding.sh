@@ -95,7 +95,15 @@ V=usr/share/kos/vendor-logos
 put "${GEN}/proxim-about.svg" "$V/emblem.svg"
 for s in 64 128 256; do
   put "${GEN}/proxim-logo-${s}.png" "$V/emblem-${s}.png"
+  # Debian's own names in that set (GDM's Debian default logo uses
+  # logo-text-version-64.png).
+  put "${GEN}/vendor-logo-${s}.png" "$V/logo-${s}.png"
+  put "${GEN}/vendor-logo-text-${s}.png" "$V/logo-text-${s}.png"
+  put "${GEN}/vendor-logo-text-${s}.png" "$V/logo-text-version-${s}.png"
 done
+put "${GEN}/vendor-logo.svg" "$V/logo.svg"
+put "${GEN}/vendor-logo-text.svg" "$V/logo-text.svg"
+put "${GEN}/vendor-logo-text.svg" "$V/logo-text-version.svg"
 
 # Boot splash
 P=usr/share/plymouth/themes/${PLYMOUTH_THEME}

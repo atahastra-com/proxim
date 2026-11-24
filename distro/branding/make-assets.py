@@ -113,6 +113,33 @@ g.alpha_composite(gm, (0, 0))
 g.alpha_composite(gt, (gm.width + 18, (96 - gt.height) // 2))
 save(g, 'proxim-gdm.png')
 
+# Debian's vendor-logos alternative set (/usr/share/images/vendor-logos),
+# which kos-whitelabel points at ours: GDM's Debian default logo and other
+# Debian bits read these names.
+def hlockup(h):
+    m = fit(M, h)
+    t = text(NAME, FONT_LIGHT, round(h * 0.46), TEXT)
+    out = Image.new('RGBA', (m.width + round(h * 0.19) + t.width, h), (0, 0, 0, 0))
+    out.alpha_composite(m, (0, 0))
+    out.alpha_composite(t, (m.width + round(h * 0.19), (h - t.height) // 2))
+    return out
+
+def svg_wrap(im, name):
+    b = io.BytesIO(); im.save(b, format='PNG', optimize=True)
+    w, h = im.width // 2, im.height // 2
+    with open(os.path.join(OUT, name), 'w') as fh:
+        fh.write('<svg xmlns="http://www.w3.org/2000/svg" '
+                 'xmlns:xlink="http://www.w3.org/1999/xlink" '
+                 f'width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
+                 f'<image width="{w}" height="{h}" xlink:href="data:image/png;base64,'
+                 f'{base64.b64encode(b.getvalue()).decode()}"/></svg>\n')
+
+for s in (64, 128, 256):
+    save(fit(M, s), f'vendor-logo-{s}.png')
+    save(hlockup(s), f'vendor-logo-text-{s}.png')
+svg_wrap(fit(M, 256), 'vendor-logo.svg')
+svg_wrap(hlockup(128), 'vendor-logo-text.svg')
+
 # GRUB menu background (only seen if the hidden menu is opened):
 # plain black instead of Debian's desktop-grub art.
 save(Image.new('RGB', (640, 480), (0, 0, 0)), 'grub-bg.png')
