@@ -2,57 +2,12 @@
 <!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
 <wallpapers>
   <wallpaper deleted="false">
-    <name>Earth Orbit</name>
-    <filename>/usr/share/backgrounds/kos/proxim-earth-orbit.jpg</filename>
-    <filename-dark>/usr/share/backgrounds/kos/proxim-earth-orbit.jpg</filename-dark>
+    <name>Proxim OS</name>
+    <filename>/usr/share/backgrounds/kos/kos-wallpaper.png</filename>
+    <filename-dark>/usr/share/backgrounds/kos/kos-wallpaper.png</filename-dark>
     <options>zoom</options>
     <shade_type>solid</shade_type>
-    <pcolor>#030812</pcolor>
-    <scolor>#030812</scolor>
-  </wallpaper>
-  <wallpaper deleted="false">
-    <name>Crescent Peak</name>
-    <filename>/usr/share/backgrounds/kos/proxim-crescent-peak.jpg</filename>
-    <filename-dark>/usr/share/backgrounds/kos/proxim-crescent-peak.jpg</filename-dark>
-    <options>zoom</options>
-    <shade_type>solid</shade_type>
-    <pcolor>#0d0c16</pcolor>
-    <scolor>#0d0c16</scolor>
-  </wallpaper>
-  <wallpaper deleted="false">
-    <name>Crimson Ocean</name>
-    <filename>/usr/share/backgrounds/kos/proxim-crimson-ocean.jpg</filename>
-    <filename-dark>/usr/share/backgrounds/kos/proxim-crimson-ocean.jpg</filename-dark>
-    <options>zoom</options>
-    <shade_type>solid</shade_type>
-    <pcolor>#180804</pcolor>
-    <scolor>#180804</scolor>
-  </wallpaper>
-  <wallpaper deleted="false">
-    <name>Fuji Moon</name>
-    <filename>/usr/share/backgrounds/kos/proxim-fuji-moon.jpg</filename>
-    <filename-dark>/usr/share/backgrounds/kos/proxim-fuji-moon.jpg</filename-dark>
-    <options>zoom</options>
-    <shade_type>solid</shade_type>
-    <pcolor>#0b101d</pcolor>
-    <scolor>#0b101d</scolor>
-  </wallpaper>
-  <wallpaper deleted="false">
-    <name>Moonlit Road</name>
-    <filename>/usr/share/backgrounds/kos/proxim-moonlit-road.jpg</filename>
-    <filename-dark>/usr/share/backgrounds/kos/proxim-moonlit-road.jpg</filename-dark>
-    <options>zoom</options>
-    <shade_type>solid</shade_type>
-    <pcolor>#080b12</pcolor>
-    <scolor>#080b12</scolor>
-  </wallpaper>
-  <wallpaper deleted="false">
-    <name>Ringed Horizon</name>
-    <filename>/usr/share/backgrounds/kos/proxim-ringed-planet.jpg</filename>
-    <filename-dark>/usr/share/backgrounds/kos/proxim-ringed-planet.jpg</filename-dark>
-    <options>zoom</options>
-    <shade_type>solid</shade_type>
-    <pcolor>#0d0b14</pcolor>
-    <scolor>#0d0b14</scolor>
+    <pcolor>#0b1020</pcolor>
+    <scolor>#0b1020</scolor>
   </wallpaper>
 </wallpapers>
