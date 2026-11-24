@@ -54,6 +54,7 @@ static struct {
     int (*g_io_channel_shutdown)(gpointer, gboolean, gpointer *);
     void (*g_io_channel_unref)(gpointer);
 
+    GType (*gtk_widget_get_type)(void);
     GType (*gtk_button_get_type)(void);
     const char *(*gtk_widget_get_name)(gpointer);
     gpointer (*gtk_widget_get_ancestor)(gpointer, GType);
@@ -137,6 +138,7 @@ static gboolean load_symbols(void) {
     LOAD_SYM(g_io_channel_shutdown);
     LOAD_SYM(g_io_channel_unref);
 
+    LOAD_SYM(gtk_widget_get_type);
     LOAD_SYM(gtk_button_get_type);
     LOAD_SYM(gtk_widget_get_name);
     LOAD_SYM(gtk_widget_get_ancestor);
@@ -555,13 +557,29 @@ static gboolean on_any_button_clicked(gpointer ihint, guint n_params, const gpoi
     return TRUE;
 }
 
+static gboolean on_any_widget_mapped(gpointer ihint, guint n_params, const gpointer params, gpointer data) {
+    (void)ihint;
+    (void)n_params;
+    (void)data;
+    gpointer w = api.g_value_get_object(params);
+    if (!w)
+        return TRUE;
+    const char *name = api.gtk_widget_get_name(w);
+    if (name && strcmp(name, "kos-hide-me") == 0)
+        api.gtk_widget_set_visible(w, FALSE);
+    return TRUE;
+}
+
 static gboolean install_hook_idle(gpointer data) {
     (void)data;
     if (!load_symbols())
         return FALSE;
-    guint sig = api.g_signal_lookup("clicked", api.gtk_button_get_type());
-    if (sig != 0)
-        api.g_signal_add_emission_hook(sig, 0, on_any_button_clicked, NULL, NULL);
+    guint click_sig = api.g_signal_lookup("clicked", api.gtk_button_get_type());
+    if (click_sig != 0)
+        api.g_signal_add_emission_hook(click_sig, 0, on_any_button_clicked, NULL, NULL);
+    guint map_sig = api.g_signal_lookup("map", api.gtk_widget_get_type());
+    if (map_sig != 0)
+        api.g_signal_add_emission_hook(map_sig, 0, on_any_widget_mapped, NULL, NULL);
     return FALSE;
 }
 

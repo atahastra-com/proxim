@@ -110,126 +110,125 @@ find_ui_resource() {
 
 patch_system_panel_ui() {
   python3 - "$1" "$2" "$3" << 'PY'
-import os, re, sys
+import os, sys
 import xml.etree.ElementTree as ET
 
 src, dest, btn_id = sys.argv[1], sys.argv[2], sys.argv[3]
-text = open(src, encoding="utf-8").read()
-marker = "<!-- kos: Embedded Software Update row injected & stock Software Updates hidden by kos-appearance. -->\n"
+raw = open(src, encoding="utf-8").read()
+root = ET.fromstring(raw)
+parent_map = {child: parent for parent in root.iter() for child in parent}
 
-# Strip any previous link-button version so upgrades replace it cleanly.
-text = re.sub(
-    r'<child>\s*<object class="AdwPreferencesGroup">\s*<child>\s*<object class="AdwActionRow">.*?kos_software_update_btn.*?</object>\s*</child>\s*</object>\s*</child>\s*',
-    '',
-    text,
-    flags=re.S,
-)
+def set_prop(obj_el, prop_name, prop_val):
+    for p in obj_el.findall("property"):
+        if p.get("name") == prop_name:
+            p.text = prop_val
+            p.attrib.pop("translatable", None)
+            return
+    p = ET.Element("property", {"name": prop_name})
+    p.text = prop_val
+    obj_el.insert(0, p)
 
-def hide_stock_software_updates(xml_text):
-    # Find top-level <child><object class="AdwPreferencesGroup"...> blocks
-    # that contain GNOME's stock "Software Updates" row (with or without '_'
-    # mnemonics) and wrap them in an unreferenced hidden AdwPreferencesGroup
-    # so C template bindings keep working while the group stays invisible.
-    token_re = re.compile(r'<(/?)child\b[^>]*>')
-    pos = 0
-    while True:
-        m = re.search(r'<child>\s*<object class="AdwPreferencesGroup"\b', xml_text[pos:])
-        if not m:
-            break
-        start = pos + m.start()
-        obj_start = pos + m.end() - len('<object class="AdwPreferencesGroup"')
-        depth = 0
-        end = -1
-        for tm in token_re.finditer(xml_text, start):
-            if tm.group(1) == '/':
-                depth -= 1
-                if depth == 0:
-                    end = tm.end()
-                    break
-            else:
-                depth += 1
-        if end < 0:
-            break
-        block = xml_text[start:end]
-        plain = block.replace('_', '')
-        if (
-            'kos-open-software-update-btn' not in block
-            and 'kos-hidden-stock-updates' not in block
-            and ('Software Updates' in plain or 'software-update' in block or 'updates_row' in block)
-        ):
-            inner_start = xml_text.find('<object', start)
-            inner_end = xml_text.rfind('</child>', start, end)
-            inner_obj = xml_text[inner_start:inner_end].strip()
-            wrapped = (
-                '<child>\n'
-                '  <object class="AdwPreferencesGroup" id="kos-hidden-stock-updates">\n'
-                '    <property name="visible">False</property>\n'
-                '    <child>\n'
-                f'      {inner_obj}\n'
-                '    </child>\n'
-                '  </object>\n'
-                '</child>'
-            )
-            xml_text = xml_text[:start] + wrapped + xml_text[end:]
-            pos = start + len(wrapped)
-        else:
-            pos = obj_start + 1
-    return xml_text
+def count_row_objects(container_obj):
+    n = 0
+    for desc in container_obj.iter("object"):
+        if desc is container_obj:
+            continue
+        cls = desc.get("class", "")
+        if "Row" in cls:
+            n += 1
+    return n
 
-text = hide_stock_software_updates(text)
+# 1) Hide GNOME's stock "Software Updates" row (and its enclosing group/box if
+#    it is the only row inside that group) using both visible=False and
+#    widget name="kos-hide-me" (enforced at runtime on map by libkos-settings-update.so).
+for obj in list(root.iter("object")):
+    if obj.get("id") == btn_id:
+        continue
+    is_stock_updates = False
+    for p in obj.findall("property"):
+        if p.get("name") == "title" and p.text:
+            clean_title = p.text.replace("_", "").strip()
+            if clean_title == "Software Updates":
+                is_stock_updates = True
+                break
+    oid = (obj.get("id") or "").lower()
+    if oid in ("software_updates_row", "updates_row", "software_update_row"):
+        is_stock_updates = True
+    if not is_stock_updates:
+        continue
 
-if btn_id not in text:
-    snippet = (
-        '<child>\n'
-        '  <object class="AdwPreferencesGroup">\n'
-        '    <child>\n'
-        '      <object class="AdwActionRow">\n'
-        '        <property name="title">Software Update</property>\n'
-        '        <property name="subtitle">Proxim OS updates and release notes</property>\n'
-        f'        <property name="activatable-widget">{btn_id}</property>\n'
-        '        <child type="prefix">\n'
-        '          <object class="GtkImage">\n'
-        '            <property name="icon-name">software-update-available-symbolic</property>\n'
-        '          </object>\n'
-        '        </child>\n'
-        '        <child type="suffix">\n'
-        f'          <object class="GtkButton" id="{btn_id}">\n'
-        '            <property name="name">kos-open-software-update-btn</property>\n'
-        '            <property name="valign">center</property>\n'
-        '            <style>\n'
-        '              <class name="flat"/>\n'
-        '            </style>\n'
-        '            <child>\n'
-        '              <object class="GtkImage">\n'
-        '                <property name="icon-name">go-next-symbolic</property>\n'
-        '              </object>\n'
-        '            </child>\n'
-        '          </object>\n'
-        '        </child>\n'
-        '      </object>\n'
-        '    </child>\n'
-        '  </object>\n'
-        '</child>\n'
+    set_prop(obj, "visible", "False")
+    set_prop(obj, "name", "kos-hide-me")
+
+    # Walk up to enclosing AdwPreferencesGroup / GtkListBox; if this was the
+    # sole row in that group, hide the group too so no empty gap remains.
+    cur = obj
+    while cur in parent_map:
+        cur = parent_map[cur]
+        if cur.tag == "object" and cur.get("class") in ("AdwPreferencesGroup", "GtkListBox", "GtkBox"):
+            if count_row_objects(cur) <= 1:
+                set_prop(cur, "visible", "False")
+                set_prop(cur, "name", "kos-hide-me")
+            if cur.get("class") == "AdwPreferencesGroup":
+                break
+
+# 2) Inject our embedded Proxim OS "Software Update" group before the first
+#    existing AdwPreferencesGroup if not already present.
+already = any(o.get("id") == btn_id for o in root.iter("object"))
+if not already:
+    snippet_el = ET.fromstring(
+        f'<child>'
+        f'  <object class="AdwPreferencesGroup">'
+        f'    <child>'
+        f'      <object class="AdwActionRow">'
+        f'        <property name="title">Software Update</property>'
+        f'        <property name="subtitle">Proxim OS updates and release notes</property>'
+        f'        <property name="activatable-widget">{btn_id}</property>'
+        f'        <child type="prefix">'
+        f'          <object class="GtkImage">'
+        f'            <property name="icon-name">software-update-available-symbolic</property>'
+        f'          </object>'
+        f'        </child>'
+        f'        <child type="suffix">'
+        f'          <object class="GtkButton" id="{btn_id}">'
+        f'            <property name="name">kos-open-software-update-btn</property>'
+        f'            <property name="valign">center</property>'
+        f'            <style><class name="flat"/></style>'
+        f'            <child>'
+        f'              <object class="GtkImage">'
+        f'                <property name="icon-name">go-next-symbolic</property>'
+        f'              </object>'
+        f'            </child>'
+        f'          </object>'
+        f'        </child>'
+        f'      </object>'
+        f'    </child>'
+        f'  </object>'
+        f'</child>'
     )
-    pat = re.compile(r'(<child>\s*<object class="AdwPreferencesGroup")')
-    new_text, n = pat.subn(lambda m: snippet + m.group(1), text, count=1)
-    if n != 1:
-        raise SystemExit(f"could not locate AdwPreferencesGroup (matches={n})")
-    text = new_text
+    inserted = False
+    for parent in root.iter():
+        children = list(parent)
+        for idx, ch in enumerate(children):
+            if ch.tag == "child":
+                first_obj = ch.find("object")
+                if first_obj is not None and first_obj.get("class") == "AdwPreferencesGroup":
+                    parent.insert(idx, snippet_el)
+                    inserted = True
+                    break
+        if inserted:
+            break
+    if not inserted:
+        raise SystemExit("could not locate AdwPreferencesGroup container in System panel UI")
 
-if marker not in text:
-    if text.startswith("<?xml"):
-        first, rest = text.split("\n", 1)
-        text = first + "\n" + marker + rest
-    else:
-        text = marker + text
-
-ET.fromstring(text)
+ET.indent(root, space="  ")
+xml_out = '<?xml version="1.0" encoding="UTF-8"?>\n<!-- kos: Embedded Software Update configured by kos-appearance. -->\n' + ET.tostring(root, encoding="unicode") + "\n"
+ET.fromstring(xml_out)
 
 tmp = dest + ".tmp"
 os.makedirs(os.path.dirname(dest), exist_ok=True)
 with open(tmp, "w", encoding="utf-8") as fh:
-    fh.write(text)
+    fh.write(xml_out)
 os.replace(tmp, dest)
 PY
 }
