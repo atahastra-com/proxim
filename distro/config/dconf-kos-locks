@@ -1,0 +1,3 @@
+# kos is dark-only. Lock these so Settings, Tweaks, or an app cannot drift them.
+/org/gnome/desktop/interface/color-scheme
+/org/gnome/desktop/interface/accent-color

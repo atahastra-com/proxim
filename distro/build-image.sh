@@ -247,6 +247,9 @@ MOD
     if [[ -x /usr/libexec/kos-whitelabel ]]; then
       /usr/libexec/kos-whitelabel
     fi
+    if [[ -x /usr/libexec/kos-appearance ]]; then
+      /usr/libexec/kos-appearance
+    fi
     chown -R ${KOS_USER}:${KOS_USER} /home/${KOS_USER}
 
     glib-compile-schemas /usr/share/glib-2.0/schemas

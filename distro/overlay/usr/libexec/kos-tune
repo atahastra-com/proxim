@@ -16,4 +16,8 @@ systemctl --global disable tracker-miner-fs-3.service tracker-miner-rss-3.servic
 systemctl --global disable evolution-addressbook-factory.service \
   evolution-calendar-factory.service evolution-source-registry.service \
   evolution-user-prompter.service 2>/dev/null
+# Re-hide Appearance Style/Accent after an apt upgrade of gnome-control-center.
+if [[ -x /usr/libexec/kos-appearance ]]; then
+  /usr/libexec/kos-appearance
+fi
 exit 0

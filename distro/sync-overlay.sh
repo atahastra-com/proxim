@@ -42,9 +42,10 @@ if [[ -d "$OVERLAY/home" ]]; then
 fi
 
 # dconf system defaults (user profile + local database)
-"${SUDO[@]}" mkdir -p "$MNT/etc/dconf/profile" "$MNT/etc/dconf/db/local.d"
+"${SUDO[@]}" mkdir -p "$MNT/etc/dconf/profile" "$MNT/etc/dconf/db/local.d" "$MNT/etc/dconf/db/local.d/locks"
 "${SUDO[@]}" cp "${CFG}/dconf-user-profile" "$MNT/etc/dconf/profile/user"
 "${SUDO[@]}" cp "${CFG}/dconf-kos-shell.ini" "$MNT/etc/dconf/db/local.d/00-kos-shell"
+"${SUDO[@]}" cp "${CFG}/dconf-kos-locks" "$MNT/etc/dconf/db/local.d/locks/00-kos"
 
 # Keep gschema overrides in sync too (wallpaper, workspaces, enabled-extensions)
 "${SUDO[@]}" mkdir -p "$MNT/usr/share/glib-2.0/schemas"
@@ -54,7 +55,7 @@ fi
 if [[ -d "$MNT/usr/share/gnome-shell/extensions/kos-shell@kos" ]]; then
   "${SUDO[@]}" chmod -R a+rX "$MNT/usr/share/gnome-shell/extensions/kos-shell@kos"
 fi
-for bin in kos-shell-reload kos-mount-dev kos-tune kos-setup-software kos-whitelabel; do
+for bin in kos-shell-reload kos-mount-dev kos-tune kos-setup-software kos-whitelabel kos-appearance; do
   if [[ -f "$MNT/usr/libexec/${bin}" ]]; then
     "${SUDO[@]}" chmod 755 "$MNT/usr/libexec/${bin}"
   fi

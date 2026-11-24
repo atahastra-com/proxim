@@ -112,6 +112,10 @@ fi
 #!/bin/bash
 set -euo pipefail
 glib-compile-schemas /usr/share/glib-2.0/schemas
+if id '${KOS_USER}' >/dev/null 2>&1; then
+  sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/color-scheme "'prefer-dark'" || true
+  sudo -u '${KOS_USER}' dbus-run-session dconf write /org/gnome/desktop/interface/accent-color "'blue'" || true
+fi
 dconf update
 systemd-tmpfiles --create /usr/lib/tmpfiles.d/kos-x11.conf || true
 export DEBIAN_FRONTEND=noninteractive
@@ -119,6 +123,10 @@ export DEBIAN_FRONTEND=noninteractive
 # even when KOS_SKIP_APT=1.
 if [[ -x /usr/libexec/kos-whitelabel ]]; then
   /usr/libexec/kos-whitelabel
+fi
+# Hide Appearance Style/Accent from the installed gnome-control-center UI.
+if [[ -x /usr/libexec/kos-appearance ]]; then
+  /usr/libexec/kos-appearance
 fi
 # Chroot has no resolver unless we bind /etc/resolv.conf; skip apt when
 # KOS_SKIP_APT=1 or DNS is down so a CSS/JS tweak does not wait minutes.
