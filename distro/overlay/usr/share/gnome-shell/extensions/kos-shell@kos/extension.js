@@ -52,7 +52,7 @@ export default class KosShellExtension extends Extension {
         this._blockOverview();
 
         this._allApps = new KosAllAppsOverlay();
-        this._panel = new KosPanel();
+        this._panel = new KosPanel({extensionPath: this.path});
         this._dock = new KosDock({
             onAllApps: () => this._allApps.toggle(),
         });

@@ -7,6 +7,8 @@
 // kos: clock on the left, dock in the center, and GNOME's stock system
 // status cluster (network/volume/power) left alone on the right.
 
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -21,8 +23,10 @@ export const POPUP_GAP = 12;
 export const POPUP_INSET = 12;
 
 export class KosPanel {
-    constructor() {
+    constructor({extensionPath} = {}) {
+        this._extensionPath = extensionPath ?? null;
         this._signals = [];
+        this._statusIconSignals = [];
         this._movedDateMenu = false;
         this._blurEffect = null;
     }
@@ -37,6 +41,7 @@ export class KosPanel {
         this._disableHotCorners();
         this._moveDateMenuToLeft();
         this._movePanelToBottom();
+        this._applyStatusIcons();
 
         // Re-run layout when monitors change or the bar is reallocated
         // (like a resize listener on window.resize).
@@ -58,6 +63,7 @@ export class KosPanel {
             this._disableHotCorners();
             this._moveDateMenuToLeft();
             this._movePanelToBottom();
+            this._applyStatusIcons();
         });
     }
 
@@ -66,6 +72,7 @@ export class KosPanel {
             obj.disconnect(id);
         this._signals = [];
 
+        this._restoreStatusIcons();
         this._disableBlur();
         this._restorePopups();
         this._restoreDateMenu();
@@ -242,6 +249,71 @@ export class KosPanel {
             return;
         box.set_position(monitor.x, monitor.y);
         box.set_size(monitor.width, -1);
+    }
+
+    _applyStatusIcons() {
+        if (!this._extensionPath)
+            return;
+        const root = Main.panel.statusArea.quickSettings?._indicators;
+        if (!root)
+            return;
+
+        const updateIcon = icon => {
+            const name = icon.icon_name;
+            if (!name)
+                return;
+            const path = `${this._extensionPath}/icons/status/${name}.svg`;
+            if (!GLib.file_test(path, GLib.FileTest.EXISTS)) {
+                if (icon._kosCustomPath) {
+                    delete icon._kosCustomPath;
+                    icon.gicon = null;
+                    icon.icon_name = name;
+                }
+                return;
+            }
+            if (icon._kosCustomPath === path)
+                return;
+            icon._kosOrigIconName = name;
+            icon._kosCustomPath = path;
+            icon.gicon = new Gio.FileIcon({file: Gio.File.new_for_path(path)});
+        };
+
+        const visit = actor => {
+            if (actor instanceof St.Icon && actor.has_style_class_name('system-status-icon')) {
+                updateIcon(actor);
+                if (!actor._kosWatched) {
+                    actor._kosWatched = true;
+                    const id = actor.connect('notify::icon-name', () => updateIcon(actor));
+                    const destroyId = actor.connect('destroy', () => {
+                        this._statusIconSignals = this._statusIconSignals.filter(([o]) => o !== actor);
+                    });
+                    this._statusIconSignals.push([actor, id], [actor, destroyId]);
+                }
+            }
+            for (const child of actor.get_children())
+                visit(child);
+        };
+        visit(root);
+    }
+
+    _restoreStatusIcons() {
+        for (const [actor, id] of this._statusIconSignals) {
+            try {
+                actor.disconnect(id);
+            } catch (_e) {
+            }
+            if (actor._kosWatched)
+                delete actor._kosWatched;
+            if (actor._kosCustomPath) {
+                const name = actor._kosOrigIconName || actor.icon_name;
+                delete actor._kosCustomPath;
+                delete actor._kosOrigIconName;
+                actor.gicon = null;
+                if (name)
+                    actor.icon_name = name;
+            }
+        }
+        this._statusIconSignals = [];
     }
 }
 
