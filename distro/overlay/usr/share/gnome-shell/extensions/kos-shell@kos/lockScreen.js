@@ -30,8 +30,8 @@ const PROMPT_RADIUS = 40;          // password page: frosted
 const PROMPT_BRIGHTNESS = 0.55;
 const CLOCK_TOP = 0.10;            // clock top at 10% of the screen height
 
-const HOME_RADIUS = 12;
-const HOME_BRIGHTNESS = 0.9;
+const HOME_RADIUS = 4;
+const HOME_BRIGHTNESS = 0.96;
 const HOME_EFFECT = 'kos-home-blur';
 
 function lockEffect(dialog) {
