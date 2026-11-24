@@ -63,6 +63,65 @@ function clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
 }
 
+function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+}
+
+// Smooth icon scale on hover without a background box (actor.ease() would
+// snap because enable-animations is false).
+function attachHoverScale(button, box, iconOrFn) {
+    const getIcon = typeof iconOrFn === 'function' ? iconOrFn : () => iconOrFn;
+    button.clip_to_allocation = false;
+    box.clip_to_allocation = false;
+    const initIcon = getIcon();
+    initIcon.clip_to_allocation = false;
+    initIcon.set_pivot_point(0.5, 0.5);
+
+    let tick = 0;
+    let target = 1;
+    const stop = () => {
+        if (!tick)
+            return;
+        GLib.source_remove(tick);
+        tick = 0;
+    };
+    const animateTo = next => {
+        if (target === next)
+            return;
+        target = next;
+        stop();
+        const cur = getIcon();
+        if (!cur)
+            return;
+        cur.clip_to_allocation = false;
+        cur.set_pivot_point(0.5, 0.5);
+        const from = cur.scale_x || 1;
+        if (Math.abs(next - from) < 0.001) {
+            cur.set_scale(next, next);
+            return;
+        }
+        const dur = next > from ? 180 : 150;
+        const start = GLib.get_monotonic_time();
+        tick = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+            const actor = getIcon();
+            if (!actor || !actor.get_stage()) {
+                tick = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            const p = Math.min(1, (GLib.get_monotonic_time() - start) / (dur * 1000));
+            const s = from + (next - from) * easeOutCubic(p);
+            actor.set_scale(s, s);
+            if (p >= 1) {
+                tick = 0;
+                return GLib.SOURCE_REMOVE;
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
+    };
+    button.connect('notify::hover', () => animateTo(button.hover ? 1.09 : 1));
+    button.connect('destroy', stop);
+}
+
 export class KosDesktopGrid {
     constructor({extensionPath} = {}) {
         this._extensionPath = extensionPath;
@@ -514,6 +573,7 @@ export class KosDesktopGrid {
             accessible_name: app.get_name(),
         });
         button.connect('captured-event', commitEditsOnPress);
+        attachHoverScale(button, box, gicon);
         button.connect('clicked', () => {
             this._folderView?.close();
             launchApp(app);
@@ -566,6 +626,7 @@ export class KosDesktopGrid {
             accessible_name: folder.name,
         });
         button.connect('captured-event', commitEditsOnPress);
+        attachHoverScale(button, box, square);
         button.connect('clicked', () =>
             this._folderView.open(folder, Main.layoutManager.primaryMonitor));
         this._onRightClick(button, (x, y) => openContextMenu(x, y, [
@@ -700,6 +761,7 @@ export class KosDesktopGrid {
             box.add_child(makeLabel());
         }
 
+        attachHoverScale(button, box, () => icon);
         button.connect('clicked', () => {
             if (skipClick || this._renamingFile === item.name) {
                 skipClick = false;
