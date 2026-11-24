@@ -18,7 +18,7 @@ import St from 'gi://St';
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 
 import {squircleIcon, squircleRadius} from './icons.js';
-import {CLOSE_MS, OPEN_MS, STAGGER_DUR_MS, STAGGER_MS, after, easeOutCubic, easeOutQuint, stop, tween} from './anim.js';
+import {CLOSE_MS, OPEN_MS, after, easeOutCubic, easeOutQuint, stop, tween} from './anim.js';
 
 export const FOLDER_COLS = 4;
 // Fixed cell for every app in an open folder. 104px is wide enough for a
@@ -411,7 +411,6 @@ export class KosFolderView {
         this.folder = null;
         this._source = null;
         this._closing = false;
-        this._staggerIds = [];
         this._ensureId = 0;
         this._openedAt = 0;
 
@@ -588,7 +587,6 @@ export class KosFolderView {
 
     open(folder, monitor, source = null) {
         const already = this.folder === folder && this.actor.visible && !this._closing;
-        this._cancelStagger();
         this._cancelEnsure();
         stop(this.actor);
         stop(this._panel);
@@ -604,15 +602,14 @@ export class KosFolderView {
             const {w: tw, h: th, gap} = this._cellSize();
             const cols = Math.min(FOLDER_COLS, Math.max(2, folder.apps.length));
             const rows = Math.max(1, Math.ceil(folder.apps.length / cols));
-            const tiles = [];
             folder.apps.forEach((id, i) => {
                 const tile = this._makeTile(id, folder);
                 if (!tile)
                     return;
                 tile.set_position((i % cols) * (tw + gap), Math.floor(i / cols) * (th + gap));
                 tile.opacity = 255;
+                tile.set_scale(1, 1);
                 this._grid.add_child(tile);
-                tiles.push(tile);
             });
             this._grid.set_size(
                 Math.max(1, cols * tw + (cols - 1) * gap),
@@ -645,18 +642,6 @@ export class KosFolderView {
                 easing: easeOutQuint,
             });
             this._ensureId = after(OPEN_MS + 120, () => this._showOpen());
-            tiles.forEach((tile, i) => {
-                tile.set_pivot_point(0.5, 0.5);
-                tile.set_scale(0.92, 0.92);
-                const id = after(80 + i * STAGGER_MS, () => {
-                    tween(tile, {
-                        scale: 1,
-                        duration: STAGGER_DUR_MS,
-                        easing: easeOutCubic,
-                    });
-                });
-                this._staggerIds.push(id);
-            });
         } catch (e) {
             logError(e, 'kos-shell: folder open');
             this._showOpen();
@@ -687,17 +672,6 @@ export class KosFolderView {
         }
     }
 
-    _cancelStagger() {
-        for (const id of this._staggerIds) {
-            try {
-                GLib.source_remove(id);
-            } catch (_e) {
-                // already fired
-            }
-        }
-        this._staggerIds = [];
-    }
-
     // Put the title in edit mode with the name selected (right-click
     // "New Folder" / "Rename").
     beginRename() {
@@ -716,7 +690,6 @@ export class KosFolderView {
         if (!this.actor.visible && !this._closing)
             return;
         this._commitTitle(false);
-        this._cancelStagger();
         this._cancelEnsure();
         let finished = false;
         const finish = () => {
@@ -779,7 +752,6 @@ export class KosFolderView {
     }
 
     destroy() {
-        this._cancelStagger();
         this._cancelEnsure();
         stop(this.actor);
         stop(this._panel);
