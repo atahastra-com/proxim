@@ -5,6 +5,11 @@
 // scale and translation on a 16ms GLib timer with ease-out cubic/quint,
 // the same path the dock hover zoom already uses. Cheap paint transforms
 // only — never animate a blur radius.
+//
+// Every tween is guaranteed to reach its end values and call onComplete:
+// the tick applies the exact end state on the last frame, a safety timeout
+// settles if the tick source is dropped, and any throw snaps to the end
+// instead of leaving an actor invisible-but-still-there.
 
 import GLib from 'gi://GLib';
 
@@ -39,17 +44,46 @@ export function easeInOutCubic(t) {
 // VM, so that key is not treated as prefers-reduced-motion. Honor an
 // explicit override if one is ever set.
 export function reduceMotion() {
-    // enable-animations is forced off for VM CPU, so it is not used here.
     return GLib.getenv('KOS_REDUCE_MOTION') === '1';
+}
+
+function sourceRemove(id) {
+    if (!id)
+        return;
+    try {
+        GLib.source_remove(id);
+    } catch (_e) {
+        // already removed, or called from the source itself
+    }
 }
 
 export function stop(actor) {
     if (!actor)
         return;
-    const id = actor._kosAnim;
-    if (id) {
-        GLib.source_remove(id);
-        actor._kosAnim = 0;
+    sourceRemove(actor._kosAnim);
+    sourceRemove(actor._kosAnimSafety);
+    actor._kosAnim = 0;
+    actor._kosAnimSafety = 0;
+    actor._kosAnimProps = null;
+    actor._kosAnimComplete = null;
+}
+
+// Drop timers when the actor is destroyed so a later tick cannot touch
+// a disposed object (GJS logs "already disposed" on logout otherwise).
+function hookDestroy(actor) {
+    if (!actor || actor._kosAnimDestroyId)
+        return;
+    try {
+        actor._kosAnimDestroyId = actor.connect('destroy', () => {
+            actor._kosAnimDestroyId = 0;
+            sourceRemove(actor._kosAnim);
+            sourceRemove(actor._kosAnimSafety);
+            actor._kosAnim = 0;
+            actor._kosAnimSafety = 0;
+            actor._kosAnimProps = null;
+            actor._kosAnimComplete = null;
+        });
+    } catch (_e) {
     }
 }
 
@@ -110,14 +144,40 @@ function write(actor, key, value) {
 const PROPS = ['opacity', 'scale', 'scaleX', 'scaleY', 'translationX', 'translationY'];
 
 function apply(actor, props) {
+    if (!actor || !props)
+        return;
     for (const key of PROPS) {
         if (key in props)
             write(actor, key, props[key]);
     }
 }
 
+function settle(actor) {
+    if (!actor)
+        return;
+    const props = actor._kosAnimProps;
+    const cb = actor._kosAnimComplete;
+    sourceRemove(actor._kosAnim);
+    sourceRemove(actor._kosAnimSafety);
+    actor._kosAnim = 0;
+    actor._kosAnimSafety = 0;
+    actor._kosAnimProps = null;
+    actor._kosAnimComplete = null;
+    try {
+        apply(actor, props);
+    } catch (e) {
+        logError(e, 'kos-shell: anim apply');
+    }
+    try {
+        cb?.();
+    } catch (e) {
+        logError(e, 'kos-shell: anim onComplete');
+    }
+}
+
 // Tween the listed properties from their current values. Retargeting the
-// same actor stops the previous tween first. duration is milliseconds.
+// same actor stops the previous tween first (without applying its end).
+// duration is milliseconds. The end values and onComplete always run.
 export function tween(actor, {
     duration = OPEN_MS,
     easing = easeOutCubic,
@@ -125,46 +185,80 @@ export function tween(actor, {
     ...props
 } = {}) {
     if (!actor) {
-        onComplete?.();
+        try {
+            onComplete?.();
+        } catch (e) {
+            logError(e, 'kos-shell: anim onComplete');
+        }
         return;
     }
     stop(actor);
-    if (!alive(actor) || reduceMotion() || duration <= 0) {
-        apply(actor, props);
-        onComplete?.();
-        return;
-    }
-    const keys = PROPS.filter(k => k in props);
-    if (keys.length === 0) {
-        onComplete?.();
-        return;
-    }
-    const from = {};
-    for (const key of keys)
-        from[key] = read(actor, key);
-    const start = GLib.get_monotonic_time();
-    actor._kosAnim = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
-        if (!alive(actor)) {
-            actor._kosAnim = 0;
-            onComplete?.();
-            return GLib.SOURCE_REMOVE;
+    hookDestroy(actor);
+    actor._kosAnimProps = props;
+    actor._kosAnimComplete = onComplete;
+
+    try {
+        if (!alive(actor) || reduceMotion() || duration <= 0) {
+            settle(actor);
+            return;
         }
-        const t = Math.min(1, (GLib.get_monotonic_time() - start) / (duration * 1000));
-        const e = easing(t);
-        for (const key of keys)
-            write(actor, key, from[key] + (props[key] - from[key]) * e);
-        if (t >= 1) {
-            actor._kosAnim = 0;
-            onComplete?.();
-            return GLib.SOURCE_REMOVE;
+        const keys = PROPS.filter(k => k in props);
+        if (keys.length === 0) {
+            settle(actor);
+            return;
         }
-        return GLib.SOURCE_CONTINUE;
-    });
+        const from = {};
+        let same = true;
+        for (const key of keys) {
+            from[key] = read(actor, key);
+            if (Math.abs((from[key] ?? 0) - props[key]) > 0.001)
+                same = false;
+        }
+        if (same) {
+            settle(actor);
+            return;
+        }
+        const start = GLib.get_monotonic_time();
+        actor._kosAnim = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+            try {
+                if (!alive(actor)) {
+                    settle(actor);
+                    return GLib.SOURCE_REMOVE;
+                }
+                const t = Math.min(1, (GLib.get_monotonic_time() - start) / (duration * 1000));
+                const e = easing(t);
+                for (const key of keys)
+                    write(actor, key, from[key] + (props[key] - from[key]) * e);
+                if (t >= 1) {
+                    settle(actor);
+                    return GLib.SOURCE_REMOVE;
+                }
+                return GLib.SOURCE_CONTINUE;
+            } catch (e) {
+                logError(e, 'kos-shell: anim tick');
+                settle(actor);
+                return GLib.SOURCE_REMOVE;
+            }
+        });
+        actor._kosAnimSafety = GLib.timeout_add(GLib.PRIORITY_DEFAULT, duration + 80, () => {
+            actor._kosAnimSafety = 0;
+            if (actor._kosAnimProps)
+                settle(actor);
+            return GLib.SOURCE_REMOVE;
+        });
+    } catch (e) {
+        logError(e, 'kos-shell: anim tween');
+        settle(actor);
+    }
 }
 
 export function after(ms, fn) {
     return GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.max(0, ms), () => {
-        fn();
+        try {
+            fn();
+        } catch (e) {
+            logError(e, 'kos-shell: anim after');
+        }
         return GLib.SOURCE_REMOVE;
     });
 }
@@ -184,11 +278,11 @@ export function hookBoxPointer(pointer) {
         this.opacity = 0;
         this.translation_y = 8;
         origOpen(PopupAnimation.NONE);
-        if (!alive(this))
+        if (!alive(this)) {
+            this.opacity = 255;
+            this.translation_y = 0;
             return;
-        stop(this);
-        this.opacity = 0;
-        this.translation_y = 8;
+        }
         tween(this, {
             opacity: 255,
             translationY: 0,
@@ -203,8 +297,11 @@ export function hookBoxPointer(pointer) {
             if (finished)
                 return;
             finished = true;
-            this.translation_y = 0;
+            sourceRemove(this._kosPointerClose);
+            this._kosPointerClose = 0;
             try {
+                if (alive(this))
+                    this.translation_y = 0;
                 origClose(PopupAnimation.NONE);
             } catch (_e) {
                 // already destroyed
@@ -221,8 +318,7 @@ export function hookBoxPointer(pointer) {
             easing: easeOutCubic,
             onComplete: finish,
         });
-        // If the tween never fires, still close so the menu cannot stick.
-        after(POPUP_CLOSE_MS + 120, finish);
+        this._kosPointerClose = after(POPUP_CLOSE_MS + 120, finish);
     };
     return pointer;
 }
@@ -231,6 +327,8 @@ export function unhookBoxPointer(pointer) {
     if (!pointer?._kosAnimHooked)
         return;
     stop(pointer);
+    sourceRemove(pointer._kosPointerClose);
+    pointer._kosPointerClose = 0;
     if (pointer._kosOrigOpen)
         pointer.open = pointer._kosOrigOpen;
     if (pointer._kosOrigClose)

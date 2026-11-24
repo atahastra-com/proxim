@@ -412,18 +412,31 @@ export class KosFolderView {
         this._source = null;
         this._closing = false;
         this._staggerIds = [];
+        this._ensureId = 0;
+        this._openedAt = 0;
 
         this.actor = new St.Widget({
             style_class: 'kos-folder-backdrop',
             reactive: true,
+            can_focus: true,
             visible: false,
             layout_manager: new Clutter.FixedLayout(),
         });
         // Clicks on the backdrop itself (not on the panel) close the folder.
+        // The opening click's button-release can land on this newly shown
+        // backdrop (Clutter still delivers events at opacity 0), so ignore
+        // close until that click has settled.
         this.actor.connect('button-release-event', (_a, event) => {
-            if (global.stage.get_event_actor(event) === this.actor)
+            if (this._canClose() && global.stage.get_event_actor(event) === this.actor)
                 this.close();
             return Clutter.EVENT_STOP;
+        });
+        this.actor.connect('key-press-event', (_a, event) => {
+            if (event.get_key_symbol() === Clutter.KEY_Escape) {
+                this.close({force: true});
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
         });
         // Dragging an app out of the panel closes the folder so the drop
         // lands on the grid underneath (see handleDragOver).
@@ -467,7 +480,7 @@ export class KosFolderView {
             if (event.get_key_symbol() === Clutter.KEY_Escape) {
                 if (this.folder)
                     this._title.text = this.folder.name;
-                this.close();
+                this.close({force: true});
                 return Clutter.EVENT_STOP;
             }
             return Clutter.EVENT_PROPAGATE;
@@ -488,71 +501,166 @@ export class KosFolderView {
         return this.actor.visible && !this._closing;
     }
 
+    _cancelEnsure() {
+        if (this._ensureId) {
+            try {
+                GLib.source_remove(this._ensureId);
+            } catch (_e) {
+                // already fired
+            }
+            this._ensureId = 0;
+        }
+    }
+
+    // Ignore the same click that opened the folder. Clutter still delivers
+    // a button-release to a newly shown, opacity-0, reactive backdrop.
+    _canClose() {
+        if (!this._openedAt)
+            return true;
+        return (GLib.get_monotonic_time() - this._openedAt) > 350 * 1000;
+    }
+
+    // Place the panel from the grid's known content size, not from
+    // get_preferred_* (which can return the fullscreen parent height and
+    // push the panel off-screen, leaving only the dim scrim visible).
+    _layoutPanel(monitor) {
+        if (!monitor)
+            return;
+        this._monitor = monitor;
+        const pad = 20, spacing = 16, titleH = 34, margin = 20, dock = 72;
+        const gridW = Math.max(1, this._grid.width);
+        const gridH = Math.max(1, this._grid.height);
+        let panelW = gridW + pad * 2;
+        let panelH = pad * 2 + titleH + spacing + gridH;
+        if (!Number.isFinite(panelW) || panelW < 80)
+            panelW = 480;
+        if (!Number.isFinite(panelH) || panelH < 80)
+            panelH = 200;
+        const maxW = Math.max(80, monitor.width - margin * 2);
+        const maxH = Math.max(80, monitor.height - dock - margin * 2);
+        panelW = Math.min(panelW, maxW);
+        panelH = Math.min(panelH, maxH);
+        this._panel.set_size(panelW, panelH);
+        const x = Math.round((monitor.width - panelW) / 2);
+        const y = Math.round((monitor.height - dock - panelH) / 2);
+        this._panel.set_position(
+            Math.max(margin, Math.min(x, monitor.width - panelW - margin)),
+            Math.max(margin, Math.min(y, monitor.height - dock - panelH - margin)));
+        this._panel.set_pivot_point(0.5, 0.5);
+        this._pivotFromSource(panelW, panelH);
+    }
+
+    _revealTiles() {
+        for (const tile of this._grid.get_children()) {
+            stop(tile);
+            tile.visible = true;
+            tile.opacity = 255;
+            try {
+                tile.set_scale(1, 1);
+            } catch (_e) {
+            }
+        }
+    }
+
+    // Snap the panel to its open, clickable, on-screen end state. Always
+    // called when the open tween finishes, on a safety timeout, or after
+    // any throw, so we never leave a grab/backdrop without a visible panel
+    // and its tiles.
+    _showOpen() {
+        this._cancelEnsure();
+        if (this._closing)
+            return;
+        stop(this.actor);
+        stop(this._panel);
+        this.actor.opacity = 255;
+        this.actor.visible = true;
+        this.actor.reactive = true;
+        this._layoutPanel(this._monitor);
+        this._panel.opacity = 255;
+        this._panel.set_scale(1, 1);
+        this._revealTiles();
+        try {
+            this.actor.grab_key_focus();
+        } catch (_e) {
+            // stage may already have focus elsewhere (e.g. rename)
+        }
+    }
+
     open(folder, monitor, source = null) {
         const already = this.folder === folder && this.actor.visible && !this._closing;
         this._cancelStagger();
+        this._cancelEnsure();
         stop(this.actor);
         stop(this._panel);
         this._closing = false;
         this.folder = folder;
         this._source = source;
+        this._monitor = monitor;
         this._title.text = folder.name;
         this._grid.destroy_all_children();
+        this._openedAt = GLib.get_monotonic_time();
 
-        const {w: tw, h: th, gap} = this._cellSize();
-        const cols = Math.min(FOLDER_COLS, Math.max(2, folder.apps.length));
-        const rows = Math.max(1, Math.ceil(folder.apps.length / cols));
-        const tiles = [];
-        folder.apps.forEach((id, i) => {
-            const tile = this._makeTile(id, folder);
-            if (!tile)
-                return;
-            tile.set_position((i % cols) * (tw + gap), Math.floor(i / cols) * (th + gap));
-            this._grid.add_child(tile);
-            tiles.push(tile);
-        });
-        this._grid.set_size(cols * tw + (cols - 1) * gap, rows * th + (rows - 1) * gap);
-
-        this.actor.set_position(0, 0);
-        this.actor.set_size(monitor.width, monitor.height);
-        this.actor.opacity = 0;
-        this.actor.show();
-        // Center the panel once it has its natural size.
-        const [, natW] = this._panel.get_preferred_width(-1);
-        const [, natH] = this._panel.get_preferred_height(natW);
-        this._panel.set_position(
-            Math.round((monitor.width - natW) / 2),
-            Math.round((monitor.height - 72 - natH) / 2));
-        this._pivotFromSource(natW, natH);
-        this._panel.set_scale(0.22, 0.22);
-        this._panel.opacity = 0;
-        if (already) {
-            this.actor.opacity = 255;
-            this._panel.set_scale(1, 1);
-            this._panel.opacity = 255;
-            return;
-        }
-        tween(this.actor, {opacity: 255, duration: OPEN_MS, easing: easeOutCubic});
-        tween(this._panel, {
-            scale: 1,
-            opacity: 255,
-            duration: OPEN_MS,
-            easing: easeOutQuint,
-        });
-        tiles.forEach((tile, i) => {
-            tile.opacity = 0;
-            tile.set_pivot_point(0.5, 0.5);
-            tile.set_scale(0.92, 0.92);
-            const id = after(80 + i * STAGGER_MS, () => {
-                tween(tile, {
-                    opacity: 255,
-                    scale: 1,
-                    duration: STAGGER_DUR_MS,
-                    easing: easeOutCubic,
-                });
+        try {
+            const {w: tw, h: th, gap} = this._cellSize();
+            const cols = Math.min(FOLDER_COLS, Math.max(2, folder.apps.length));
+            const rows = Math.max(1, Math.ceil(folder.apps.length / cols));
+            const tiles = [];
+            folder.apps.forEach((id, i) => {
+                const tile = this._makeTile(id, folder);
+                if (!tile)
+                    return;
+                tile.set_position((i % cols) * (tw + gap), Math.floor(i / cols) * (th + gap));
+                tile.opacity = 255;
+                this._grid.add_child(tile);
+                tiles.push(tile);
             });
-            this._staggerIds.push(id);
-        });
+            this._grid.set_size(
+                Math.max(1, cols * tw + (cols - 1) * gap),
+                Math.max(1, rows * th + (rows - 1) * gap));
+
+            this.actor.set_position(0, 0);
+            this.actor.set_size(monitor.width, monitor.height);
+            // Layout and show the panel at full opacity before the scrim
+            // fades in, so a failed tween can never leave a dim backdrop
+            // with an invisible or off-screen panel.
+            this._layoutPanel(monitor);
+            this._panel.opacity = 255;
+            this._panel.set_scale(already ? 1 : 0.85, already ? 1 : 0.85);
+            this.actor.opacity = already ? 255 : 0;
+            this.actor.reactive = true;
+            this.actor.show();
+            if (already) {
+                this._showOpen();
+                return;
+            }
+            tween(this.actor, {
+                opacity: 255,
+                duration: OPEN_MS,
+                easing: easeOutCubic,
+                onComplete: () => this._showOpen(),
+            });
+            tween(this._panel, {
+                scale: 1,
+                duration: OPEN_MS,
+                easing: easeOutQuint,
+            });
+            this._ensureId = after(OPEN_MS + 120, () => this._showOpen());
+            tiles.forEach((tile, i) => {
+                tile.set_pivot_point(0.5, 0.5);
+                tile.set_scale(0.92, 0.92);
+                const id = after(80 + i * STAGGER_MS, () => {
+                    tween(tile, {
+                        scale: 1,
+                        duration: STAGGER_DUR_MS,
+                        easing: easeOutCubic,
+                    });
+                });
+                this._staggerIds.push(id);
+            });
+        } catch (e) {
+            logError(e, 'kos-shell: folder open');
+            this._showOpen();
+        }
     }
 
     _pivotFromSource(panelW, panelH) {
@@ -567,9 +675,13 @@ export class KosFolderView {
             const [px, py] = panel.get_transformed_position();
             if (panelW < 1 || panelH < 1)
                 return;
-            panel.set_pivot_point(
-                (sx + sw / 2 - px) / panelW,
-                (sy + sh / 2 - py) / panelH);
+            const pivX = (sx + sw / 2 - px) / panelW;
+            const pivY = (sy + sh / 2 - py) / panelH;
+            if (!Number.isFinite(pivX) || !Number.isFinite(pivY) ||
+                Math.abs(pivX) > 2 || Math.abs(pivY) > 2)
+                panel.set_pivot_point(0.5, 0.5);
+            else
+                panel.set_pivot_point(pivX, pivY);
         } catch (_e) {
             panel.set_pivot_point(0.5, 0.5);
         }
@@ -596,18 +708,27 @@ export class KosFolderView {
         this._title.clutter_text.set_selection(0, -1);
     }
 
-    close({snap = false} = {}) {
+    close({snap = false, force = false} = {}) {
+        if (!force && !snap && !this._canClose())
+            return;
         if (this._closing && !snap)
             return;
         if (!this.actor.visible && !this._closing)
             return;
         this._commitTitle(false);
         this._cancelStagger();
+        this._cancelEnsure();
+        let finished = false;
         const finish = () => {
+            if (finished)
+                return;
+            finished = true;
+            this._cancelEnsure();
             stop(this.actor);
             stop(this._panel);
             this.actor.hide();
             this.actor.opacity = 255;
+            this.actor.reactive = true;
             this._panel.set_scale(1, 1);
             this._panel.opacity = 255;
             this._panel.set_pivot_point(0.5, 0.5);
@@ -621,17 +742,23 @@ export class KosFolderView {
             return;
         }
         this._closing = true;
-        const [, natW] = this._panel.get_preferred_width(-1);
-        const [, natH] = this._panel.get_preferred_height(natW);
-        this._pivotFromSource(natW, natH);
-        tween(this.actor, {opacity: 0, duration: CLOSE_MS, easing: easeOutCubic});
-        tween(this._panel, {
-            scale: 0.22,
-            opacity: 0,
-            duration: CLOSE_MS,
-            easing: easeOutQuint,
-            onComplete: finish,
-        });
+        try {
+            const [, natW] = this._panel.get_preferred_width(-1);
+            const [, natH] = this._panel.get_preferred_height(natW);
+            this._pivotFromSource(natW, natH);
+            tween(this.actor, {opacity: 0, duration: CLOSE_MS, easing: easeOutCubic});
+            tween(this._panel, {
+                scale: 0.22,
+                opacity: 0,
+                duration: CLOSE_MS,
+                easing: easeOutQuint,
+                onComplete: finish,
+            });
+            this._ensureId = after(CLOSE_MS + 120, finish);
+        } catch (e) {
+            logError(e, 'kos-shell: folder close');
+            finish();
+        }
     }
 
     _commitTitle(unfocus) {
@@ -653,6 +780,7 @@ export class KosFolderView {
 
     destroy() {
         this._cancelStagger();
+        this._cancelEnsure();
         stop(this.actor);
         stop(this._panel);
         endPendingEdit(this._title);

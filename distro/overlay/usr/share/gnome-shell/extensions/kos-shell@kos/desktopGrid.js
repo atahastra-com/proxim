@@ -1336,14 +1336,35 @@ class KosAllAppsOverlay extends St.Widget {
     dismiss(snap = false) {
         if (!this.visible)
             return;
+        if (!snap && this._openedAt &&
+            (GLib.get_monotonic_time() - this._openedAt) < 350 * 1000)
+            return;
+        if (this._ensureId) {
+            try {
+                GLib.source_remove(this._ensureId);
+            } catch (_e) {
+            }
+            this._ensureId = 0;
+        }
+        let finished = false;
         const finish = () => {
+            if (finished)
+                return;
+            finished = true;
+            if (this._ensureId) {
+                try {
+                    GLib.source_remove(this._ensureId);
+                } catch (_e) {
+                }
+                this._ensureId = 0;
+            }
+            stop(this);
+            stop(this._panel);
             super.hide();
             this.opacity = 255;
             this._panel.set_scale(1, 1);
         };
         if (snap) {
-            stop(this);
-            stop(this._panel);
             finish();
             return;
         }
@@ -1354,6 +1375,7 @@ class KosAllAppsOverlay extends St.Widget {
             easing: easeOutQuint,
             onComplete: finish,
         });
+        this._ensureId = after(CLOSE_MS + 120, finish);
     }
 
     showAll() {
@@ -1380,12 +1402,23 @@ class KosAllAppsOverlay extends St.Widget {
             });
             this._grid.add_child(box);
         }
+        this._openedAt = GLib.get_monotonic_time();
         this._panel.set_pivot_point(0.5, 0.5);
         this._panel.set_scale(0.96, 0.96);
         this.opacity = 0;
         this.visible = true;
         this.grab_key_focus();
-        tween(this, {opacity: 255, duration: OPEN_MS, easing: easeOutCubic});
+        const showEnd = () => {
+            this.opacity = 255;
+            this._panel.set_scale(1, 1);
+        };
+        tween(this, {
+            opacity: 255,
+            duration: OPEN_MS,
+            easing: easeOutCubic,
+            onComplete: showEnd,
+        });
         tween(this._panel, {scale: 1, duration: OPEN_MS, easing: easeOutQuint});
+        this._ensureId = after(OPEN_MS + 120, showEnd);
     }
 });
