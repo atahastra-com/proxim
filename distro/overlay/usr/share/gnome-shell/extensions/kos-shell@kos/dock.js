@@ -14,6 +14,7 @@ import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
 
 import {DND, appIcon, getPins, later, makeDraggableIcon, pinAt} from './folders.js';
 import {squircleGIcon} from './icons.js';
+import {BOUNCE_MS, DOT_FADE_MS, easeOutCubic, stop, tween} from './anim.js';
 
 // Hover magnification is a scale transform, not a size reflow, so the
 // bar width never jumps. Only the hovered icon scales up; we load the
@@ -28,11 +29,27 @@ const GROW_MS = 220;
 const SHRINK_MS = 180;
 const LABEL_DELAY_MS = 120;
 
-// Global animations are off (enable-animations=false), so actor.ease()
-// would snap. A monotonic GLib timer with ease-out cubic still grows
-// smoothly (Clutter.Timeline also needs a frame clock in Mutter 48).
-function easeOutCubic(t) {
-    return 1 - Math.pow(1 - t, 3);
+// Hover zoom and the launch bounce go through anim.js (GLib timer),
+// because actor.ease() would snap with enable-animations=false.
+
+let _dock = null;
+
+// Stage-space center of the dock icon for this app, used to minimize
+// windows toward the icon. Null if the app is not in the dock yet.
+export function dockIconCenter(app) {
+    if (!app || !_dock)
+        return null;
+    const item = _dock._items().find(c => c._app === app);
+    const icon = item?._kosIcon || item;
+    if (!icon || typeof icon.get_transformed_position !== 'function')
+        return null;
+    try {
+        const [x, y] = icon.get_transformed_position();
+        const [w, h] = icon.get_transformed_size();
+        return {x: x + w / 2, y: y + h / 2, w, h};
+    } catch (_e) {
+        return null;
+    }
 }
 
 export class KosDock {
@@ -48,6 +65,7 @@ export class KosDock {
     }
 
     enable() {
+        _dock = this;
         this._actor = new St.BoxLayout({
             style_class: 'kos-dock',
             x_align: Clutter.ActorAlign.CENTER,
@@ -92,6 +110,8 @@ export class KosDock {
     }
 
     disable() {
+        if (_dock === this)
+            _dock = null;
         for (const [obj, id] of this._signals)
             obj.disconnect(id);
         this._signals = [];
@@ -227,6 +247,12 @@ export class KosDock {
             app.activate();
         }
         Main.overview.hide();
+        this._bounce(app);
+    }
+
+    _bounce(app) {
+        const item = this._items().find(c => c._app === app);
+        item?.bounce?.();
     }
 
     _syncRunning() {
@@ -397,7 +423,6 @@ class DockItem extends St.Button {
         icon.set_pivot_point(0.5, PIVOT_Y);
         icon.set_scale(REST_SCALE, REST_SCALE);
         this._zoomTarget = REST_SCALE;
-        this._zoomTick = 0;
 
         // Fixed 52x52 slot so the dock never reflows while the 65px icon scales.
         const slot = this._kosSlot = new St.Widget({
@@ -433,6 +458,7 @@ class DockItem extends St.Button {
     syncRunning(focusApp) {
         const running = !!(this._app && this._app.get_n_windows() > 0);
         const focused = !!(running && focusApp && this._app === focusApp);
+        const wasRunning = this._dot.has_style_class_name('running');
         if (running)
             this._dot.add_style_class_name('running');
         else
@@ -442,51 +468,56 @@ class DockItem extends St.Button {
             this.add_style_class_name('focused');
         else
             this.remove_style_class_name('focused');
+
+        if (running !== wasRunning) {
+            if (running) {
+                this._dot.opacity = 0;
+                tween(this._dot, {opacity: 255, duration: DOT_FADE_MS, easing: easeOutCubic});
+            } else if (wasRunning) {
+                tween(this._dot, {opacity: 0, duration: DOT_FADE_MS - 40, easing: easeOutCubic});
+            }
+        }
     }
 
     // Animate from the current scale so moving across icons just retargets.
-    // actor.ease() jumps when enable-animations is false, so we tick our
-    // own ease-out cubic from the monotonic clock.
     setZoom(scale, snap = false) {
         if (!this._kosIcon)
             return;
         if (!snap && this._zoomTarget === scale)
             return;
         this._zoomTarget = scale;
-        this._stopZoomAnim();
         const icon = this._kosIcon;
         if (snap) {
+            stop(icon);
             icon.set_scale(scale, scale);
             return;
         }
         const from = icon.scale_x || REST_SCALE;
-        const to = scale;
-        if (Math.abs(to - from) < 0.001) {
-            icon.set_scale(to, to);
+        if (Math.abs(scale - from) < 0.001) {
+            stop(icon);
+            icon.set_scale(scale, scale);
             return;
         }
-        const duration = to > from + 0.001 ? GROW_MS : SHRINK_MS;
-        const start = GLib.get_monotonic_time();
-        this._zoomTick = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
-            if (!this._kosIcon) {
-                this._zoomTick = 0;
-                return GLib.SOURCE_REMOVE;
-            }
-            const t = Math.min(1, (GLib.get_monotonic_time() - start) / (duration * 1000));
-            const s = from + (to - from) * easeOutCubic(t);
-            this._kosIcon.set_scale(s, s);
-            if (t >= 1) {
-                this._zoomTick = 0;
-                return GLib.SOURCE_REMOVE;
-            }
-            return GLib.SOURCE_CONTINUE;
+        const duration = scale > from + 0.001 ? GROW_MS : SHRINK_MS;
+        tween(icon, {scale, duration, easing: easeOutCubic});
+    }
+
+    // A short upward pulse when the app is launched or focused from the dock.
+    bounce() {
+        if (!this._kosIcon)
+            return;
+        const base = this._zoomTarget ?? REST_SCALE;
+        const peak = Math.min(1, Math.max(base * 1.14, base + 0.08));
+        this._zoomTarget = peak;
+        tween(this._kosIcon, {
+            scale: peak,
+            duration: BOUNCE_MS,
+            easing: easeOutCubic,
+            onComplete: () => this.setZoom(base),
         });
     }
 
     _stopZoomAnim() {
-        if (!this._zoomTick)
-            return;
-        GLib.source_remove(this._zoomTick);
-        this._zoomTick = 0;
+        stop(this._kosIcon);
     }
 });

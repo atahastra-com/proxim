@@ -14,6 +14,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import {later} from './folders.js';
+import {hookBoxPointer} from './anim.js';
 
 let current = null;
 
@@ -65,6 +66,8 @@ export function openContextMenu(stageX, stageY, entries) {
             anchor.destroy();
         });
     });
+    if (menu._boxPointer)
+        hookBoxPointer(menu._boxPointer);
     menu.open(true);
     return handle;
 }

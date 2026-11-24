@@ -19,6 +19,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {LOCK_MS, easeOutQuint, tween} from './anim.js';
 import {UnlockDialog} from 'resource:///org/gnome/shell/ui/unlockDialog.js';
 
 const LOCK_BRIGHTNESS = 0.85;      // clock page: sharp, slightly dimmed
@@ -31,7 +32,9 @@ const HOME_BRIGHTNESS = 0.9;
 const HOME_EFFECT = 'kos-home-blur';
 
 function lockEffect(dialog) {
-    const p = Math.min(Math.max(dialog._kosProgress ?? 0, 0), 1);
+    // Two states only: sharp clock page, frosted prompt. Do not interpolate
+    // the blur radius (that would re-render the blur every frame).
+    const p = (dialog._kosProgress ?? 0) >= 0.5 ? 1 : 0;
     const {scaleFactor} = St.ThemeContext.get_for_stage(global.stage);
     const radius = Math.round(PROMPT_RADIUS * p * scaleFactor);
     const brightness = LOCK_BRIGHTNESS + (PROMPT_BRIGHTNESS - LOCK_BRIGHTNESS) * p;
@@ -75,6 +78,18 @@ export class KosLockScreen {
             // Re-run the (patched) transition once so the blur, brightness
             // and clock lift are applied exactly once from a clean state.
             this._setTransitionProgress(this._adjustment?.value ?? 0);
+            const clock = this._clock;
+            if (clock) {
+                const restY = clock.translation_y || 0;
+                clock.opacity = 0;
+                clock.translation_y = restY - 16;
+                tween(clock, {
+                    opacity: 255,
+                    translationY: restY,
+                    duration: LOCK_MS,
+                    easing: easeOutQuint,
+                });
+            }
         };
         proto._updateBackgroundEffects = function () {
             lockEffect(this);

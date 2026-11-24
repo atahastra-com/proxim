@@ -18,6 +18,7 @@ import St from 'gi://St';
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 
 import {squircleIcon, squircleRadius} from './icons.js';
+import {CLOSE_MS, OPEN_MS, STAGGER_DUR_MS, STAGGER_MS, after, easeOutCubic, easeOutQuint, stop, tween} from './anim.js';
 
 export const FOLDER_COLS = 4;
 // Fixed cell for every app in an open folder. 104px is wide enough for a
@@ -408,6 +409,9 @@ export class KosFolderView {
         this._makeTile = makeTile;
         this._cellSize = cellSize;
         this.folder = null;
+        this._source = null;
+        this._closing = false;
+        this._staggerIds = [];
 
         this.actor = new St.Widget({
             style_class: 'kos-folder-backdrop',
@@ -481,28 +485,37 @@ export class KosFolderView {
     }
 
     get isOpen() {
-        return this.actor.visible;
+        return this.actor.visible && !this._closing;
     }
 
-    open(folder, monitor) {
+    open(folder, monitor, source = null) {
+        const already = this.folder === folder && this.actor.visible && !this._closing;
+        this._cancelStagger();
+        stop(this.actor);
+        stop(this._panel);
+        this._closing = false;
         this.folder = folder;
+        this._source = source;
         this._title.text = folder.name;
         this._grid.destroy_all_children();
 
         const {w: tw, h: th, gap} = this._cellSize();
         const cols = Math.min(FOLDER_COLS, Math.max(2, folder.apps.length));
         const rows = Math.max(1, Math.ceil(folder.apps.length / cols));
+        const tiles = [];
         folder.apps.forEach((id, i) => {
             const tile = this._makeTile(id, folder);
             if (!tile)
                 return;
             tile.set_position((i % cols) * (tw + gap), Math.floor(i / cols) * (th + gap));
             this._grid.add_child(tile);
+            tiles.push(tile);
         });
         this._grid.set_size(cols * tw + (cols - 1) * gap, rows * th + (rows - 1) * gap);
 
         this.actor.set_position(0, 0);
         this.actor.set_size(monitor.width, monitor.height);
+        this.actor.opacity = 0;
         this.actor.show();
         // Center the panel once it has its natural size.
         const [, natW] = this._panel.get_preferred_width(-1);
@@ -510,6 +523,67 @@ export class KosFolderView {
         this._panel.set_position(
             Math.round((monitor.width - natW) / 2),
             Math.round((monitor.height - 72 - natH) / 2));
+        this._pivotFromSource(natW, natH);
+        this._panel.set_scale(0.22, 0.22);
+        this._panel.opacity = 0;
+        if (already) {
+            this.actor.opacity = 255;
+            this._panel.set_scale(1, 1);
+            this._panel.opacity = 255;
+            return;
+        }
+        tween(this.actor, {opacity: 255, duration: OPEN_MS, easing: easeOutCubic});
+        tween(this._panel, {
+            scale: 1,
+            opacity: 255,
+            duration: OPEN_MS,
+            easing: easeOutQuint,
+        });
+        tiles.forEach((tile, i) => {
+            tile.opacity = 0;
+            tile.set_pivot_point(0.5, 0.5);
+            tile.set_scale(0.92, 0.92);
+            const id = after(80 + i * STAGGER_MS, () => {
+                tween(tile, {
+                    opacity: 255,
+                    scale: 1,
+                    duration: STAGGER_DUR_MS,
+                    easing: easeOutCubic,
+                });
+            });
+            this._staggerIds.push(id);
+        });
+    }
+
+    _pivotFromSource(panelW, panelH) {
+        const panel = this._panel;
+        panel.set_pivot_point(0.5, 0.5);
+        const src = this._source;
+        if (!src || typeof src.get_transformed_position !== 'function')
+            return;
+        try {
+            const [sx, sy] = src.get_transformed_position();
+            const [sw, sh] = src.get_transformed_size();
+            const [px, py] = panel.get_transformed_position();
+            if (panelW < 1 || panelH < 1)
+                return;
+            panel.set_pivot_point(
+                (sx + sw / 2 - px) / panelW,
+                (sy + sh / 2 - py) / panelH);
+        } catch (_e) {
+            panel.set_pivot_point(0.5, 0.5);
+        }
+    }
+
+    _cancelStagger() {
+        for (const id of this._staggerIds) {
+            try {
+                GLib.source_remove(id);
+            } catch (_e) {
+                // already fired
+            }
+        }
+        this._staggerIds = [];
     }
 
     // Put the title in edit mode with the name selected (right-click
@@ -522,13 +596,42 @@ export class KosFolderView {
         this._title.clutter_text.set_selection(0, -1);
     }
 
-    close() {
-        if (!this.actor.visible)
+    close({snap = false} = {}) {
+        if (this._closing && !snap)
+            return;
+        if (!this.actor.visible && !this._closing)
             return;
         this._commitTitle(false);
-        this.actor.hide();
-        this.folder = null;
-        this._onClosed?.();
+        this._cancelStagger();
+        const finish = () => {
+            stop(this.actor);
+            stop(this._panel);
+            this.actor.hide();
+            this.actor.opacity = 255;
+            this._panel.set_scale(1, 1);
+            this._panel.opacity = 255;
+            this._panel.set_pivot_point(0.5, 0.5);
+            this.folder = null;
+            this._source = null;
+            this._closing = false;
+            this._onClosed?.();
+        };
+        if (snap) {
+            finish();
+            return;
+        }
+        this._closing = true;
+        const [, natW] = this._panel.get_preferred_width(-1);
+        const [, natH] = this._panel.get_preferred_height(natW);
+        this._pivotFromSource(natW, natH);
+        tween(this.actor, {opacity: 0, duration: CLOSE_MS, easing: easeOutCubic});
+        tween(this._panel, {
+            scale: 0.22,
+            opacity: 0,
+            duration: CLOSE_MS,
+            easing: easeOutQuint,
+            onComplete: finish,
+        });
     }
 
     _commitTitle(unfocus) {
@@ -544,11 +647,14 @@ export class KosFolderView {
 
     handleDragOver(source) {
         if (source?.kind === 'folder-app')
-            this.close();
+            this.close({snap: true});
         return DND.DragMotionResult.CONTINUE;
     }
 
     destroy() {
+        this._cancelStagger();
+        stop(this.actor);
+        stop(this._panel);
         endPendingEdit(this._title);
         this.actor.destroy();
     }

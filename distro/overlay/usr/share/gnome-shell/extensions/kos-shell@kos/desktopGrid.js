@@ -32,6 +32,7 @@ import {
     saveLayout, unpin,
 } from './folders.js';
 import {closeContextMenu, openContextMenu} from './contextMenu.js';
+import {CLOSE_MS, OPEN_MS, SWIPE_MS, after, easeOutCubic, easeOutQuint, stop, tween} from './anim.js';
 
 export const GRID_COLS = 7;
 export const ICON_SIZE = 72; // all-apps overlay only; the home grid sizes from the screen
@@ -64,12 +65,8 @@ function clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
 }
 
-function easeOutCubic(t) {
-    return 1 - Math.pow(1 - t, 3);
-}
-
-// Smooth icon scale on hover without a background box (actor.ease() would
-// snap because enable-animations is false).
+// Smooth icon scale on hover without a background box. Tweens go through
+// anim.js because actor.ease() snaps with enable-animations=false.
 function attachHoverScale(button, box, iconOrFn) {
     const getIcon = typeof iconOrFn === 'function' ? iconOrFn : () => iconOrFn;
     button.clip_to_allocation = false;
@@ -78,19 +75,11 @@ function attachHoverScale(button, box, iconOrFn) {
     initIcon.clip_to_allocation = false;
     initIcon.set_pivot_point(0.5, 0.5);
 
-    let tick = 0;
     let target = 1;
-    const stop = () => {
-        if (!tick)
-            return;
-        GLib.source_remove(tick);
-        tick = 0;
-    };
     const animateTo = next => {
         if (target === next)
             return;
         target = next;
-        stop();
         const cur = getIcon();
         if (!cur)
             return;
@@ -98,29 +87,18 @@ function attachHoverScale(button, box, iconOrFn) {
         cur.set_pivot_point(0.5, 0.5);
         const from = cur.scale_x || 1;
         if (Math.abs(next - from) < 0.001) {
+            stop(cur);
             cur.set_scale(next, next);
             return;
         }
-        const dur = next > from ? 180 : 150;
-        const start = GLib.get_monotonic_time();
-        tick = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
-            const actor = getIcon();
-            if (!actor || !actor.get_stage()) {
-                tick = 0;
-                return GLib.SOURCE_REMOVE;
-            }
-            const p = Math.min(1, (GLib.get_monotonic_time() - start) / (dur * 1000));
-            const s = from + (next - from) * easeOutCubic(p);
-            actor.set_scale(s, s);
-            if (p >= 1) {
-                tick = 0;
-                return GLib.SOURCE_REMOVE;
-            }
-            return GLib.SOURCE_CONTINUE;
+        tween(cur, {
+            scale: next,
+            duration: next > from ? 180 : 150,
+            easing: easeOutCubic,
         });
     };
     button.connect('notify::hover', () => animateTo(button.hover ? 1.09 : 1));
-    button.connect('destroy', stop);
+    button.connect('destroy', () => stop(getIcon()));
 }
 
 export class KosDesktopGrid {
@@ -131,6 +109,8 @@ export class KosDesktopGrid {
         this._backdrop = null;
         this._dots = null;
         this._page = 0;
+        this._sliding = false;
+        this._didIntro = false;
         this._renamingFile = null;
         // Once the default Utilities folder has been created (fresh layout
         // or one-time migration), this stays true so deleting it never
@@ -165,7 +145,7 @@ export class KosDesktopGrid {
             if (event.get_button() !== Clutter.BUTTON_SECONDARY)
                 return Clutter.EVENT_PROPAGATE;
             const [x, y] = event.get_coords();
-            this._folderView?.close();
+            this._folderView?.close({snap: true});
             openContextMenu(x, y, [
                 {label: 'New File', action: () => this._newFile(this._cellIndexAt(x, y))},
                 {label: 'New Folder', action: () => this._newDesktopDir(this._cellIndexAt(x, y))},
@@ -222,6 +202,7 @@ export class KosDesktopGrid {
     }
 
     disable() {
+        this._cancelSlide(true);
         closeContextMenu();
         for (const [obj, id] of this._signals)
             obj.disconnect(id);
@@ -270,9 +251,9 @@ export class KosDesktopGrid {
         if (openFid) {
             const f = this._items.find(e => e.type === 'folder' && e.fid === openFid);
             if (f)
-                this._folderView.open(f, Main.layoutManager.primaryMonitor);
+                this._folderView.open(f, Main.layoutManager.primaryMonitor, this._folderIconActor(f));
             else
-                this._folderView.close();
+                this._folderView.close({snap: true});
         }
     }
 
@@ -421,9 +402,9 @@ export class KosDesktopGrid {
             if (this._folderView?.isOpen) {
                 const f = this._items.find(e => e.type === 'folder' && e === this._folderView.folder);
                 if (f)
-                    this._folderView.open(f, Main.layoutManager.primaryMonitor);
+                    this._folderView.open(f, Main.layoutManager.primaryMonitor, this._folderIconActor(f));
                 else
-                    this._folderView.close();
+                    this._folderView.close({snap: true});
             }
         });
     }
@@ -480,15 +461,76 @@ export class KosDesktopGrid {
         return {iconSize, colW, rowH, labelH, rows, perPage, left, top, padY};
     }
 
-    _layoutIcons() {
+    _pageIcons() {
+        const keep = new Set([this._backdrop, this._dots, this._folderView?.actor]);
+        return this._actor
+            ? this._actor.get_children().filter(c => !keep.has(c))
+            : [];
+    }
+
+    _folderIconActor(folder) {
+        return this._pageIcons().find(c => c._kosFolder === folder) || null;
+    }
+
+    _cancelSlide(destroyOld = false) {
+        const old = this._slideOld || [];
+        this._sliding = false;
+        this._slideOld = null;
+        for (const icon of this._pageIcons().concat(old)) {
+            stop(icon);
+            try {
+                icon.translation_x = 0;
+            } catch (_e) {
+                // destroyed
+            }
+        }
+        if (destroyOld) {
+            for (const icon of old) {
+                try {
+                    icon.destroy();
+                } catch (_e) {
+                    // already gone
+                }
+            }
+        }
+    }
+
+    _placePageIcons(pageItems, m, tileW, tileH) {
+        const icons = [];
+        pageItems.forEach((item, i) => {
+            const col = i % GRID_COLS;
+            const row = Math.floor(i / GRID_COLS);
+            let icon = null;
+            if (item.type === 'folder')
+                icon = this._makeFolderIcon(item, tileW, m.iconSize);
+            else if (item.type === 'file' || item.type === 'dir')
+                icon = this._makeFileIcon(item, tileW, m.iconSize);
+            else
+                icon = this._makeIcon(item, tileW, m.iconSize);
+            if (!icon)
+                return;
+            icon.set_size(tileW, tileH);
+            icon.set_position(
+                m.left + col * m.colW + Math.round((m.colW - tileW) / 2),
+                m.top + row * m.rowH + Math.round((m.rowH - tileH) / 2));
+            this._actor.add_child(icon);
+            icons.push(icon);
+        });
+        return icons;
+    }
+
+    _layoutIcons({slideFrom = 0} = {}) {
         if (!this._actor)
             return;
 
-        // Drop previous icon actors; keep backdrop, dots and the folder view.
-        const keep = new Set([this._backdrop, this._dots, this._folderView?.actor]);
-        for (const child of this._actor.get_children()) {
-            if (!keep.has(child))
-                child.destroy();
+        const oldIcons = slideFrom ? this._pageIcons() : [];
+        if (!slideFrom) {
+            this._cancelSlide(true);
+            const keep = new Set([this._backdrop, this._dots, this._folderView?.actor]);
+            for (const child of this._actor.get_children()) {
+                if (!keep.has(child))
+                    child.destroy();
+            }
         }
 
         const wa = this._workArea();
@@ -509,24 +551,7 @@ export class KosDesktopGrid {
 
         this._ensureFolderView();
 
-        pageItems.forEach((item, i) => {
-            const col = i % GRID_COLS;
-            const row = Math.floor(i / GRID_COLS);
-            let icon = null;
-            if (item.type === 'folder')
-                icon = this._makeFolderIcon(item, tileW, m.iconSize);
-            else if (item.type === 'file' || item.type === 'dir')
-                icon = this._makeFileIcon(item, tileW, m.iconSize);
-            else
-                icon = this._makeIcon(item, tileW, m.iconSize);
-            if (!icon)
-                return;
-            icon.set_size(tileW, tileH);
-            icon.set_position(
-                m.left + col * m.colW + Math.round((m.colW - tileW) / 2),
-                m.top + row * m.rowH + Math.round((m.rowH - tileH) / 2));
-            this._actor.add_child(icon);
-        });
+        const newIcons = this._placePageIcons(pageItems, m, tileW, tileH);
         if (this._folderView)
             this._actor.set_child_above_sibling(this._folderView.actor, null);
 
@@ -534,6 +559,56 @@ export class KosDesktopGrid {
         log(`kos-shell: launchpad ${items.length} items, page ${this._page + 1}/${pages}, ` +
             `${m.rows} rows x ${GRID_COLS} cols, icon ${m.iconSize}px, cell ${m.colW}x${m.rowH}, ` +
             `block at ${m.left},${m.top}`);
+
+        if (slideFrom && oldIcons.length) {
+            const dx = slideFrom * wa.w;
+            this._sliding = true;
+            this._slideOld = oldIcons;
+            for (const icon of newIcons)
+                icon.translation_x = dx;
+            let left = oldIcons.length + newIcons.length;
+            const done = () => {
+                left -= 1;
+                if (left > 0)
+                    return;
+                for (const icon of oldIcons) {
+                    try {
+                        icon.destroy();
+                    } catch (_e) {
+                        // gone
+                    }
+                }
+                for (const icon of newIcons) {
+                    try {
+                        icon.translation_x = 0;
+                    } catch (_e) {
+                        // gone
+                    }
+                }
+                this._sliding = false;
+                this._slideOld = null;
+            };
+            for (const icon of oldIcons)
+                tween(icon, {translationX: -dx, duration: SWIPE_MS, easing: easeOutCubic, onComplete: done});
+            for (const icon of newIcons)
+                tween(icon, {translationX: 0, duration: SWIPE_MS, easing: easeOutCubic, onComplete: done});
+            return;
+        }
+
+        if (!this._didIntro && !Main.layoutManager._startingUp && newIcons.length) {
+            this._didIntro = true;
+            newIcons.forEach((icon, i) => {
+                icon.opacity = 0;
+                icon.set_pivot_point(0.5, 0.5);
+                icon.set_scale(0.96, 0.96);
+                after(i * 12, () => tween(icon, {
+                    opacity: 255,
+                    scale: 1,
+                    duration: OPEN_MS,
+                    easing: easeOutCubic,
+                }));
+            });
+        }
     }
 
     // An app tile. `item` is a grid entry ({type: 'app', id}); inside an
@@ -624,8 +699,9 @@ export class KosDesktopGrid {
         });
         button.connect('captured-event', commitEditsOnPress);
         attachHoverScale(button, box, square);
+        button._kosFolder = folder;
         button.connect('clicked', () =>
-            this._folderView.open(folder, Main.layoutManager.primaryMonitor));
+            this._folderView.open(folder, Main.layoutManager.primaryMonitor, button));
         this._onRightClick(button, (x, y) => openContextMenu(x, y, [
             {label: 'Rename', action: () => this._openFolder(folder, true)},
             {label: 'Delete Folder', action: () => this._deleteFolder(folder)},
@@ -804,7 +880,7 @@ export class KosDesktopGrid {
         if (inFolder)
             entries.push({label: 'Remove from Folder', action: () => this._place(source, this._items.indexOf(inFolder) + 1, null)});
         entries.push({label: 'Add to Dock', action: () => {
-            this._folderView?.close();
+            this._folderView?.close({snap: true});
             pinAt(appId, getPins().length);
         }});
         openContextMenu(x, y, entries);
@@ -826,14 +902,14 @@ export class KosDesktopGrid {
         this._removeId(appId);
         if (!top)
             index = index >= 0 ? index + 1 : this._items.length;
-        this._folderView?.close();
+        this._folderView?.close({snap: true});
         this._newFolder([appId], index);
     }
 
     _openFolder(folder, rename) {
         if (!this._folderView || !this._items.includes(folder))
             return;
-        this._folderView.open(folder, Main.layoutManager.primaryMonitor);
+        this._folderView.open(folder, Main.layoutManager.primaryMonitor, this._folderIconActor(folder));
         if (rename)
             this._folderView.beginRename();
     }
@@ -844,7 +920,7 @@ export class KosDesktopGrid {
         if (i < 0)
             return;
         if (this._folderView?.folder === folder)
-            this._folderView.close();
+            this._folderView.close({snap: true});
         this._items.splice(i, 1, ...folder.apps.map(id => ({type: 'app', id})));
         this._commit();
     }
@@ -1076,14 +1152,17 @@ export class KosDesktopGrid {
     }
 
     _setPage(page) {
+        if (this._sliding)
+            return;
         const items = this._items;
         const {perPage} = this._metrics(this._workArea(), items.length);
         const pages = Math.max(1, Math.ceil(items.length / perPage));
         const next = Math.max(0, Math.min(pages - 1, page));
         if (next === this._page)
             return;
+        const dir = next > this._page ? 1 : -1;
         this._page = next;
-        this._layoutIcons();
+        this._layoutIcons({slideFrom: dir});
     }
 
     _onScroll(_actor, event) {
@@ -1238,16 +1317,43 @@ class KosAllAppsOverlay extends St.Widget {
         this._panel.add_child(this._grid);
         this.add_child(this._panel);
         this.connect('button-press-event', () => {
-            this.hide();
+            this.dismiss();
             return Clutter.EVENT_STOP;
         });
     }
 
     toggle() {
         if (this.visible)
-            this.hide();
+            this.dismiss();
         else
             this.showAll();
+    }
+
+    hide() {
+        this.dismiss(true);
+    }
+
+    dismiss(snap = false) {
+        if (!this.visible)
+            return;
+        const finish = () => {
+            super.hide();
+            this.opacity = 255;
+            this._panel.set_scale(1, 1);
+        };
+        if (snap) {
+            stop(this);
+            stop(this._panel);
+            finish();
+            return;
+        }
+        tween(this, {opacity: 0, duration: CLOSE_MS, easing: easeOutCubic});
+        tween(this._panel, {
+            scale: 0.96,
+            duration: CLOSE_MS,
+            easing: easeOutQuint,
+            onComplete: finish,
+        });
     }
 
     showAll() {
@@ -1269,12 +1375,17 @@ class KosAllAppsOverlay extends St.Widget {
             }));
             box.connect('button-press-event', () => {
                 launchApp(app);
-                this.hide();
+                this.dismiss();
                 return Clutter.EVENT_STOP;
             });
             this._grid.add_child(box);
         }
+        this._panel.set_pivot_point(0.5, 0.5);
+        this._panel.set_scale(0.96, 0.96);
+        this.opacity = 0;
         this.visible = true;
         this.grab_key_focus();
+        tween(this, {opacity: 255, duration: OPEN_MS, easing: easeOutCubic});
+        tween(this._panel, {scale: 1, duration: OPEN_MS, easing: easeOutQuint});
     }
 });

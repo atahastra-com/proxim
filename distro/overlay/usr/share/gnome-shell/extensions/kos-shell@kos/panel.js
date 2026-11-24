@@ -11,6 +11,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {hookBoxPointer, unhookBoxPointer} from './anim.js';
 
 export const PANEL_HEIGHT = 72;
 // The calendar (clock, left) and quick settings (right) popups float as
@@ -147,6 +148,7 @@ export class KosPanel {
             if (!pointer)
                 continue;
             pointer.add_style_class_name('kos-popup-boxpointer');
+            hookBoxPointer(pointer);
             const reposition = pointer._reposition;
             pointer._reposition = function (box) {
                 reposition.call(this, box);
@@ -158,6 +160,7 @@ export class KosPanel {
 
     _restorePopups() {
         for (const pointer of this._placed || []) {
+            unhookBoxPointer(pointer);
             delete pointer._reposition;
             pointer.remove_style_class_name('kos-popup-boxpointer');
         }
