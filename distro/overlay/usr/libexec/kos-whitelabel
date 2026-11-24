@@ -245,4 +245,10 @@ if command -v update-desktop-database >/dev/null && [[ -d /usr/share/application
   update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 fi
 
+if command -v update-initramfs >/dev/null && [[ -f /usr/share/plymouth/themes/kos/logo.png ]]; then
+  if [[ -n "$(find /boot -maxdepth 1 -name 'initrd.img-*' ! -newer /usr/share/plymouth/themes/kos/logo.png -print -quit 2>/dev/null)" ]]; then
+    update-initramfs -u >/dev/null 2>&1 || true
+  fi
+fi
+
 echo "kos-whitelabel: done (purged=${purged})"
