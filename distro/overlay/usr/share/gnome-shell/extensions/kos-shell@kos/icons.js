@@ -66,9 +66,6 @@ const _giconCache = new Map();
 // ~13% padding on each side of artwork that sits on the shared tile.
 const INSET = 0.74;
 const SQUIRCLE_N = 5;
-// Opaque dark slate, close to folder tiles, so every non-bleed icon
-// shares one background. 0xRRGGBBAA for GdkPixbuf.fill().
-const TILE_FILL = ((0x3a << 24) | (0x3e << 16) | (0x4a << 8) | 0xff) >>> 0;
 const MIN_EDGE_FILL = 0.55;
 const EDGE_SAMPLE_INSET = 0.03;
 
@@ -252,21 +249,49 @@ function isFullBleedSquircle(pb) {
     return Math.min(top, bot, lef, rig) >= MIN_EDGE_FILL;
 }
 
-function applySquircleMask(pb) {
+function applySquircleMask(pb, addGlass = false) {
     const {w, h, stride, ch, pixels} = pixbufBytes(pb);
     const cx = (w - 1) / 2;
     const cy = (h - 1) / 2;
     const a = Math.min(cx, cy);
     const aa = 1 + 2.5 / a;
+    const rimIn = Math.pow(Math.max(0, 1 - 1.6 / a), SQUIRCLE_N);
     const n = SQUIRCLE_N;
+    const denom = Math.max(1, h - 1);
     for (let y = 0; y < h; y++) {
+        const yt = y / denom;
+        const gr0 = 68 - 32 * yt;
+        const gg0 = 74 - 34 * yt;
+        const gb0 = 94 - 40 * yt;
+        const ga0 = (148 + 20 * yt) / 255;
+        const rimAlpha = 0.14 * (1 - 0.55 * yt);
         for (let x = 0; x < w; x++) {
             const v = Math.pow(Math.abs(x - cx) / a, n) + Math.pow(Math.abs(y - cy) / a, n);
             let m = 1;
             if (v > 1)
                 m = v >= aa ? 0 : 1 - (v - 1) / (aa - 1);
-            const i = y * stride + x * ch + 3;
-            pixels[i] = Math.round(pixels[i] * m);
+            const i = y * stride + x * ch;
+            if (addGlass) {
+                let gr = gr0, gg = gg0, gb = gb0, ga = ga0;
+                if (v >= rimIn && v < aa) {
+                    const rim = rimAlpha * (v <= 1 ? (v - rimIn) / Math.max(0.001, 1 - rimIn) : 1);
+                    gr = gr + (255 - gr) * rim;
+                    gg = gg + (255 - gg) * rim;
+                    gb = gb + (255 - gb) * rim;
+                    ga = Math.min(1, ga + (1 - ga) * rim * 0.6);
+                }
+                const ia = pixels[i + 3] / 255;
+                const inv = ga * (1 - ia);
+                const outA = ia + inv;
+                if (outA > 0) {
+                    pixels[i] = Math.round((pixels[i] * ia + gr * inv) / outA);
+                    pixels[i + 1] = Math.round((pixels[i + 1] * ia + gg * inv) / outA);
+                    pixels[i + 2] = Math.round((pixels[i + 2] * ia + gb * inv) / outA);
+                }
+                pixels[i + 3] = Math.round(outA * 255 * m);
+            } else {
+                pixels[i + 3] = Math.round(pixels[i + 3] * m);
+            }
         }
     }
     return pixbufFromPixels(w, h, stride, pixels);
@@ -310,14 +335,13 @@ function tilePixbuf(src, size) {
     // fill() writes in place (0xRRGGBBAA). Do not use new_from_bytes
     // here: GdkPixbuf.composite cannot reliably paint onto that kind of
     // pixbuf in GJS.
-    if (isFullBleedSquircle(src)) {
-        dest.fill(0x00000000);
+    dest.fill(0x00000000);
+    const fullBleed = isFullBleedSquircle(src);
+    if (fullBleed)
         coverInto(src, dest);
-    } else {
-        dest.fill(TILE_FILL);
+    else
         scaleInto(src, dest, INSET);
-    }
-    return applySquircleMask(dest);
+    return applySquircleMask(dest, !fullBleed);
 }
 
 function pixbufToGIcon(pb) {
