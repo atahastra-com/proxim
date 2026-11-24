@@ -168,11 +168,7 @@ PRC
 
 install_overlays() {
   echo "Applying kos branding and desktop defaults"
-  "${SUDO[@]}" cp "${CFG}/os-release" "$MNT/etc/os-release"
-  "${SUDO[@]}" cp "${CFG}/os-release" "$MNT/usr/lib/os-release"
-  "${SUDO[@]}" cp "${CFG}/hostname" "$MNT/etc/hostname"
-  "${SUDO[@]}" cp "${CFG}/hosts" "$MNT/etc/hosts"
-  "${SUDO[@]}" cp "${CFG}/grub.default" "$MNT/etc/default/grub"
+  "${DISTRO}/apply-branding.sh" "$MNT"
   "${SUDO[@]}" mkdir -p "$MNT/etc/gdm3"
   # Debian reads daemon.conf; Ubuntu-style custom.conf is kept in sync.
   # Template KOS_USER so overriding KOS_USER=... keeps autologin working.
@@ -248,6 +244,9 @@ MOD
     if [[ -f /etc/xdg/autostart/gnome-initial-setup-first-login.desktop ]]; then
       printf '\nHidden=true\n' >> /etc/xdg/autostart/gnome-initial-setup-first-login.desktop
     fi
+    if [[ -x /usr/libexec/kos-whitelabel ]]; then
+      /usr/libexec/kos-whitelabel
+    fi
     chown -R ${KOS_USER}:${KOS_USER} /home/${KOS_USER}
 
     glib-compile-schemas /usr/share/glib-2.0/schemas
@@ -321,7 +320,7 @@ kos 0.1
 username: ${KOS_USER}
 password: ${KOS_PASSWORD}
 hostname: kos
-desktop: GNOME (autologin)
+desktop: kos (autologin)
 Change the password after the first login (Settings → Users, or passwd).
 LOGIN
   chmod 600 "$LOGIN"

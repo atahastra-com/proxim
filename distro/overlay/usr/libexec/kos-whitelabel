@@ -1,0 +1,224 @@
+#!/bin/bash
+# Idempotent. Drop GNOME Help / Tour / first-run setup so the image looks
+# like kos, not stock GNOME, and keep apt from pulling them back.
+#
+# yelp and gnome-user-docs are hard Depends of the gnome-core metapackage.
+# Other gnome-core Depends are marked manual first so purging Help only
+# removes the metapackage, not the desktop itself. If a simulated purge
+# would take gnome-shell, gdm or another protected package with it, we
+# skip the purge and hide the leftover .desktop files instead.
+#
+# Safe without network. Called from a fresh build and from distro-update
+# even when KOS_SKIP_APT=1.
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+export LANG="${LANG:-C.UTF-8}"
+export LC_ALL=C
+
+DROP=(yelp gnome-user-docs gnome-tour gnome-initial-setup)
+# Also hide these .desktop ids if a package left them behind.
+DESKTOPS=(
+  yelp.desktop
+  org.gnome.Yelp.desktop
+  gnome-tour.desktop
+  org.gnome.Tour.desktop
+  gnome-initial-setup.desktop
+  org.gnome.InitialSetup.desktop
+)
+PROTECTED=(
+  gnome-shell
+  gdm3
+  gdm
+  gnome-control-center
+  gnome-software
+  gnome-session
+  gnome-settings-daemon
+  mutter
+  nautilus
+  gnome-terminal
+  firefox-esr
+  network-manager
+  packagekit
+)
+
+installed() {
+  dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'install ok installed'
+}
+
+# Keep every other already-installed gnome-core dependency if the
+# metapackage itself goes away with yelp.
+mark_gnome_core_deps_manual() {
+  installed gnome-core || return 0
+  local deps=() d
+  while read -r d; do
+    [[ -z "$d" || "$d" == *'<'* ]] && continue
+    case "$d" in
+      yelp|gnome-user-docs|gnome-tour|gnome-initial-setup) continue ;;
+    esac
+    if installed "$d"; then
+      deps+=("$d")
+    fi
+  done < <(apt-cache depends gnome-core 2>/dev/null | awk '/^  Depends:/{print $2}')
+  if ((${#deps[@]} > 0)); then
+    apt-mark manual "${deps[@]}" >/dev/null || true
+  fi
+}
+
+# True if a simulated purge would remove a package we must keep.
+would_remove_protected() {
+  local sim p
+  sim="$(apt-get -s purge "$@" 2>/dev/null || true)"
+  for p in "${PROTECTED[@]}"; do
+    if printf '%s\n' "$sim" | grep -qE "^(Remv|Purg) ${p} "; then
+      echo "kos-whitelabel: not purging (would remove ${p})"
+      return 0
+    fi
+  done
+  return 1
+}
+
+hide_or_clear_desktop() {
+  local id="$1"
+  local sys="/usr/share/applications/${id}"
+  local localf="/usr/local/share/applications/${id}"
+  if [[ -f "$sys" ]]; then
+    mkdir -p /usr/local/share/applications
+    cp -a "$sys" "$localf"
+    if grep -q '^NoDisplay=' "$localf"; then
+      sed -i 's/^NoDisplay=.*/NoDisplay=true/' "$localf"
+    else
+      printf '\nNoDisplay=true\n' >> "$localf"
+    fi
+    if grep -q '^Hidden=' "$localf"; then
+      sed -i 's/^Hidden=.*/Hidden=true/' "$localf"
+    else
+      printf 'Hidden=true\n' >> "$localf"
+    fi
+  else
+    # Don't leave a stub that could show up as a broken app once purged.
+    rm -f "$localf"
+  fi
+}
+
+# Also hide the first-login autostart if the package is still present.
+hide_initial_setup_autostart() {
+  local f=/etc/xdg/autostart/gnome-initial-setup-first-login.desktop
+  if [[ -f "$f" ]] && ! grep -q '^Hidden=true' "$f"; then
+    printf '\nHidden=true\n' >> "$f"
+  fi
+  mkdir -p /etc/skel/.config
+  if [[ ! -f /etc/skel/.config/gnome-initial-setup-done ]]; then
+    echo yes > /etc/skel/.config/gnome-initial-setup-done
+  fi
+  local home
+  for home in /home/*; do
+    [[ -d "$home" ]] || continue
+    mkdir -p "${home}/.config"
+    if [[ ! -f "${home}/.config/gnome-initial-setup-done" ]]; then
+      echo yes > "${home}/.config/gnome-initial-setup-done"
+      if id "$(basename "$home")" >/dev/null 2>&1; then
+        chown "$(basename "$home"):$(basename "$home")" "${home}/.config/gnome-initial-setup-done" 2>/dev/null || true
+      fi
+    fi
+  done
+}
+
+# Drop gone apps from saved launchpad layouts (the grid already skips
+# missing ids; this just keeps the file tidy).
+clean_launchpad() {
+  local f python
+  python="$(command -v python3 || true)"
+  [[ -n "$python" ]] || return 0
+  for f in /home/*/.config/kos/launchpad.json; do
+    [[ -f "$f" ]] || continue
+    "$python" - "$f" << 'PY' || true
+import json, sys
+path = sys.argv[1]
+drop = {"yelp.desktop", "org.gnome.Yelp.desktop",
+        "gnome-tour.desktop", "org.gnome.Tour.desktop",
+        "gnome-initial-setup.desktop", "org.gnome.InitialSetup.desktop"}
+try:
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+except Exception:
+    sys.exit(0)
+items = data.get("items")
+if not isinstance(items, list):
+    sys.exit(0)
+changed = False
+out = []
+for e in items:
+    if isinstance(e, str):
+        if e in drop:
+            changed = True
+            continue
+        out.append(e)
+        continue
+    if isinstance(e, dict) and isinstance(e.get("apps"), list):
+        apps = [a for a in e["apps"] if a not in drop]
+        if apps != e["apps"]:
+            e = dict(e)
+            e["apps"] = apps
+            changed = True
+        if apps or e.get("keep"):
+            out.append(e)
+        else:
+            changed = True
+        continue
+    out.append(e)
+if changed:
+    data["items"] = out
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=1)
+        fh.write("\n")
+PY
+  done
+}
+
+echo "kos-whitelabel: dropping Help / Tour / initial setup if present"
+
+mark_gnome_core_deps_manual
+
+to_purge=()
+for p in "${DROP[@]}"; do
+  installed "$p" && to_purge+=("$p")
+done
+
+purged=0
+if ((${#to_purge[@]} > 0)); then
+  if would_remove_protected "${to_purge[@]}"; then
+    echo "kos-whitelabel: falling back to hiding .desktop files"
+  else
+    if apt-get purge -y "${to_purge[@]}"; then
+      purged=1
+      # gnome-core is a metapackage and may now be auto-removable; drop
+      # only that metapackage if it is no longer needed.
+      if installed gnome-core; then
+        if apt-get -s remove gnome-core 2>/dev/null | grep -qE '^(Remv|Purg) gnome-core '; then
+          if ! would_remove_protected gnome-core; then
+            apt-get remove -y gnome-core || true
+          fi
+        fi
+      fi
+    else
+      echo "WARN: kos-whitelabel: apt-get purge failed; hiding leftovers"
+    fi
+  fi
+fi
+
+# Hold even if the packages are not installed, so later gnome-core
+# upgrades cannot pull Help or Tour back in.
+apt-mark hold "${DROP[@]}" >/dev/null || true
+
+hide_initial_setup_autostart
+for id in "${DESKTOPS[@]}"; do
+  hide_or_clear_desktop "$id"
+done
+clean_launchpad
+
+# Icon cache for the kos logo, if the theme dir exists.
+if command -v gtk-update-icon-cache >/dev/null && [[ -d /usr/share/icons/hicolor ]]; then
+  gtk-update-icon-cache -f /usr/share/icons/hicolor >/dev/null 2>&1 || true
+fi
+
+echo "kos-whitelabel: done (purged=${purged})"

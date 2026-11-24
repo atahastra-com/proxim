@@ -16,7 +16,9 @@ pkexec
 network-manager
 network-manager-gnome
 
-# Graphical desktop (GNOME, polished and relatively compact)
+# Graphical desktop (GNOME is the engine; the UI is kos).
+# gnome-core pulls yelp and gnome-user-docs; /usr/libexec/kos-whitelabel
+# purges and holds those, plus gnome-tour and gnome-initial-setup.
 gnome-core
 gdm3
 gnome-terminal

@@ -95,6 +95,7 @@ MOUNTED=1
 
 start="$(date +%s)"
 "${DISTRO}/sync-overlay.sh" "$MNT"
+"${DISTRO}/apply-branding.sh" "$MNT"
 
 # Bind-mount so we can chroot to compile schemas and refresh dconf
 "${SUDO[@]}" mount --bind /dev "$MNT/dev"
@@ -114,6 +115,11 @@ glib-compile-schemas /usr/share/glib-2.0/schemas
 dconf update
 systemd-tmpfiles --create /usr/lib/tmpfiles.d/kos-x11.conf || true
 export DEBIAN_FRONTEND=noninteractive
+# Hide/purge GNOME Help and other first-run apps. Offline, so it runs
+# even when KOS_SKIP_APT=1.
+if [[ -x /usr/libexec/kos-whitelabel ]]; then
+  /usr/libexec/kos-whitelabel
+fi
 # Chroot has no resolver unless we bind /etc/resolv.conf; skip apt when
 # KOS_SKIP_APT=1 or DNS is down so a CSS/JS tweak does not wait minutes.
 if [[ "${KOS_SKIP_APT:-0}" == 1 ]]; then
