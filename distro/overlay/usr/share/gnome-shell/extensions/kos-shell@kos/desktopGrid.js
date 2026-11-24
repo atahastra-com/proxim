@@ -38,6 +38,16 @@ export const MAX_GRID_WIDTH = 1100;
 export const LABEL_GAP = 8;
 export const DOTS_HEIGHT = 24;
 
+// Apps that start inside the "Utilities" folder on a fresh home screen.
+export const DEFAULT_UTILITIES = [
+    'org.gnome.Calculator.desktop',
+    'org.gnome.clocks.desktop',
+    'org.gnome.Characters.desktop',
+    'org.gnome.font-viewer.desktop',
+    'org.gnome.SystemMonitor.desktop',
+    'org.gnome.baobab.desktop',
+];
+
 function clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
 }
@@ -199,7 +209,7 @@ export class KosDesktopGrid {
             .filter(id => !pinned.has(id));
         const saved = loadLayout();
         if (!saved)
-            return home.map(id => ({type: 'app', id}));
+            return this._defaultItems(home);
 
         const used = new Set(pinned);
         const seenEntries = new Set();
@@ -245,6 +255,34 @@ export class KosDesktopGrid {
                 items.push({type: entry.isDir ? 'dir' : 'file', name: entry.name});
             }
         }
+        return items;
+    }
+
+    // First-run layout (no ~/.config/kos/launchpad.json yet): the small system
+    // tools go into one "Utilities" folder, sitting where the first of them
+    // would have been; everything else stays a plain icon. The folder is
+    // `keep`, so it never dissolves, even if the user drags apps out.
+    _defaultItems(homeIds) {
+        const present = homeIds.filter(id => DEFAULT_UTILITIES.includes(id));
+        const items = [];
+        let placed = false;
+        for (const id of homeIds) {
+            if (present.length < 2 || !DEFAULT_UTILITIES.includes(id)) {
+                items.push({type: 'app', id});
+            } else if (!placed) {
+                placed = true;
+                items.push({
+                    type: 'folder',
+                    fid: 'utilities',
+                    name: 'Utilities',
+                    apps: DEFAULT_UTILITIES.filter(u => present.includes(u)),
+                    keep: true,
+                });
+            }
+        }
+        // Files and folders already on the desktop still show up.
+        for (const entry of listUserDesktopEntries())
+            items.push({type: entry.isDir ? 'dir' : 'file', name: entry.name});
         return items;
     }
 
