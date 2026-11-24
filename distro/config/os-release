@@ -1,9 +1,9 @@
-PRETTY_NAME="kos 0.1"
-NAME="kos"
+PRETTY_NAME="Proxim OS 0.1"
+NAME="Proxim OS"
 VERSION_ID="0.1"
 VERSION="0.1"
 VERSION_CODENAME=trixie
-ID=kos
+ID=proxim
 ID_LIKE=debian
 HOME_URL="https://github.com"
 SUPPORT_URL="https://github.com"
