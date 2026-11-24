@@ -749,6 +749,10 @@
 .kos-lock .unlock-dialog-clock {
     spacing: 0;
 }
+.kos-lock .kos-lock-logo {
+    margin-bottom: 14px;
+    icon-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+}
 .kos-lock .unlock-dialog-clock-date {
     font-size: 22px;
     font-weight: 500;

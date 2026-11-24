@@ -14,6 +14,9 @@
 // runs in the 'unlock-dialog' session mode too (metadata.json), otherwise
 // GNOME would disable it, and this stylesheet, while the screen is locked.
 
+import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -75,6 +78,16 @@ export class KosLockScreen {
             const c = this._clock;
             if (c?._date && c?._time)
                 c.set_child_below_sibling(c._date, c._time);
+            // OS logo (os-release LOGO, e.g. proxim-logo) above the date.
+            if (c) {
+                const logo = new St.Icon({
+                    gicon: new Gio.ThemedIcon({name: GLib.get_os_info('LOGO') || 'proxim-logo'}),
+                    icon_size: 52,
+                    style_class: 'kos-lock-logo',
+                    x_align: Clutter.ActorAlign.CENTER,
+                });
+                c.insert_child_at_index(logo, 0);
+            }
             // Re-run the (patched) transition once so the blur, brightness
             // and clock lift are applied exactly once from a clean state.
             this._setTransitionProgress(this._adjustment?.value ?? 0);
