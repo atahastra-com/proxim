@@ -315,4 +315,30 @@ if command -v update-desktop-database >/dev/null && [[ -d /usr/share/application
   update-desktop-database /usr/share/applications >/dev/null 2>&1 || true
 fi
 
+# Wrap /usr/bin/nautilus so libkos-nautilus.so hides the built-in "Home"
+# sidebar row while keeping all user bookmarks visible.
+install_nautilus_wrapper() {
+  local target=/usr/bin/nautilus
+  local real=/usr/bin/nautilus.real
+  local lib=/usr/lib/kos/libkos-nautilus.so
+  [[ -e "$target" || -e "$real" ]] || return 0
+  [[ -f "$lib" ]] || return 0
+  if [[ -f "$target" ]] && ! grep -q KOS_NAUTILUS_WRAPPER "$target" 2>/dev/null; then
+    if [[ ! -e "$real" ]]; then
+      dpkg-divert --local --divert "$real" --rename --add "$target" || return 0
+    fi
+  fi
+  [[ -e "$real" ]] || return 0
+  cat > "$target" << 'WRAP'
+#!/bin/bash
+# KOS_NAUTILUS_WRAPPER
+if [[ -f /usr/lib/kos/libkos-nautilus.so ]]; then
+  export LD_PRELOAD="/usr/lib/kos/libkos-nautilus.so${LD_PRELOAD:+:$LD_PRELOAD}"
+fi
+exec /usr/bin/nautilus.real "$@"
+WRAP
+  chmod 755 "$target"
+}
+install_nautilus_wrapper
+
 echo "kos-whitelabel: done (purged=${purged})"
