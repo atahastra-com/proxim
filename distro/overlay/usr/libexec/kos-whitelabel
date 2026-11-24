@@ -24,6 +24,7 @@ DESKTOPS=(
   org.gnome.Tour.desktop
   gnome-initial-setup.desktop
   org.gnome.InitialSetup.desktop
+  gnome-online-accounts-panel.desktop
 )
 PROTECTED=(
   gnome-shell
@@ -215,6 +216,24 @@ for id in "${DESKTOPS[@]}"; do
   hide_or_clear_desktop "$id"
 done
 clean_launchpad
+
+# Keep only the kos wallpaper in Settings -> Appearance -> Background.
+prune_backgrounds() {
+  if installed gnome-backgrounds && ! would_remove_protected gnome-backgrounds; then
+    apt-get purge -y gnome-backgrounds >/dev/null || true
+  fi
+  apt-mark hold gnome-backgrounds >/dev/null 2>&1 || true
+
+  local xml
+  for xml in /usr/share/gnome-background-properties/*.xml; do
+    [[ -e "$xml" ]] || continue
+    if [[ "$(basename "$xml")" != "kos-backgrounds.xml" ]]; then
+      rm -f "$xml"
+    fi
+  done
+  rm -rf /usr/share/backgrounds/gnome /usr/share/backgrounds/debian*
+}
+prune_backgrounds
 
 # Icon cache for the kos logo, if the theme dir exists.
 if command -v gtk-update-icon-cache >/dev/null && [[ -d /usr/share/icons/hicolor ]]; then
