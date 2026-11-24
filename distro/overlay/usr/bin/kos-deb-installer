@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+"""Simple GTK4/Adwaita .deb Package Installer for kos."""
+
+import os
+import subprocess
+import sys
+import threading
+
+import gi
+
+gi.require_version('Gtk', '4.0')
+gi.require_version('Adw', '1')
+from gi.repository import Adw, Gio, GLib, Gtk
+
+
+def read_deb_info(deb_path):
+    """Read Package, Version, Architecture, Installed-Size, Maintainer, Description."""
+    fields = ['Package', 'Version', 'Architecture', 'Installed-Size', 'Maintainer', 'Description']
+    info = {}
+    for field in fields:
+        try:
+            out = subprocess.check_output(
+                ['dpkg-deb', '-f', deb_path, field],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+            info[field] = out
+        except subprocess.CalledProcessError:
+            info[field] = ''
+    return info
+
+
+def installed_version(pkg_name):
+    """Return installed version string if package is installed, else None."""
+    if not pkg_name:
+        return None
+    try:
+        out = subprocess.check_output(
+            ['dpkg-query', '-W', '-f=${Status}\t${Version}', pkg_name],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except subprocess.CalledProcessError:
+        return None
+    parts = out.split('\t', 1)
+    if len(parts) == 2 and 'install ok installed' in parts[0]:
+        return parts[1]
+    return None
+
+
+def format_size(kb_str):
+    try:
+        kb = int(kb_str)
+    except (TypeError, ValueError):
+        return 'Unknown'
+    if kb >= 1024:
+        return f'{kb / 1024:.1f} MB'
+    return f'{kb} KB'
+
+
+class DebInstallerWindow(Adw.ApplicationWindow):
+    def __init__(self, app, deb_path):
+        super().__init__(application=app, title='Package Installer')
+        self.set_default_size(500, 440)
+        self.deb_path = os.path.abspath(deb_path)
+        self.info = read_deb_info(self.deb_path)
+        self.pkg_name = self.info.get('Package', '')
+        self._busy = False
+        self._pulse_id = 0
+
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        toolbar.add_top_bar(header)
+
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        box.set_margin_top(16)
+        box.set_margin_bottom(20)
+        box.set_margin_start(20)
+        box.set_margin_end(20)
+
+        # Header summary row
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=14)
+        icon = Gtk.Image.new_from_icon_name('package-x-generic')
+        icon.set_pixel_size(56)
+        top.append(icon)
+
+        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        title_box.set_valign(Gtk.Align.CENTER)
+        title_box.set_hexpand(True)
+
+        self.name_label = Gtk.Label(
+            label=self.pkg_name or os.path.basename(self.deb_path),
+            xalign=0,
+        )
+        self.name_label.add_css_class('title-2')
+        title_box.append(self.name_label)
+
+        ver = self.info.get('Version', 'Unknown')
+        arch = self.info.get('Architecture', '')
+        self.sub_label = Gtk.Label(
+            label=f'Version {ver}' + (f' ({arch})' if arch else ''),
+            xalign=0,
+        )
+        self.sub_label.add_css_class('dim-label')
+        title_box.append(self.sub_label)
+
+        self.status_label = Gtk.Label(xalign=0)
+        self.status_label.add_css_class('caption')
+        title_box.append(self.status_label)
+
+        top.append(title_box)
+        box.append(top)
+
+        if not self.pkg_name:
+            err = Adw.StatusPage(
+                icon_name='dialog-error-symbolic',
+                title='Invalid Package',
+                description=f'Could not read package metadata from:\n{self.deb_path}',
+            )
+            box.append(err)
+            scroll.set_child(box)
+            toolbar.set_content(scroll)
+            self.set_content(toolbar)
+            return
+
+        # Package metadata card
+        meta_group = Adw.PreferencesGroup()
+        desc_lines = [l for l in self.info.get('Description', '').splitlines() if l.strip()]
+        summary = desc_lines[0] if desc_lines else 'Debian software package'
+
+        for title, subtitle in [
+            ('Summary', summary),
+            ('Installed Size', format_size(self.info.get('Installed-Size'))),
+            ('Maintainer', self.info.get('Maintainer') or 'Unknown'),
+            ('File', os.path.basename(self.deb_path)),
+        ]:
+            row = Adw.ActionRow(title=title, subtitle=subtitle)
+            row.set_subtitle_selectable(True)
+            meta_group.add(row)
+        box.append(meta_group)
+
+        # Progress + log output (shown once an action starts)
+        self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.progress_box.set_visible(False)
+
+        self.progress_bar = Gtk.ProgressBar()
+        self.progress_box.append(self.progress_bar)
+
+        log_scroll = Gtk.ScrolledWindow()
+        log_scroll.set_min_content_height(110)
+        log_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        self.log_view = Gtk.TextView(editable=False, monospace=True)
+        self.log_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.log_buf = self.log_view.get_buffer()
+        log_scroll.set_child(self.log_view)
+        self.progress_box.append(log_scroll)
+        box.append(self.progress_box)
+
+        # Action buttons
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        btn_row.set_halign(Gtk.Align.END)
+
+        self.remove_btn = Gtk.Button(label='Uninstall')
+        self.remove_btn.add_css_class('destructive-action')
+        self.remove_btn.connect('clicked', self._on_uninstall)
+        btn_row.append(self.remove_btn)
+
+        self.install_btn = Gtk.Button(label='Install')
+        self.install_btn.add_css_class('suggested-action')
+        self.install_btn.connect('clicked', self._on_install)
+        btn_row.append(self.install_btn)
+
+        box.append(btn_row)
+
+        scroll.set_child(box)
+        toolbar.set_content(scroll)
+        self.set_content(toolbar)
+        self._refresh_status()
+
+    def _refresh_status(self):
+        cur = installed_version(self.pkg_name)
+        pkg_ver = self.info.get('Version', '')
+        if cur:
+            if cur == pkg_ver:
+                self.status_label.set_text(f'Installed (version {cur})')
+                self.install_btn.set_label('Reinstall')
+            else:
+                self.status_label.set_text(f'Installed: {cur}  →  Package: {pkg_ver}')
+                self.install_btn.set_label('Update / Install')
+            self.remove_btn.set_visible(True)
+        else:
+            self.status_label.set_text('Not installed')
+            self.install_btn.set_label('Install')
+            self.remove_btn.set_visible(False)
+
+    def _append_log(self, text):
+        end = self.log_buf.get_end_iter()
+        self.log_buf.insert(end, text)
+        mark = self.log_buf.create_mark(None, self.log_buf.get_end_iter(), False)
+        self.log_view.scroll_to_mark(mark, 0.0, False, 0.0, 0.0)
+        return False
+
+    def _set_busy(self, busy, status_text=None):
+        self._busy = busy
+        self.install_btn.set_sensitive(not busy)
+        self.remove_btn.set_sensitive(not busy)
+        if status_text:
+            self.status_label.set_text(status_text)
+        if busy:
+            self.progress_box.set_visible(True)
+            if not self._pulse_id:
+                self._pulse_id = GLib.timeout_add(120, self._pulse)
+        else:
+            if self._pulse_id:
+                GLib.source_remove(self._pulse_id)
+                self._pulse_id = 0
+            self.progress_bar.set_fraction(1.0)
+
+    def _pulse(self):
+        if not self._busy:
+            self._pulse_id = 0
+            return False
+        self.progress_bar.pulse()
+        return True
+
+    def _run_pkexec(self, cmd, verb, done_msg):
+        self.log_buf.set_text('')
+        self._set_busy(True, f'{verb}…')
+
+        def worker():
+            rc = 1
+            try:
+                proc = subprocess.Popen(
+                    ['pkexec', *cmd],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    env={**os.environ, 'DEBIAN_FRONTEND': 'noninteractive'},
+                )
+                assert proc.stdout is not None
+                for line in proc.stdout:
+                    GLib.idle_add(self._append_log, line)
+                rc = proc.wait()
+            except Exception as exc:
+                GLib.idle_add(self._append_log, f'\nError: {exc}\n')
+
+            def finish():
+                self._set_busy(False)
+                self._refresh_status()
+                if rc == 0:
+                    self.status_label.set_text(done_msg)
+                elif rc in (126, 127):
+                    self.status_label.set_text('Authentication cancelled')
+                else:
+                    self.status_label.set_text(f'{verb} failed (exit code {rc})')
+                return False
+
+            GLib.idle_add(finish)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _on_install(self, _btn):
+        self._run_pkexec(
+            ['apt-get', 'install', '-y', '--allow-downgrades', self.deb_path],
+            'Installing',
+            'Installed — available in Applications',
+        )
+
+    def _on_uninstall(self, _btn):
+        self._run_pkexec(
+            ['apt-get', 'remove', '-y', self.pkg_name],
+            'Uninstalling',
+            'Uninstalled',
+        )
+
+
+class DebInstallerApp(Adw.Application):
+    def __init__(self):
+        super().__init__(
+            application_id='org.kos.DebInstaller',
+            flags=Gio.ApplicationFlags.HANDLES_OPEN,
+        )
+
+    def do_activate(self):
+        dialog = Gtk.FileDialog(title='Select a .deb package to install')
+        f = Gtk.FileFilter()
+        f.set_name('Debian Packages (*.deb)')
+        f.add_pattern('*.deb')
+        filters = Gio.ListStore.new(Gtk.FileFilter)
+        filters.append(f)
+        dialog.set_filters(filters)
+
+        def on_chosen(dlg, res):
+            try:
+                gfile = dlg.open_finish(res)
+                if gfile and gfile.get_path():
+                    win = DebInstallerWindow(self, gfile.get_path())
+                    win.present()
+            except GLib.Error:
+                pass
+
+        dialog.open(None, None, on_chosen)
+
+    def do_open(self, files, _n_files, _hint):
+        for gf in files:
+            path = gf.get_path()
+            if path:
+                win = DebInstallerWindow(self, path)
+                win.present()
+
+
+def main():
+    app = DebInstallerApp()
+    return app.run(sys.argv)
+
+
+if __name__ == '__main__':
+    sys.exit(main())

@@ -1,0 +1,4 @@
+[Default Applications]
+application/vnd.debian.binary-package=kos-deb-installer.desktop
+application/x-deb=kos-deb-installer.desktop
+application/x-debian-package=kos-deb-installer.desktop
