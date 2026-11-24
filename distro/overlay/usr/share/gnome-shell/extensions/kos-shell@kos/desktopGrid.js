@@ -39,6 +39,10 @@ export const LABEL_GAP = 8;
 export const DOTS_HEIGHT = 24;
 
 // Apps that start inside the "Utilities" folder on a fresh home screen.
+// Small system tools that start inside the "Utilities" folder. Main apps
+// (Files, Firefox, Terminal, Settings, Software) stay on the grid or dock.
+// Only ids that are actually installed and unpinned are placed; later
+// installs are not auto-filed once the layout exists.
 export const DEFAULT_UTILITIES = [
     'org.gnome.Calculator.desktop',
     'org.gnome.clocks.desktop',
@@ -46,6 +50,13 @@ export const DEFAULT_UTILITIES = [
     'org.gnome.font-viewer.desktop',
     'org.gnome.SystemMonitor.desktop',
     'org.gnome.baobab.desktop',
+    'org.gnome.DiskUtility.desktop',
+    'org.gnome.Logs.desktop',
+    'org.gnome.TextEditor.desktop',
+    'org.gnome.Loupe.desktop',
+    'org.gnome.Evince.desktop',
+    'simple-scan.desktop',
+    'nm-connection-editor.desktop',
 ];
 
 function clamp(v, lo, hi) {
@@ -61,6 +72,10 @@ export class KosDesktopGrid {
         this._dots = null;
         this._page = 0;
         this._renamingFile = null;
+        // Once the default Utilities folder has been created (fresh layout
+        // or one-time migration), this stays true so deleting it never
+        // brings it back. Persisted as utilitiesMigrated in launchpad.json.
+        this._utilitiesMigrated = false;
         // Grid entries in order: {type: 'app', id},
         // {type: 'folder', fid, name, apps: [ids]}, or {type: 'file', name}.
         // Saved in launchpad.json.
@@ -209,9 +224,12 @@ export class KosDesktopGrid {
         const home = listHomeApps(this._extensionPath).map(a => a.get_id())
             .filter(id => !pinned.has(id));
         const saved = loadLayout();
-        if (!saved)
+        if (!saved) {
+            this._utilitiesMigrated = true;
             return this._defaultItems(home);
+        }
 
+        this._utilitiesMigrated = saved.utilitiesMigrated === true;
         const used = new Set(pinned);
         const seenEntries = new Set();
         const take = id => {
@@ -221,7 +239,7 @@ export class KosDesktopGrid {
             return true;
         };
         const items = [];
-        for (const e of saved) {
+        for (const e of saved.items) {
             if (typeof e === 'string') {
                 if (take(e))
                     items.push({type: 'app', id: e});
@@ -250,6 +268,15 @@ export class KosDesktopGrid {
                 items.push({type: 'app', id});
             }
         }
+        const hasUtilities = items.some(e => e.type === 'folder' && e.fid === 'utilities');
+        if (!this._utilitiesMigrated && !hasUtilities) {
+            this._migrateUtilities(items);
+            this._utilitiesMigrated = true;
+            saveLayout(items, {utilitiesMigrated: true});
+        } else if (!this._utilitiesMigrated) {
+            this._utilitiesMigrated = true;
+            saveLayout(items, {utilitiesMigrated: true});
+        }
         for (const entry of listUserDesktopEntries()) {
             if (!seenEntries.has(entry.name)) {
                 seenEntries.add(entry.name);
@@ -257,6 +284,39 @@ export class KosDesktopGrid {
             }
         }
         return items;
+    }
+
+    // Scoop default utility apps that are loose on the home grid (not in
+    // the dock, not already in another user folder) into a keep Utilities
+    // folder, sitting where the first of them was.
+    _migrateUtilities(items) {
+        const loose = new Set();
+        for (const e of items) {
+            if (e.type === 'app' && DEFAULT_UTILITIES.includes(e.id))
+                loose.add(e.id);
+        }
+        if (loose.size === 0)
+            return;
+        const folder = {
+            type: 'folder',
+            fid: 'utilities',
+            name: 'Utilities',
+            apps: DEFAULT_UTILITIES.filter(id => loose.has(id)),
+            keep: true,
+        };
+        let placed = false;
+        const next = [];
+        for (const e of items) {
+            if (e.type === 'app' && loose.has(e.id)) {
+                if (!placed) {
+                    next.push(folder);
+                    placed = true;
+                }
+            } else {
+                next.push(e);
+            }
+        }
+        items.splice(0, items.length, ...next);
     }
 
     // First-run layout (no ~/.config/kos/launchpad.json yet): the small system
@@ -287,9 +347,13 @@ export class KosDesktopGrid {
         return items;
     }
 
+    _saveLayout() {
+        saveLayout(this._items, {utilitiesMigrated: this._utilitiesMigrated});
+    }
+
     // Save, then redraw after the current drop has finished.
     _commit() {
-        saveLayout(this._items);
+        this._saveLayout();
         later(() => {
             if (!this._actor)
                 return;
@@ -589,7 +653,7 @@ export class KosDesktopGrid {
                     if (next)
                         item.name = next;
                 }
-                saveLayout(this._items);
+                this._saveLayout();
                 if (global.stage.get_key_focus() === entry.clutter_text)
                     global.stage.set_key_focus(null);
                 if (gone || entry.get_parent() !== box)
@@ -785,7 +849,7 @@ export class KosDesktopGrid {
             // tiles alone so a press that committed the title still lands.
             onRename: (folder, name) => {
                 folder.name = name;
-                saveLayout(this._items);
+                this._saveLayout();
                 later(() => this._layoutIcons());
             },
         });

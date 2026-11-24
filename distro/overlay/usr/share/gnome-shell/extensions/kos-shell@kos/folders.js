@@ -109,7 +109,11 @@ export function appIcon(appId, size, styleClass = '') {
 
 // ---- persistence ----------------------------------------------------------
 // ~/.config/kos/launchpad.json:
-//   {"version": 1, "items": ["app.desktop", {"folder": "f1", "name": "Folder", "apps": [...]}, ...]}
+//   {"version": 1, "utilitiesMigrated": true,
+//    "items": ["app.desktop", {"folder": "f1", "name": "Folder", "apps": [...], "keep": true}, ...]}
+// utilitiesMigrated is a one-shot marker: after the default Utilities
+// folder has been created (or skipped because it already existed), it
+// stays set so deleting the folder does not bring it back.
 
 const STORE = GLib.build_filenamev([GLib.get_user_config_dir(), 'kos', 'launchpad.json']);
 
@@ -119,13 +123,18 @@ export function loadLayout() {
         if (!ok)
             return null;
         const data = JSON.parse(new TextDecoder().decode(bytes));
-        return Array.isArray(data?.items) ? data.items : null;
+        if (!Array.isArray(data?.items))
+            return null;
+        return {
+            items: data.items,
+            utilitiesMigrated: data.utilitiesMigrated === true,
+        };
     } catch (_e) {
         return null;
     }
 }
 
-export function saveLayout(items) {
+export function saveLayout(items, {utilitiesMigrated = false} = {}) {
     const out = items.map(e => {
         if (e.type === 'folder')
             return {folder: e.fid, name: e.name, apps: [...e.apps], ...(e.keep ? {keep: true} : {})};
@@ -135,9 +144,12 @@ export function saveLayout(items) {
             return {dir: e.name};
         return e.id;
     });
+    const doc = {version: 1, items: out};
+    if (utilitiesMigrated)
+        doc.utilitiesMigrated = true;
     try {
         GLib.mkdir_with_parents(GLib.path_get_dirname(STORE), 0o755);
-        GLib.file_set_contents(STORE, JSON.stringify({version: 1, items: out}, null, 1));
+        GLib.file_set_contents(STORE, JSON.stringify(doc, null, 1));
     } catch (e) {
         logError(e, 'kos-shell: saving launchpad layout');
     }
