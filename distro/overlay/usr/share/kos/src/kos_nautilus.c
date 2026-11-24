@@ -61,15 +61,39 @@ static gboolean load_symbols(void) {
     return TRUE;
 }
 
+static gboolean contains_list(gpointer w, int depth) {
+    if (depth > 6)
+        return FALSE;
+    for (gpointer c = api.gtk_widget_get_first_child(w); c; c = api.gtk_widget_get_next_sibling(c)) {
+        const char *css = api.gtk_widget_get_css_name(c);
+        if (css && strcmp(css, "list") == 0)
+            return TRUE;
+        if (contains_list(c, depth + 1))
+            return TRUE;
+    }
+    return FALSE;
+}
+
 static gboolean is_places_row(gpointer row) {
     const char *row_css = api.gtk_widget_get_css_name(row);
     if (!row_css || strcmp(row_css, "row") != 0)
+        return FALSE;
+    if (contains_list(row, 0))
         return FALSE;
     gpointer list = api.gtk_widget_get_parent(row);
     if (!list)
         return FALSE;
     const char *list_css = api.gtk_widget_get_css_name(list);
     if (!list_css || strcmp(list_css, "list") != 0)
+        return FALSE;
+    /* Never hide a single-child container row; sidebar list has many rows. */
+    int n_rows = 0;
+    for (gpointer c = api.gtk_widget_get_first_child(list); c; c = api.gtk_widget_get_next_sibling(c)) {
+        const char *ccss = api.gtk_widget_get_css_name(c);
+        if (ccss && strcmp(ccss, "row") == 0 && ++n_rows >= 2)
+            break;
+    }
+    if (n_rows < 2)
         return FALSE;
     gpointer cur = api.gtk_widget_get_parent(list);
     for (int depth = 0; cur && depth < 6; depth++) {
