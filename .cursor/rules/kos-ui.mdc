@@ -65,6 +65,7 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
   - Sidebar slightly darker (#1a1c22), 40px rows with 8px corners, selected row solid #0081ff with white text and icon.
   - Grouped lists (`boxed-list`) are separate gray (#2c2f38) 9px cards with 6px gaps, label left, value right in gray. No macOS traffic lights.
 - Icon theme is Deepin bloom (`deepin-icon-theme`, GPL-3.0-or-later, in `packages.txt`). Every app icon on the launchpad, dock and in folders is drawn in a uniform macOS-style squircle (`icons.js`), including apps installed later. Folder tiles use the same corner radius. Do not revert to macosicons.com, kos-icons, Deepin2022 or unshaped Adwaita.
+- GNOME Software needs Debian DEP-11 AppStream metadata and an unmasked PackageKit. A fresh build's first `apt-get update` runs before `appstream` is installed, so `/usr/libexec/kos-setup-software` (fresh build and `distro-update`) runs a second update, adds the system Flathub remote (`flatpak` + `gnome-software-plugin-flatpak`), and refreshes the catalogue. `kos-tune` must not mask `packagekit.service` (disable-at-boot is fine; D-Bus starts it on demand). `KOS_SKIP_APT=1` skips this. The first refresh in the store needs network and can take a minute.
 - kos wallpaper with a dim layer over the whole screen, accent #0081ff, animations off.
 
 ## Hard rules
@@ -82,3 +83,4 @@ Wallpaper: `distro/overlay/usr/share/backgrounds/kos/kos-wallpaper.png`. Default
 - Brightness only shows on hardware with a backlight, bluetooth only with an adapter, night light only where mutter supports it, so the QEMU VM shows fewer tiles than Deepin.
 - Hot reload (`distro-dev`) re-applies CSS, but GJS caches ES modules: JS changes in a new or changed module need a fresh session (re-login or reboot) to show.
 - GTK CSS is per user (~/.config), so changes reach the image only through `distro-update` (or a rebuild), not `distro-dev` hot reload.
+- GNOME Software only lists already-installed apps if DEP-11 metadata was never fetched or PackageKit is masked; fix that with `kos-setup-software`, not by pointing the store at a different frontend.

@@ -1,4 +1,6 @@
 enable kos-tune.service
+# Disabled at boot only. Do not mask packagekit: GNOME Software starts it
+# over D-Bus to install .deb packages.
 disable packagekit.service
 disable packagekit-offline-update.service
 disable apt-daily.timer

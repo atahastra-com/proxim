@@ -41,3 +41,10 @@ inotify-tools
 
 # Official Deepin icon theme (bloom, GPL-3.0-or-later; pulls papirus-icon-theme)
 deepin-icon-theme
+
+# Software store: gnome-software, appstream, packagekit and the .deb plugin
+# come in with gnome-core. Flathub needs these two extra packages. The
+# AppStream catalogue itself is fetched by /usr/libexec/kos-setup-software
+# (a second apt-get update after appstream's hooks are installed).
+flatpak
+gnome-software-plugin-flatpak

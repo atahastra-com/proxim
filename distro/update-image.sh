@@ -133,6 +133,10 @@ else
       fi
     fi
   fi
+  # Fetch DEP-11 metadata (if missing) and add Flathub. Idempotent.
+  if [[ -x /usr/libexec/kos-setup-software ]]; then
+    /usr/libexec/kos-setup-software
+  fi
 fi
 systemctl enable mnt-kosdev.mount || true
 systemctl enable kos-shell-dev.service || true

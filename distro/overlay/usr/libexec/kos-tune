@@ -1,8 +1,15 @@
 #!/bin/bash
 # Quiet background services that fight the desktop for CPU on a small VM.
+#
+# PackageKit must stay unmasked: GNOME Software talks to it over D-Bus to
+# install .deb packages. Leaving the unit disabled is fine — D-Bus
+# activation starts it on demand. Masking it (the old behaviour) made
+# Software show only already-installed apps' actions and blocked installs.
 set +e
-systemctl disable --now packagekit.service packagekit-offline-update.service 2>/dev/null
-systemctl mask packagekit.service packagekit-offline-update.service 2>/dev/null
+systemctl unmask packagekit.service 2>/dev/null
+systemctl disable packagekit.service 2>/dev/null
+systemctl disable --now packagekit-offline-update.service 2>/dev/null
+systemctl mask packagekit-offline-update.service 2>/dev/null
 systemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null
 systemctl --global disable tracker-miner-fs-3.service tracker-miner-rss-3.service \
   tracker-extract-3.service tracker-writeback-3.service 2>/dev/null

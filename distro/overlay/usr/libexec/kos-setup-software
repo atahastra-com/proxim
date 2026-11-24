@@ -1,0 +1,118 @@
+#!/bin/bash
+# Idempotent. Give GNOME Software a catalogue of installable apps:
+# Debian DEP-11 AppStream metadata, plus Flathub.
+#
+# A fresh image runs apt-get update *before* appstream is installed, so
+# apt never fetches Components-*.yml or the icon tarballs. Without those,
+# Software only lists already-installed apps. This script is run at the
+# end of a fresh build and on distro-update (unless KOS_SKIP_APT=1).
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+export LANG="${LANG:-C.UTF-8}"
+
+SOURCES=/etc/apt/sources.list
+
+want_sources() {
+  cat << 'SRC'
+deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
+SRC
+}
+
+have_dep11() {
+  ls /var/lib/apt/lists/*Components*.yml* >/dev/null 2>&1
+}
+
+need_pkg() {
+  dpkg -s "$1" >/dev/null 2>&1
+}
+
+have_flathub() {
+  command -v flatpak >/dev/null 2>&1 || return 1
+  flatpak --system remotes --columns=name 2>/dev/null | grep -qx flathub
+}
+
+# PackageKit must be startable over D-Bus or .deb installs from Software fail.
+# Disabled-at-boot is fine; masked is not.
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl unmask packagekit.service >/dev/null 2>&1 || true
+fi
+
+sources_changed=0
+if ! [[ -f "$SOURCES" ]] || ! cmp -s "$SOURCES" <(want_sources); then
+  want_sources > "$SOURCES"
+  sources_changed=1
+  echo "kos-setup-software: apt sources now include main contrib non-free non-free-firmware"
+fi
+
+pkgs=(
+  appstream
+  apt-config-icons
+  packagekit
+  gnome-software
+  gnome-software-plugin-deb
+  flatpak
+  gnome-software-plugin-flatpak
+)
+missing=()
+for p in "${pkgs[@]}"; do
+  need_pkg "$p" || missing+=("$p")
+done
+
+need_update=0
+if (( sources_changed )) || (( ${#missing[@]} > 0 )) || ! have_dep11; then
+  need_update=1
+fi
+
+if (( need_update )); then
+  echo "kos-setup-software: apt-get update (fetch package lists and DEP-11 metadata)"
+  if ! apt-get update; then
+    echo "WARN: apt-get update failed (network?)."
+    exit 0
+  fi
+  if (( ${#missing[@]} > 0 )); then
+    echo "kos-setup-software: installing ${missing[*]}"
+    if ! apt-get install -y --no-install-recommends "${missing[@]}"; then
+      echo "WARN: could not install ${missing[*]} (network?)."
+    fi
+  fi
+  # If appstream's apt hooks were not present for the update above, fetch now.
+  if ! have_dep11; then
+    echo "kos-setup-software: second apt-get update to fetch DEP-11 metadata"
+    apt-get update || echo "WARN: second apt-get update failed (network?)."
+  fi
+  apt-get clean || true
+  if have_dep11; then
+    echo "kos-setup-software: DEP-11 metadata is in /var/lib/apt/lists"
+  else
+    echo "WARN: still no DEP-11 Components metadata after apt-get update."
+  fi
+  if command -v appstreamcli >/dev/null 2>&1; then
+    mkdir -p /var/cache/swcatalog
+    appstreamcli refresh --force >/dev/null || appstreamcli refresh --force || true
+  fi
+fi
+
+if ! command -v flatpak >/dev/null 2>&1; then
+  echo "WARN: flatpak is not installed; skipping Flathub."
+  exit 0
+fi
+
+if ! have_flathub; then
+  echo "kos-setup-software: adding system Flathub remote"
+  if ! flatpak --system remote-add --if-not-exists flathub \
+      https://dl.flathub.org/repo/flathub.flatpakrepo; then
+    echo "WARN: could not add the Flathub remote (network?)."
+    exit 0
+  fi
+fi
+
+# Prefetch the Flathub appstream catalogue so Explore is not empty on first open.
+# This is metadata only, not the apps themselves.
+if ! flatpak --system update --appstream; then
+  echo "WARN: could not refresh Flathub appstream (network?). First open of Software may need a minute."
+fi
+
+echo "kos-setup-software: done"
+exit 0

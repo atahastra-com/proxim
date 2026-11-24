@@ -116,3 +116,15 @@ The default WSL VM is about 8 GB RAM, which is tight for a 4 GB guest.
 To give the VM more, create `%UserProfile%\.wslconfig` (see the notes
 in the latest report) and run `wsl --shutdown` once. `distro-run` then
 picks a larger `-m` / `-smp` automatically.
+
+## Software store
+
+GNOME Software is the app store. A fresh image used to show only already-installed
+apps because `apt-get update` ran before `appstream` was installed, so Debian's
+DEP-11 catalogue was never fetched, and `kos-tune` masked PackageKit.
+
+`distro-update` (and a fresh `distro` build) now runs `/usr/libexec/kos-setup-software`,
+which fetches that metadata, adds the system Flathub remote, and leaves PackageKit
+unmasked (still disabled at boot; D-Bus starts it when Software needs it). Set
+`KOS_SKIP_APT=1` to skip this (no catalogue refresh). The first open of Software
+needs network and can take a minute if the Flathub catalogue was not prefetched.

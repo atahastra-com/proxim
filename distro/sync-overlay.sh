@@ -54,7 +54,7 @@ fi
 if [[ -d "$MNT/usr/share/gnome-shell/extensions/kos-shell@kos" ]]; then
   "${SUDO[@]}" chmod -R a+rX "$MNT/usr/share/gnome-shell/extensions/kos-shell@kos"
 fi
-for bin in kos-shell-reload kos-mount-dev kos-tune; do
+for bin in kos-shell-reload kos-mount-dev kos-tune kos-setup-software; do
   if [[ -f "$MNT/usr/libexec/${bin}" ]]; then
     "${SUDO[@]}" chmod 755 "$MNT/usr/libexec/${bin}"
   fi

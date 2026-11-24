@@ -132,9 +132,9 @@ bootstrap() {
 
   "${SUDO[@]}" mkdir -p "$MNT/etc/apt/sources.list.d"
   "${SUDO[@]}" tee "$MNT/etc/apt/sources.list" >/dev/null << 'SRC'
-deb http://deb.debian.org/debian trixie main contrib non-free-firmware
-deb http://deb.debian.org/debian trixie-updates main contrib non-free-firmware
-deb http://security.debian.org/debian-security trixie-security main contrib non-free-firmware
+deb http://deb.debian.org/debian trixie main contrib non-free non-free-firmware
+deb http://deb.debian.org/debian trixie-updates main contrib non-free non-free-firmware
+deb http://security.debian.org/debian-security trixie-security main contrib non-free non-free-firmware
 SRC
 
   # Bind mounts so apt and grub can work inside the image.
@@ -265,6 +265,9 @@ MOD
     systemctl --global enable kos-shell-reload.service || true
     systemctl enable kos-tune.service || true
     /usr/libexec/kos-tune || true
+    # Second apt update + Flathub: the first apt-get update ran before
+    # appstream was installed, so DEP-11 metadata was never fetched.
+    /usr/libexec/kos-setup-software
     systemctl set-default graphical.target
 
     update-initramfs -u
