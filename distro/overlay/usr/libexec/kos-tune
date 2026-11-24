@@ -16,7 +16,17 @@ systemctl disable --now apt-daily.timer apt-daily-upgrade.timer \
 # Quiet hardware/network discovery daemons unused at boot (socket/D-Bus
 # activation still brings up CUPS or PC/SC on demand when needed).
 systemctl disable --now ModemManager.service cups-browsed.service \
-  switcheroo-control.service pcscd.service 2>/dev/null
+  switcheroo-control.service pcscd.service \
+  NetworkManager-wait-online.service systemd-udev-settle.service 2>/dev/null
+systemctl mask NetworkManager-wait-online.service 2>/dev/null
+systemctl enable fstrim.timer 2>/dev/null
+
+# Flush leftover apt caches, old rotated logs, and temp files.
+apt-get clean 2>/dev/null
+rm -rf /var/cache/apt/archives/*.deb /var/cache/apt/archives/partial/* \
+  /var/tmp/kos-* /var/log/*.gz /var/log/*.[0-9] /var/log/*/*.gz \
+  /root/.cache/* 2>/dev/null
+command -v journalctl >/dev/null && journalctl --vacuum-size=16M 2>/dev/null || true
 
 # Disable background file indexers (Tracker 3 and Debian 13 LocalSearch)
 # and Evolution calendar/addressbook background factories.
