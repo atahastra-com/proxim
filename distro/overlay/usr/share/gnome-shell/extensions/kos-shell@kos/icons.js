@@ -6,9 +6,12 @@
 // rasterized into the same superellipse so later-installed apps get the
 // same shape automatically.
 //
-// Rounded-square artwork is scaled to fill the tile (cover). Circles
-// and sparse glyphs sit inset on a squircle filled with the icon's
-// dominant colour.
+// Artwork that already fills a rounded square (all four bbox edges are
+// mostly opaque) is scaled to cover the tile. Everything else — a
+// contacts book, a map pin, a shopping bag, a circle, a later-installed
+// app — is centred on one shared dark-slate squircle with ~13% padding.
+// Detection uses edge alpha, not bbox fill or a per-app list: dense
+// irregular icons fooled a coverage threshold and were clipped bare.
 
 import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
@@ -60,9 +63,14 @@ const EXTS = ['.svg', '.png'];
 const _pathCache = new Map();
 const _giconCache = new Map();
 
-const COVER_COVERAGE = 0.84;
-const INSET = 0.84;
+// ~13% padding on each side of artwork that sits on the shared tile.
+const INSET = 0.74;
 const SQUIRCLE_N = 5;
+// Opaque dark slate, close to folder tiles, so every non-bleed icon
+// shares one background. 0xRRGGBBAA for GdkPixbuf.fill().
+const TILE_FILL = ((0x3a << 24) | (0x3e << 16) | (0x4a << 8) | 0xff) >>> 0;
+const MIN_EDGE_FILL = 0.55;
+const EDGE_SAMPLE_INSET = 0.03;
 
 export function squircleRadius(size) {
     return Math.round(size * 0.223);
@@ -212,50 +220,36 @@ function contentBBox(pb, minAlpha = 16) {
     return [x0, y0, x1 + 1, y1 + 1];
 }
 
-function bboxCoverage(pb) {
+// True when the artwork already is a rounded square: the opaque bbox is
+// nearly square, and each of its four edges is mostly filled. Circles
+// only touch the mid-edge; a contacts book / map / shopping bag leaves
+// at least one edge sparse (tabs, pin, handle). Measuring bbox fill
+// alone is not enough — those irregular icons are densely packed inside
+// their box and used to take the cover path, so they rendered bare.
+function isFullBleedSquircle(pb) {
     const [x0, y0, x1, y1] = contentBBox(pb);
+    const bw = x1 - x0;
+    const bh = y1 - y0;
+    if (bw < 4 || bh < 4)
+        return false;
+    if (Math.min(bw, bh) / Math.max(bw, bh) < 0.80)
+        return false;
     const {stride, ch, pixels} = pixbufBytes(pb);
-    let n = 0, opaque = 0;
-    for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-            n++;
-            if (pixels[y * stride + x * ch + 3] > 40)
+    const ix = Math.max(1, Math.round(EDGE_SAMPLE_INSET * bw));
+    const iy = Math.max(1, Math.round(EDGE_SAMPLE_INSET * bh));
+    const edgeFill = (count, alphaAt) => {
+        let opaque = 0;
+        for (let i = 0; i < count; i++) {
+            if (alphaAt(i) >= 128)
                 opaque++;
         }
-    }
-    return n ? opaque / n : 0;
-}
-
-function dominantColor(pb) {
-    const {w, h, stride, ch, pixels} = pixbufBytes(pb);
-    let rs = 0, gs = 0, bs = 0, n = 0;
-    for (let y = 0; y < h; y++) {
-        for (let x = 0; x < w; x++) {
-            const i = y * stride + x * ch;
-            const a = pixels[i + 3];
-            if (a < 32)
-                continue;
-            const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
-            const sat = Math.max(r, g, b) - Math.min(r, g, b);
-            const wt = (a / 255) * (0.35 + 0.65 * (sat / 255));
-            rs += r * wt;
-            gs += g * wt;
-            bs += b * wt;
-            n += wt;
-        }
-    }
-    if (n <= 0)
-        return [40, 42, 52];
-    let r = rs / n, g = gs / n, b = bs / n;
-    const mn = Math.min(r, g, b);
-    r += (r - mn) * 0.15;
-    g += (g - mn) * 0.15;
-    b += (b - mn) * 0.15;
-    return [
-        Math.max(0, Math.min(255, Math.round(r))),
-        Math.max(0, Math.min(255, Math.round(g))),
-        Math.max(0, Math.min(255, Math.round(b))),
-    ];
+        return opaque / count;
+    };
+    const top = edgeFill(bw, i => pixels[(y0 + iy) * stride + (x0 + i) * ch + 3]);
+    const bot = edgeFill(bw, i => pixels[(y1 - 1 - iy) * stride + (x0 + i) * ch + 3]);
+    const lef = edgeFill(bh, i => pixels[(y0 + i) * stride + (x0 + ix) * ch + 3]);
+    const rig = edgeFill(bh, i => pixels[(y0 + i) * stride + (x1 - 1 - ix) * ch + 3]);
+    return Math.min(top, bot, lef, rig) >= MIN_EDGE_FILL;
 }
 
 function applySquircleMask(pb) {
@@ -313,16 +307,14 @@ function coverInto(src, dest) {
 
 function tilePixbuf(src, size) {
     const dest = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, true, 8, size, size);
-    dest.fill(0x00000000);
-    if (bboxCoverage(src) >= COVER_COVERAGE) {
+    // fill() writes in place (0xRRGGBBAA). Do not use new_from_bytes
+    // here: GdkPixbuf.composite cannot reliably paint onto that kind of
+    // pixbuf in GJS.
+    if (isFullBleedSquircle(src)) {
+        dest.fill(0x00000000);
         coverInto(src, dest);
     } else {
-        const [r, g, b] = dominantColor(src);
-        // fill() writes in place (0xRRGGBBAA). Do not use new_from_bytes
-        // here: GdkPixbuf.composite cannot reliably paint onto that kind of
-        // pixbuf in GJS.
-        // JS bitwise is signed 32-bit; >>> 0 keeps 0xRRGGBBAA as guint32.
-        dest.fill(((r << 24) | (g << 16) | (b << 8) | 0xff) >>> 0);
+        dest.fill(TILE_FILL);
         scaleInto(src, dest, INSET);
     }
     return applySquircleMask(dest);
