@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Proxim OS
+Description=Proxim OS boot splash: Atahastra logo with a loading spinner
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/proxim
+ScriptFile=/usr/share/plymouth/themes/proxim/proxim.script

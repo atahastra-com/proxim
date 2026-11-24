@@ -1,0 +1,63 @@
+# Proxim OS boot splash (Atahastra). Black screen, the logo fading in at
+# the centre, "Proxim OS" under it, an iOS-style spinner below and the
+# ATAHASTRA vendor line at the bottom. Images come from
+# distro/branding/gen (make-assets.py).
+
+Window.SetBackgroundTopColor(0, 0, 0);
+Window.SetBackgroundBottomColor(0, 0, 0);
+
+W = Window.GetWidth();
+H = Window.GetHeight();
+X = Window.GetX();
+Y = Window.GetY();
+
+logo.image = Image("splash-logo.png");
+logo.sprite = Sprite(logo.image);
+logo.y = Y + H / 2 - logo.image.GetHeight() / 2 - 48;
+logo.sprite.SetPosition(X + W / 2 - logo.image.GetWidth() / 2, logo.y, 10);
+logo.sprite.SetOpacity(0);
+
+name.image = Image("splash-name.png");
+name.sprite = Sprite(name.image);
+name.sprite.SetPosition(X + W / 2 - name.image.GetWidth() / 2, logo.y + logo.image.GetHeight() + 22, 10);
+name.sprite.SetOpacity(0);
+
+vendor.image = Image("splash-vendor.png");
+vendor.sprite = Sprite(vendor.image);
+vendor.sprite.SetPosition(X + W / 2 - vendor.image.GetWidth() / 2, Y + H - vendor.image.GetHeight() - 40, 10);
+vendor.sprite.SetOpacity(0);
+
+spin[0] = Image("spinner-00.png");
+spin[1] = Image("spinner-01.png");
+spin[2] = Image("spinner-02.png");
+spin[3] = Image("spinner-03.png");
+spin[4] = Image("spinner-04.png");
+spin[5] = Image("spinner-05.png");
+spin[6] = Image("spinner-06.png");
+spin[7] = Image("spinner-07.png");
+spin[8] = Image("spinner-08.png");
+spin[9] = Image("spinner-09.png");
+spin[10] = Image("spinner-10.png");
+spin[11] = Image("spinner-11.png");
+spinner.sprite = Sprite(spin[0]);
+spinner.sprite.SetPosition(X + W / 2 - spin[0].GetWidth() / 2, logo.y + logo.image.GetHeight() + 96, 10);
+spinner.sprite.SetOpacity(0);
+
+state.tick = 0;
+
+fun refresh_callback ()
+  {
+    state.tick++;
+    # 50 refreshes a second: fade in over ~0.6s, spinner a step every 80ms.
+    fade = state.tick / 30;
+    if (fade > 1)
+      fade = 1;
+    logo.sprite.SetOpacity(fade);
+    name.sprite.SetOpacity(fade);
+    vendor.sprite.SetOpacity(fade * 0.9);
+    spinner.sprite.SetOpacity(fade);
+    frame = Math.Int(state.tick / 4) % 12;
+    spinner.sprite.SetImage(spin[frame]);
+  }
+
+Plymouth.SetRefreshFunction (refresh_callback);
