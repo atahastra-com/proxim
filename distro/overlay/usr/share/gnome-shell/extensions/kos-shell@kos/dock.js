@@ -5,6 +5,7 @@
 import Clutter from 'gi://Clutter';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
+import Pango from 'gi://Pango';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 
@@ -303,6 +304,7 @@ export class KosDock {
             opacity: 0,
             visible: false,
         });
+        this._label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         Main.layoutManager.uiGroup.add_child(this._label);
     }
 
@@ -322,9 +324,9 @@ export class KosDock {
             this._labelTimeout = 0;
             if (this._labelItem !== item || !this._label)
                 return GLib.SOURCE_REMOVE;
-            this._placeLabel(item);
             this._label.opacity = 255;
             this._label.show();
+            this._placeLabel(item);
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -334,6 +336,7 @@ export class KosDock {
         const label = this._label;
         if (!slot || !label)
             return;
+        label.set_size(-1, -1);
         const [, natW] = label.get_preferred_width(-1);
         const [, natH] = label.get_preferred_height(-1);
         const [ix, iy] = slot.get_transformed_position();
@@ -341,7 +344,6 @@ export class KosDock {
         const cx = ix + ICON_SIZE / 2;
         const x = Math.round(cx - natW / 2);
         const y = Math.round(visualTop - 10 - natH);
-        label.set_size(natW, natH);
         label.set_position(x, y);
     }
 
