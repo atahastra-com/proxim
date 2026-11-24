@@ -2,12 +2,57 @@
 <!DOCTYPE wallpapers SYSTEM "gnome-wp-list.dtd">
 <wallpapers>
   <wallpaper deleted="false">
-    <name>kos</name>
+    <name>Proxim Default</name>
     <filename>/usr/share/backgrounds/kos/kos-wallpaper.png</filename>
     <filename-dark>/usr/share/backgrounds/kos/kos-wallpaper.png</filename-dark>
     <options>zoom</options>
     <shade_type>solid</shade_type>
     <pcolor>#0b1020</pcolor>
     <scolor>#0b1020</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Amber Waves</name>
+    <filename>/usr/share/backgrounds/kos/proxim-amber-waves.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/kos/proxim-amber-waves.jpg</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#0b0b0f</pcolor>
+    <scolor>#0b0b0f</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Crimson Dunes</name>
+    <filename>/usr/share/backgrounds/kos/proxim-crimson-dunes.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/kos/proxim-crimson-dunes.jpg</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#12090d</pcolor>
+    <scolor>#12090d</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Autumn Peak</name>
+    <filename>/usr/share/backgrounds/kos/proxim-autumn-peak.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/kos/proxim-autumn-peak.jpg</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#121524</pcolor>
+    <scolor>#121524</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Rainy Skyline</name>
+    <filename>/usr/share/backgrounds/kos/proxim-rainy-skyline.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/kos/proxim-rainy-skyline.jpg</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#0b101a</pcolor>
+    <scolor>#0b101a</scolor>
+  </wallpaper>
+  <wallpaper deleted="false">
+    <name>Orbital Horizon</name>
+    <filename>/usr/share/backgrounds/kos/proxim-orbital-horizon.jpg</filename>
+    <filename-dark>/usr/share/backgrounds/kos/proxim-orbital-horizon.jpg</filename-dark>
+    <options>zoom</options>
+    <shade_type>solid</shade_type>
+    <pcolor>#050a14</pcolor>
+    <scolor>#050a14</scolor>
   </wallpaper>
 </wallpapers>
