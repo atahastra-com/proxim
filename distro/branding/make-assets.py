@@ -149,6 +149,18 @@ save(fit(M, 150), 'splash-logo.png')
 save(text(NAME, FONT_LIGHT, 26, TEXT), 'splash-name.png')
 save(text(VENDOR, FONT_MED, 12, SUB, spacing=0.5), 'splash-vendor.png')
 
+# Apple-style offline update progress bar (240x6 rounded pill track + fill).
+BAR_W, BAR_H = 240, 6
+for fname, rgba in (('splash-bar-bg.png', (255, 255, 255, 46)),
+                    ('splash-bar-fill.png', (255, 255, 255, 245))):
+    big = Image.new('RGBA', (BAR_W * 4, BAR_H * 4), (0, 0, 0, 0))
+    ImageDraw.Draw(big).rounded_rectangle(
+        (0, 0, BAR_W * 4 - 1, BAR_H * 4 - 1),
+        radius=BAR_H * 2,
+        fill=rgba,
+    )
+    save(big.resize((BAR_W, BAR_H), Image.LANCZOS), fname)
+
 # iOS-style activity spinner: 12 rounded spokes, one frame per step.
 SS = 4                         # supersample
 S = 32

@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""Build a signed Proxim OS (.pxu) OTA update bundle and latest.json manifest.
+
+Examples:
+  # 1) Optional: generate an Ed25519 signing keypair once
+  proxim-build-update --keygen ./keys
+
+  # 2) Build Proxim OS 0.2 update bundle + latest.json from distro/overlay
+  proxim-build-update \
+    --version 0.2 \
+    --overlay ./distro/overlay \
+    --out ./updates-out \
+    --url-base https://updates.atahastra.com/proxim-os \
+    --note "Refined Liquid Glass UI and faster startup" \
+    --note "Security and system reliability improvements"
+"""
+
+import argparse
+import base64
+import datetime
+import glob
+import hashlib
+import io
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+
+
+def generate_keypair(out_dir):
+    os.makedirs(out_dir, exist_ok=True)
+    priv = os.path.join(out_dir, 'update-signing.key')
+    pub = os.path.join(out_dir, 'update-signing.pub')
+    subprocess.run(['openssl', 'genpkey', '-algorithm', 'ED25519', '-out', priv], check=True)
+    os.chmod(priv, 0o600)
+    subprocess.run(['openssl', 'pkey', '-in', priv, '-pubout', '-out', pub], check=True)
+    print(f'Wrote private key: {priv} (keep secret!)')
+    print(f'Wrote public key:  {pub} (copy to distro/overlay/etc/kos/update-signing.pub)')
+
+
+def build_rootfs_tar(overlay_dir, out_tar_gz):
+    with tarfile.open(out_tar_gz, 'w:gz') as tf:
+        for entry in sorted(os.listdir(overlay_dir)):
+            # Skip per-user home configs if desired? Keep /etc/skel and system
+            # files; include overlay cleanly relative to /.
+            full = os.path.join(overlay_dir, entry)
+            tf.add(full, arcname=entry, recursive=True)
+
+
+def sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as fh:
+        while True:
+            chunk = fh.read(65536)
+            if not chunk:
+                break
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def sign_file(bundle_path, privkey_path):
+    sig_path = bundle_path + '.sig'
+    subprocess.run(
+        [
+            'openssl', 'pkeyutl', '-sign',
+            '-inkey', privkey_path,
+            '-rawin',
+            '-in', bundle_path,
+            '-out', sig_path,
+        ],
+        check=True,
+    )
+    with open(sig_path, 'rb') as fh:
+        return base64.b64encode(fh.read()).decode('ascii')
+
+
+def main():
+    ap = argparse.ArgumentParser(description='Build a Proxim OS .pxu OTA release bundle.')
+    ap.add_argument('--keygen', metavar='DIR', help='Generate an Ed25519 signing keypair in DIR and exit')
+    ap.add_argument('--version', help='Target OS version (e.g. 0.2)')
+    ap.add_argument('--name', help='Display release title (default: "Proxim OS <version>")')
+    ap.add_argument('--channel', default='stable', help='Release channel (default: stable)')
+    ap.add_argument('--overlay', help='Directory of rootfs overlay files to include (e.g. ./distro/overlay)')
+    ap.add_argument('--deb', action='append', default=[], help='.deb file or glob to include (repeatable)')
+    ap.add_argument('--note', action='append', default=[], help='Release note bullet (repeatable)')
+    ap.add_argument('--privkey', help='Ed25519 private key (update-signing.key) to sign the bundle')
+    ap.add_argument('--url-base', default='', help='Base URL where latest.json and .pxu will be hosted')
+    ap.add_argument('--out', default='./updates-out', help='Output directory (default: ./updates-out)')
+    args = ap.parse_args()
+
+    if args.keygen:
+        generate_keypair(args.keygen)
+        return 0
+
+    if not args.version:
+        ap.error('--version is required (unless using --keygen)')
+
+    ver = args.version.strip()
+    rel_name = args.name or f'Proxim OS {ver}'
+    today = datetime.date.today().isoformat()
+    os.makedirs(args.out, exist_ok=True)
+
+    bundle_filename = f'proxim-os-{ver}.pxu'
+    bundle_path = os.path.abspath(os.path.join(args.out, bundle_filename))
+
+    deb_files = []
+    for pat in args.deb:
+        matched = sorted(glob.glob(pat))
+        if matched:
+            deb_files.extend(matched)
+        elif os.path.isfile(pat):
+            deb_files.append(pat)
+        else:
+            ap.error(f'No .deb files matched: {pat}')
+
+    manifest = {
+        'version': ver,
+        'name': rel_name,
+        'channel': args.channel,
+        'released': today,
+        'notes': args.note or [f'Update to {rel_name}'],
+    }
+
+    with tempfile.TemporaryDirectory() as tmp:
+        manifest_path = os.path.join(tmp, 'manifest.json')
+        with open(manifest_path, 'w', encoding='utf-8') as fh:
+            json.dump(manifest, fh, indent=2)
+            fh.write('\n')
+
+        rootfs_tar = None
+        if args.overlay:
+            if not os.path.isdir(args.overlay):
+                ap.error(f'Overlay directory does not exist: {args.overlay}')
+            rootfs_tar = os.path.join(tmp, 'rootfs.tar.gz')
+            build_rootfs_tar(args.overlay, rootfs_tar)
+
+        with tarfile.open(bundle_path, 'w:gz') as pxu:
+            pxu.add(manifest_path, arcname='manifest.json')
+            if rootfs_tar:
+                pxu.add(rootfs_tar, arcname='rootfs.tar.gz')
+            for d in deb_files:
+                pxu.add(d, arcname=f'debs/{os.path.basename(d)}')
+
+    size_bytes = os.path.getsize(bundle_path)
+    digest = sha256_file(bundle_path)
+    sig_b64 = ''
+    if args.privkey:
+        sig_b64 = sign_file(bundle_path, args.privkey)
+
+    url_base = args.url_base.rstrip('/')
+    bundle_url = f'{url_base}/{bundle_filename}' if url_base else bundle_filename
+
+    latest = {
+        **manifest,
+        'size_bytes': size_bytes,
+        'sha256': digest,
+        'url': bundle_url,
+    }
+    if sig_b64:
+        latest['signature'] = sig_b64
+
+    latest_path = os.path.abspath(os.path.join(args.out, 'latest.json'))
+    with open(latest_path, 'w', encoding='utf-8') as fh:
+        json.dump(latest, fh, indent=2)
+        fh.write('\n')
+
+    print(f'Built bundle:   {bundle_path} ({size_bytes} bytes)')
+    print(f'SHA-256:        {digest}')
+    if sig_b64:
+        print(f'Signed:         {bundle_path}.sig')
+    print(f'Wrote manifest: {latest_path}')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

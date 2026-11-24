@@ -1,0 +1,144 @@
+#!/bin/bash
+# Runs inside systemd's system-update.target on reboot with Plymouth active.
+# Applies /var/lib/kos-update/pending.pxu atomically with an Apple-style
+# Plymouth progress bar, updates OS version metadata, and reboots cleanly.
+set -uo pipefail
+export PATH="/usr/sbin:/usr/bin:/sbin:/bin"
+export DEBIAN_FRONTEND=noninteractive
+
+STATE_DIR="/var/lib/kos-update"
+BUNDLE="${STATE_DIR}/pending.pxu"
+RESULT="${STATE_DIR}/last-result.json"
+LOG="${STATE_DIR}/last-update.log"
+
+# Always remove /system-update FIRST so any error can never cause a boot loop.
+rm -f /system-update
+mkdir -p "$STATE_DIR"
+exec > >(tee "$LOG") 2>&1
+
+ply_progress() {
+  local pct="$1"
+  if command -v plymouth >/dev/null 2>&1 && plymouth --ping 2>/dev/null; then
+    plymouth change-mode --updates 2>/dev/null || true
+    plymouth system-update --progress="$pct" 2>/dev/null || true
+  fi
+}
+
+write_result() {
+  local status="$1" ver="$2" msg="$3"
+  python3 - "$RESULT" "$status" "$ver" "$msg" << 'PY' || true
+import datetime, json, sys
+path, status, ver, msg = sys.argv[1:5]
+with open(path, 'w', encoding='utf-8') as fh:
+    json.dump({
+        'status': status,
+        'version': ver,
+        'message': msg,
+        'updated_at': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ'),
+    }, fh, indent=2)
+    fh.write('\n')
+PY
+}
+
+fail_and_reboot() {
+  local ver="$1" msg="$2"
+  echo "kos-offline-update ERROR: $msg"
+  rm -f "$BUNDLE" "${STATE_DIR}/pending.json"
+  write_result "failed" "$ver" "$msg"
+  sync
+  systemctl reboot --force || reboot -f
+  exit 1
+}
+
+if [[ ! -f "$BUNDLE" ]]; then
+  echo "kos-offline-update: no pending bundle at ${BUNDLE}; continuing reboot"
+  systemctl reboot
+  exit 0
+fi
+
+ply_progress 5
+WORK="$(mktemp -d /var/tmp/kos-update.XXXXXX)"
+trap 'rm -rf "$WORK"' EXIT
+
+if ! tar -xzf "$BUNDLE" -C "$WORK"; then
+  fail_and_reboot "" "Failed to unpack update bundle"
+fi
+ply_progress 20
+
+VER="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$WORK/manifest.json" 2>/dev/null || true)"
+[[ -n "$VER" ]] || fail_and_reboot "" "Missing version in manifest.json"
+
+echo "Applying Proxim OS ${VER}..."
+
+# 1. Extract updated rootfs/overlay files if included.
+if [[ -f "$WORK/rootfs.tar.gz" ]]; then
+  ply_progress 35
+  if ! tar -xzf "$WORK/rootfs.tar.gz" -C / --no-same-owner --keep-directory-symlink; then
+    fail_and_reboot "$VER" "Failed to extract rootfs payload"
+  fi
+fi
+ply_progress 55
+
+# 2. Install any bundled offline .deb packages.
+shopt -s nullglob
+DEBS=("$WORK"/debs/*.deb)
+shopt -u nullglob
+if ((${#DEBS[@]} > 0)); then
+  ply_progress 65
+  if ! dpkg -i "${DEBS[@]}"; then
+    apt-get -f install -y --no-download || fail_and_reboot "$VER" "Failed to install bundled .deb packages"
+  fi
+fi
+ply_progress 78
+
+# 3. Update OS version strings across branding.env and os-release / lsb-release.
+OS_NAME="Proxim OS"
+OS_ID="proxim"
+OS_VENDOR="Atahastra"
+OS_LOGO="proxim-logo"
+if [[ -f /usr/share/kos/branding.env ]]; then
+  # shellcheck disable=SC1091
+  source /usr/share/kos/branding.env
+  sed -i "s/^OS_VERSION=.*/OS_VERSION=\"${VER}\"/" /usr/share/kos/branding.env || true
+fi
+PRETTY="${OS_NAME} ${VER}"
+cat > /usr/lib/os-release << OSR
+PRETTY_NAME="${PRETTY}"
+NAME="${OS_NAME}"
+VERSION_ID="${VER}"
+VERSION="${VER}"
+VERSION_CODENAME=trixie
+ID=${OS_ID}
+ID_LIKE=debian
+VENDOR_NAME="${OS_VENDOR}"
+ANSI_COLOR="1;37"
+LOGO=${OS_LOGO}
+OSR
+if [[ ! -L /etc/os-release ]]; then
+  cp /usr/lib/os-release /etc/os-release
+fi
+cat > /etc/lsb-release << LSB
+DISTRIB_ID="${OS_NAME}"
+DISTRIB_RELEASE=${VER}
+DISTRIB_CODENAME=trixie
+DISTRIB_DESCRIPTION="${PRETTY}"
+LSB
+printf '%s \\n \\l\n\n' "$PRETTY" > /etc/issue
+printf '%s\n' "$PRETTY" > /etc/issue.net
+printf '%s by %s\n' "$PRETTY" "$OS_VENDOR" > /etc/motd
+
+ply_progress 88
+
+# 4. Refresh schemas, dconf, white-label & appearance hooks.
+[[ -x /usr/libexec/kos-whitelabel ]] && KOS_SKIP_APT=1 /usr/libexec/kos-whitelabel || true
+[[ -x /usr/libexec/kos-appearance ]] && /usr/libexec/kos-appearance || true
+[[ -x /usr/libexec/kos-tune ]] && /usr/libexec/kos-tune || true
+command -v glib-compile-schemas >/dev/null && glib-compile-schemas /usr/share/glib-2.0/schemas 2>/dev/null || true
+command -v dconf >/dev/null && dconf update 2>/dev/null || true
+
+rm -f "$BUNDLE" "${STATE_DIR}/pending.json"
+write_result "ok" "$VER" "Successfully updated to ${PRETTY}"
+ply_progress 100
+sync
+sleep 0.6
+systemctl reboot

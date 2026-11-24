@@ -7,6 +7,7 @@
 set +e
 systemctl unmask packagekit.service 2>/dev/null
 systemctl disable packagekit.service 2>/dev/null
+systemctl enable kos-offline-update.service 2>/dev/null
 systemctl disable --now packagekit-offline-update.service 2>/dev/null
 systemctl mask packagekit-offline-update.service 2>/dev/null
 systemctl disable --now apt-daily.timer apt-daily-upgrade.timer \

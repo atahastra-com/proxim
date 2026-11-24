@@ -1,7 +1,8 @@
-# Proxim OS boot splash (Atahastra). Black screen, the logo fading in at
-# the centre, "Proxim OS" under it, an iOS-style spinner below and the
-# ATAHASTRA vendor line at the bottom. Images come from
-# distro/branding/gen (make-assets.py).
+# Proxim OS boot & offline-update splash (Atahastra).
+# Normal boot/shutdown: black screen, Atahastra logo, "Proxim OS", iOS-style
+# 12-spoke spinner, and ATAHASTRA footer.
+# System update mode (plymouth change-mode --updates): hides the spinner and
+# fills a sleek Apple-style white progress bar from 0% to 100%.
 
 Window.SetBackgroundTopColor(0, 0, 0);
 Window.SetBackgroundBottomColor(0, 0, 0);
@@ -43,21 +44,70 @@ spinner.sprite = Sprite(spin[0]);
 spinner.sprite.SetPosition(X + W / 2 - spin[0].GetWidth() / 2, logo.y + logo.image.GetHeight() + 96, 10);
 spinner.sprite.SetOpacity(0);
 
+bar.bg_image = Image("splash-bar-bg.png");
+bar.fill_full = Image("splash-bar-fill.png");
+bar.x = X + W / 2 - bar.bg_image.GetWidth() / 2;
+bar.y = logo.y + logo.image.GetHeight() + 104;
+bar.bg_sprite = Sprite(bar.bg_image);
+bar.bg_sprite.SetPosition(bar.x, bar.y, 11);
+bar.bg_sprite.SetOpacity(0);
+bar.fill_sprite = Sprite(bar.fill_full.Scale(1, bar.fill_full.GetHeight()));
+bar.fill_sprite.SetPosition(bar.x, bar.y, 12);
+bar.fill_sprite.SetOpacity(0);
+
 state.tick = 0;
+state.is_update = (Plymouth.GetMode() == "updates" || Plymouth.GetMode() == "system-upgrade");
+state.progress = 0;
+
+fun set_update_progress (pct)
+  {
+    state.is_update = 1;
+    if (pct < 0)
+      pct = 0;
+    if (pct > 100)
+      pct = 100;
+    state.progress = pct;
+    w = Math.Int((bar.fill_full.GetWidth() * pct) / 100);
+    if (w < 6 && pct > 0)
+      w = 6;
+    if (w > 0)
+      {
+        bar.fill_sprite.SetImage(bar.fill_full.Scale(w, bar.fill_full.GetHeight()));
+        bar.fill_sprite.SetOpacity(1);
+      }
+    else
+      {
+        bar.fill_sprite.SetOpacity(0);
+      }
+    bar.bg_sprite.SetOpacity(1);
+    spinner.sprite.SetOpacity(0);
+  }
 
 fun refresh_callback ()
   {
     state.tick++;
-    # 50 refreshes a second: fade in over ~0.6s, spinner a step every 80ms.
     fade = state.tick / 30;
     if (fade > 1)
       fade = 1;
     logo.sprite.SetOpacity(fade);
     name.sprite.SetOpacity(fade);
     vendor.sprite.SetOpacity(fade * 0.9);
-    spinner.sprite.SetOpacity(fade);
-    frame = Math.Int(state.tick / 4) % 12;
-    spinner.sprite.SetImage(spin[frame]);
+    if (state.is_update)
+      {
+        spinner.sprite.SetOpacity(0);
+        bar.bg_sprite.SetOpacity(fade);
+        if (state.progress > 0)
+          bar.fill_sprite.SetOpacity(fade);
+      }
+    else
+      {
+        bar.bg_sprite.SetOpacity(0);
+        bar.fill_sprite.SetOpacity(0);
+        spinner.sprite.SetOpacity(fade);
+        frame = Math.Int(state.tick / 4) % 12;
+        spinner.sprite.SetImage(spin[frame]);
+      }
   }
 
 Plymouth.SetRefreshFunction (refresh_callback);
+Plymouth.SetSystemUpdateFunction (set_update_progress);

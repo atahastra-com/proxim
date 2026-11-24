@@ -1,0 +1,93 @@
+#!/bin/bash
+# Privileged helper for Proxim OS Software Update (invoked via pkexec).
+# Verifies a .pxu update bundle, stages it into /var/lib/kos-update, sets the
+# systemd /system-update offline-update trigger, and optionally reboots.
+set -euo pipefail
+
+CMD="${1:-}"
+BUNDLE="${2:-}"
+SIG_FILE="${3:-}"
+PUB_KEY="/etc/kos/update-signing.pub"
+STATE_DIR="/var/lib/kos-update"
+
+if [[ -f /etc/kos/update.conf ]]; then
+  # shellcheck disable=SC1091
+  source /etc/kos/update.conf
+fi
+if [[ -f /etc/kos/update.local.conf ]]; then
+  # shellcheck disable=SC1091
+  source /etc/kos/update.local.conf
+fi
+PUB_KEY="${PUBLIC_KEY:-$PUB_KEY}"
+
+die() {
+  echo "kos-update-helper: $*" >&2
+  exit 1
+}
+
+case "$CMD" in
+  stage|stage-and-reboot)
+    [[ -n "$BUNDLE" && -f "$BUNDLE" ]] || die "missing update bundle file"
+    ;;
+  cancel)
+    rm -f /system-update "${STATE_DIR}/pending.pxu" "${STATE_DIR}/pending.json"
+    echo "Cancelled staged update."
+    exit 0
+    ;;
+  *)
+    die "usage: kos-update-helper <stage|stage-and-reboot|cancel> [bundle.pxu] [bundle.sig]"
+    ;;
+esac
+
+# Optional Ed25519 signature check when a public key is installed on the system.
+if [[ -f "$PUB_KEY" ]]; then
+  if [[ -z "$SIG_FILE" && -f "${BUNDLE}.sig" ]]; then
+    SIG_FILE="${BUNDLE}.sig"
+  fi
+  [[ -n "$SIG_FILE" && -f "$SIG_FILE" ]] || die "signature required by ${PUB_KEY} but missing"
+  openssl pkeyutl -verify -pubin -inkey "$PUB_KEY" -rawin -in "$BUNDLE" -sigfile "$SIG_FILE" >/dev/null \
+    || die "cryptographic signature verification failed"
+fi
+
+# Validate bundle structure and extract manifest.json safely in Python.
+mkdir -p "$STATE_DIR"
+chmod 0755 "$STATE_DIR"
+
+python3 - "$BUNDLE" "${STATE_DIR}/pending.json" << 'PY'
+import json, sys, tarfile
+
+bundle_path, out_meta = sys.argv[1], sys.argv[2]
+try:
+    with tarfile.open(bundle_path, 'r:gz') as tf:
+        try:
+            member = tf.getmember('manifest.json')
+        except KeyError:
+            try:
+                member = tf.getmember('./manifest.json')
+            except KeyError as exc:
+                raise SystemExit('bundle missing manifest.json') from exc
+        fh = tf.extractfile(member)
+        if fh is None:
+            raise SystemExit('invalid manifest.json entry')
+        manifest = json.loads(fh.read().decode('utf-8'))
+except tarfile.TarError as exc:
+    raise SystemExit(f'corrupt update archive: {exc}') from exc
+
+ver = str(manifest.get('version', '')).strip()
+if not ver or any(c in ver for c in '/\\\n\r\t"'):
+    raise SystemExit('invalid version in manifest.json')
+
+with open(out_meta, 'w', encoding='utf-8') as out:
+    json.dump(manifest, out, indent=2)
+    out.write('\n')
+print(f"Verified bundle: {manifest.get('name') or ('Proxim OS ' + ver)} ({ver})")
+PY
+
+install -m 0600 "$BUNDLE" "${STATE_DIR}/pending.pxu"
+ln -sfn "$STATE_DIR" /system-update
+sync
+
+echo "Update staged for next restart."
+if [[ "$CMD" == "stage-and-reboot" ]]; then
+  systemctl reboot
+fi

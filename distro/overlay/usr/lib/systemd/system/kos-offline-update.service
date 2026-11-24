@@ -1,0 +1,18 @@
+[Unit]
+Description=Proxim OS Offline System Update
+Documentation=man:systemd.offline-updates(7)
+DefaultDependencies=no
+Requires=sysinit.target
+After=sysinit.target systemd-journald.service plymouth-start.service
+Before=system-update.target shutdown.target
+OnFailure=reboot.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/kos-offline-update
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=system-update.target
