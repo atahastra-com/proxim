@@ -446,16 +446,6 @@ export class KosFolderView {
             orientation: Clutter.Orientation.VERTICAL,
             reactive: true,
         });
-        try {
-            const blur = new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, brightness: 0.88});
-            if ('radius' in blur)
-                blur.radius = 56;
-            else if ('sigma' in blur)
-                blur.sigma = 56;
-            this._panel.add_effect(blur);
-        } catch (_e) {
-            // fallback to CSS tint
-        }
         // Stop the walk up to the backdrop while the pointer is on the panel.
         this._panel._delegate = {
             handleDragOver: () => DND.DragMotionResult.NO_DROP,
