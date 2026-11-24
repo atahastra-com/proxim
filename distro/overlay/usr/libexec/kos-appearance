@@ -5,7 +5,9 @@
 #
 # The C template still binds default_toggle, dark_toggle and accent_box,
 # so the groups are hidden rather than removed. color-scheme and
-# accent-color are locked separately via dconf.
+# accent-color are locked separately via dconf; existing user values
+# are reset first because a lock does not override a value already in
+# the user db.
 #
 # Safe without network. Called from a fresh build and from distro-update
 # even when KOS_SKIP_APT=1, and from kos-tune on boot.
@@ -14,6 +16,8 @@ set -euo pipefail
 OVERLAY_DIR=/usr/share/kos/gresource-overlays/background
 OVERLAY_UI="${OVERLAY_DIR}/cc-background-panel.ui"
 RESOURCE_PATH=/org/gnome/control-center/background/cc-background-panel.ui
+# GLib format is resource-path=filesystem-path (gio/gresource.c).
+OVERLAY_SPEC="${RESOURCE_PATH%/*}=${OVERLAY_DIR}"
 
 log() { echo "kos-appearance: $*"; }
 
@@ -49,7 +53,7 @@ find_source() {
 
 patch_ui() {
   python3 - "$1" "$2" << 'PY'
-import re, sys
+import re, sys, os
 
 src, dest = sys.argv[1], sys.argv[2]
 text = open(src, encoding="utf-8").read()
@@ -80,8 +84,6 @@ if marker not in text:
     else:
         text = marker + text
 
-# Keep the fallback if a mid-file write is interrupted.
-import os
 tmp = dest + ".tmp"
 os.makedirs(os.path.dirname(dest), exist_ok=True)
 with open(tmp, "w", encoding="utf-8") as fh:
@@ -107,14 +109,53 @@ install_wrapper() {
     log "WARN: diverted binary ${real} missing"
     return 0
   fi
-  cat > "$target" << 'WRAP'
+  cat > "$target" << WRAP
 #!/bin/bash
 # KOS_APPEARANCE_WRAPPER
-export G_RESOURCE_OVERLAYS="/usr/share/kos/gresource-overlays/background=/org/gnome/control-center/background${G_RESOURCE_OVERLAYS:+:$G_RESOURCE_OVERLAYS}"
-exec /usr/bin/gnome-control-center.real "$@"
+# GLib wants resource-path=filesystem-path, not the reverse.
+export G_RESOURCE_OVERLAYS="${OVERLAY_SPEC}\${G_RESOURCE_OVERLAYS:+:\$G_RESOURCE_OVERLAYS}"
+exec /usr/bin/gnome-control-center.real "\$@"
 WRAP
   chmod 755 "$target"
   log "installed gnome-control-center wrapper"
+}
+
+# User dconf wins for reads even after a lock, so a pre-existing pink
+# accent (or a light scheme) would stick. Drop the locks briefly, write
+# the kos defaults, then lock again.
+force_color_defaults() {
+  local lockdir=/etc/dconf/db/local.d/locks
+  local lockfile="${lockdir}/00-kos"
+  local saved="" home user uid
+  command -v dconf >/dev/null || { log "WARN: dconf not installed, cannot reset/lock colors"; return 0; }
+  mkdir -p "$lockdir"
+  if [[ -f "$lockfile" ]]; then
+    saved="$(mktemp)"
+    cp -a "$lockfile" "$saved"
+    rm -f "$lockfile"
+    dconf update || true
+  fi
+  for home in /home/*; do
+    [[ -d "$home" ]] || continue
+    user="$(basename "$home")"
+    id "$user" >/dev/null 2>&1 || continue
+    uid="$(id -u "$user")"
+    mkdir -p "/run/user/${uid}"
+    chown "$user:$user" "/run/user/${uid}" 2>/dev/null || true
+    # One short session; dbus-run-session can otherwise hang in a chroot.
+    if timeout 20 env XDG_RUNTIME_DIR="/run/user/${uid}" \
+         sudo -u "$user" dbus-run-session -- bash -c \
+         "dconf write /org/gnome/desktop/interface/color-scheme \"'prefer-dark'\" &&
+          dconf write /org/gnome/desktop/interface/accent-color \"'blue'\""; then
+      log "reset color-scheme and accent-color for ${user}"
+    else
+      log "WARN: could not reset color keys for ${user}"
+    fi
+  done
+  if [[ -n "$saved" && -f "$saved" ]]; then
+    mv -f "$saved" "$lockfile"
+  fi
+  dconf update || true
 }
 
 mkdir -p "$OVERLAY_DIR"
@@ -128,7 +169,8 @@ if src="$(find_source)"; then
   if gresource extract "$src" "$RESOURCE_PATH" > "$tmp" && [[ -s "$tmp" ]]; then
     if patch_ui "$tmp" "$OVERLAY_UI"; then
       log "hid Style and Accent Color from ${src}"
-      exit 0
+    else
+      log "WARN: could not patch ${RESOURCE_PATH} from ${src}"
     fi
   else
     log "WARN: could not extract ${RESOURCE_PATH} from ${src}"
@@ -138,9 +180,10 @@ else
 fi
 
 if [[ -s "$OVERLAY_UI" ]]; then
-  log "keeping existing overlay at ${OVERLAY_UI}"
-  exit 0
+  log "overlay in place at ${OVERLAY_UI}"
+else
+  log "WARN: no appearance overlay installed"
 fi
 
-log "WARN: no appearance overlay installed"
+force_color_defaults
 exit 0
