@@ -1,0 +1,2 @@
+KERNEL=="fd[0-9]*", ENV{UDISKS_IGNORE}="1"
+SUBSYSTEM=="block", ATTRS{removable}=="1", KERNEL=="fd*", ENV{UDISKS_IGNORE}="1"

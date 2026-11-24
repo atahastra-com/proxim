@@ -57,18 +57,24 @@ toolbarview > .top-bar headerbar {
     background-image: none;
     border-bottom: none;
     box-shadow: none;
-    min-height: 50px;
+    min-height: 44px;
 }
 
-/* Header buttons ('...', back, search): even dark rounded buttons. */
+/* Header buttons ('...', back, search): compact dark rounded buttons. */
 headerbar button.image-button:not(.titlebutton),
 headerbar menubutton > button {
     background-color: #2c2f38;
     border: none;
     box-shadow: none;
+    border-radius: 7px;
+    min-width: 28px;
+    min-height: 28px;
+}
+
+.nautilus-path-bar {
+    background-color: rgba(255, 255, 255, 0.06);
     border-radius: 8px;
-    min-width: 32px;
-    min-height: 32px;
+    padding: 2px 4px;
 }
 
 headerbar button.image-button:not(.titlebutton):hover,
@@ -150,12 +156,24 @@ placessidebar,
     border-right: 1px solid rgba(255, 255, 255, 0.04);
 }
 
-.navigation-sidebar > row,
-placessidebar row {
-    min-height: 40px;
+.navigation-sidebar > row {
+    min-height: 36px;
     border-radius: 8px;
     margin: 1px 6px;
     padding: 0 8px;
+}
+
+placessidebar row {
+    min-height: 30px;
+    border-radius: 7px;
+    margin: 1px 8px;
+    padding: 0 8px;
+}
+
+placessidebar separator {
+    margin: 5px 12px;
+    min-height: 1px;
+    background-color: rgba(255, 255, 255, 0.07);
 }
 
 .navigation-sidebar > row image {
