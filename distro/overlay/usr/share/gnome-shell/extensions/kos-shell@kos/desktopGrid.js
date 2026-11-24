@@ -102,6 +102,7 @@ export class KosDesktopGrid {
         this._dots = new St.BoxLayout({
             style_class: 'kos-page-dots',
             x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
             visible: false,
         });
         this._actor.add_child(this._dots);
@@ -936,18 +937,23 @@ export class KosDesktopGrid {
             return;
         }
         this._dots.visible = true;
-        this._dots.set_position(0, wa.h - m.padY - DOTS_HEIGHT);
-        this._dots.set_size(wa.w, DOTS_HEIGHT);
         for (let i = 0; i < pages; i++) {
             const dot = new St.Button({
                 style_class: i === this._page ? 'kos-page-dot active' : 'kos-page-dot',
                 reactive: true,
                 can_focus: true,
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
             });
             const page = i;
             dot.connect('clicked', () => this._setPage(page));
             this._dots.add_child(dot);
         }
+        const [, natW] = this._dots.get_preferred_width(-1);
+        this._dots.set_size(natW, DOTS_HEIGHT);
+        this._dots.set_position(
+            Math.round((wa.w - natW) / 2),
+            wa.h - m.padY - DOTS_HEIGHT);
     }
 
     _setPage(page) {

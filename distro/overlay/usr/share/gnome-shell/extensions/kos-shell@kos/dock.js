@@ -18,11 +18,12 @@ import {squircleIcon} from './icons.js';
 // bar width never jumps. The icon grows upward out of the dock (pivot
 // at its bottom-center). Neighbours rise a little for a soft wave.
 const ICON_SIZE = 52;
-const HOVER_SCALE = 1.42;
-const NEIGHBOR_SCALE = 1.16;
-const GROW_MS = 280;
-const SHRINK_MS = 220;
-const LABEL_DELAY_MS = 180;
+const HOVER_SCALE = 1.24;
+const NEIGHBOR_SCALE = 1.10;
+const PIVOT_Y = 0.75;
+const GROW_MS = 220;
+const SHRINK_MS = 180;
+const LABEL_DELAY_MS = 120;
 
 // Global animations are off (enable-animations=false), so actor.ease()
 // would snap. A monotonic GLib timer with ease-out cubic still grows
@@ -327,12 +328,8 @@ export class KosDock {
             if (this._labelItem !== item || !this._label)
                 return GLib.SOURCE_REMOVE;
             this._placeLabel(item);
+            this._label.opacity = 255;
             this._label.show();
-            this._label.ease({
-                opacity: 255,
-                duration: 140,
-                mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-            });
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -345,11 +342,10 @@ export class KosDock {
         const [, natW] = label.get_preferred_width(-1);
         const [, natH] = label.get_preferred_height(-1);
         const [ix, iy] = icon.get_transformed_position();
-        const scale = icon.scale_y || 1;
-        const visualTop = iy - icon.height * (scale - 1);
+        const visualTop = iy - icon.height * (HOVER_SCALE - 1) * PIVOT_Y;
         const cx = ix + icon.width / 2;
         const x = Math.round(cx - natW / 2);
-        const y = Math.round(visualTop - 8 - natH);
+        const y = Math.round(visualTop - 10 - natH);
         label.set_size(natW, natH);
         label.set_position(x, y);
     }
@@ -362,15 +358,8 @@ export class KosDock {
         }
         if (!this._label)
             return;
-        this._label.ease({
-            opacity: 0,
-            duration: 120,
-            mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-            onComplete: () => {
-                if (this._label && this._label.opacity === 0)
-                    this._label.hide();
-            },
-        });
+        this._label.opacity = 0;
+        this._label.hide();
     }
 }
 
@@ -403,7 +392,7 @@ class DockItem extends St.Button {
             icon_size: ICON_SIZE,
             style_class: 'kos-dock-item-icon',
         });
-        icon.set_pivot_point(0.5, 1.0);
+        icon.set_pivot_point(0.5, PIVOT_Y);
         icon.set_scale(1, 1);
         this._zoomTarget = 1;
         this._zoomTick = 0;
