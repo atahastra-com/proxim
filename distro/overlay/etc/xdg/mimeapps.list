@@ -2,3 +2,5 @@
 application/vnd.debian.binary-package=kos-deb-installer.desktop
 application/x-deb=kos-deb-installer.desktop
 application/x-debian-package=kos-deb-installer.desktop
+x-scheme-handler/proxim-update=org.proxim.SoftwareUpdate.desktop
+application/x-proxim-update=org.proxim.SoftwareUpdate.desktop

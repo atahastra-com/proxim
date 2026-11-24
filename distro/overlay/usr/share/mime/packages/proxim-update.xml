@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-proxim-update">
+    <comment>Proxim OS Update Bundle</comment>
+    <glob pattern="*.pxu"/>
+    <icon name="proxim-logo"/>
+  </mime-type>
+</mime-info>

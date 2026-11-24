@@ -13,7 +13,8 @@
 # even when KOS_SKIP_APT=1, and from kos-tune on boot.
 set -euo pipefail
 
-OVERLAY_DIR=/usr/share/kos/gresource-overlays/background
+OVERLAY_ROOT=/usr/share/kos/gresource-overlays
+OVERLAY_DIR="${OVERLAY_ROOT}/background"
 OVERLAY_UI="${OVERLAY_DIR}/cc-background-panel.ui"
 RESOURCE_PATH=/org/gnome/control-center/background/cc-background-panel.ui
 # GLib format is resource-path=filesystem-path (gio/gresource.c).
@@ -92,6 +93,84 @@ os.replace(tmp, dest)
 PY
 }
 
+find_about_resource() {
+  local f="$1" line
+  [[ -f "$f" ]] || return 1
+  command -v gresource >/dev/null || return 1
+  while IFS= read -r line; do
+    case "$line" in
+      */cc-about-page.ui)
+        printf '%s\n' "$line"
+        return 0
+        ;;
+    esac
+  done < <(gresource list "$f" 2>/dev/null || true)
+  return 1
+}
+
+patch_about_ui() {
+  python3 - "$1" "$2" << 'PY'
+import os, re, sys
+import xml.etree.ElementTree as ET
+
+src, dest = sys.argv[1], sys.argv[2]
+text = open(src, encoding="utf-8").read()
+marker = "<!-- kos: Software Update row injected by kos-appearance. -->\n"
+if "kos_software_update_btn" not in text:
+    snippet = (
+        '<child>\n'
+        '  <object class="AdwPreferencesGroup">\n'
+        '    <child>\n'
+        '      <object class="AdwActionRow">\n'
+        '        <property name="title">Software Update</property>\n'
+        '        <property name="subtitle">Check for Proxim OS updates and release notes</property>\n'
+        '        <property name="activatable-widget">kos_software_update_btn</property>\n'
+        '        <child type="suffix">\n'
+        '          <object class="GtkLinkButton" id="kos_software_update_btn">\n'
+        '            <property name="label">Check for Updates…</property>\n'
+        '            <property name="uri">proxim-update://check</property>\n'
+        '            <property name="valign">center</property>\n'
+        '          </object>\n'
+        '        </child>\n'
+        '      </object>\n'
+        '    </child>\n'
+        '  </object>\n'
+        '</child>\n'
+    )
+    pat = re.compile(r'(<child>\s*<object class="AdwPreferencesGroup")')
+    new_text, n = pat.subn(lambda m: snippet + m.group(1), text, count=1)
+    if n != 1:
+        raise SystemExit(f"could not locate AdwPreferencesGroup in About UI (matches={n})")
+    text = new_text
+
+if marker not in text:
+    if text.startswith("<?xml"):
+        first, rest = text.split("\n", 1)
+        text = first + "\n" + marker + rest
+    else:
+        text = marker + text
+
+ET.fromstring(text)
+
+tmp = dest + ".tmp"
+os.makedirs(os.path.dirname(dest), exist_ok=True)
+with open(tmp, "w", encoding="utf-8") as fh:
+    fh.write(text)
+os.replace(tmp, dest)
+PY
+}
+
+write_env_files() {
+  local spec="$1" f
+  for f in /etc/environment.d/90-kos-appearance.conf /usr/lib/environment.d/90-kos-appearance.conf; do
+    mkdir -p "$(dirname "$f")"
+    cat > "$f" << ENV
+# GLib format is resource-path=filesystem-path (see gio/gresource.c).
+G_RESOURCE_OVERLAYS=${spec}
+ENV
+  done
+}
+
 install_wrapper() {
   local target=/usr/bin/gnome-control-center
   local real=/usr/bin/gnome-control-center.real
@@ -159,13 +238,13 @@ force_color_defaults() {
 }
 
 mkdir -p "$OVERLAY_DIR"
-install_wrapper
 
 src=""
 if src="$(find_source)"; then
   tmp="$(mktemp)"
+  about_tmp="$(mktemp)"
   # shellcheck disable=SC2064
-  trap 'rm -f "$tmp"' EXIT
+  trap 'rm -f "$tmp" "$about_tmp"' EXIT
   if gresource extract "$src" "$RESOURCE_PATH" > "$tmp" && [[ -s "$tmp" ]]; then
     if patch_ui "$tmp" "$OVERLAY_UI"; then
       log "hid Style and Accent Color from ${src}"
@@ -175,9 +254,25 @@ if src="$(find_source)"; then
   else
     log "WARN: could not extract ${RESOURCE_PATH} from ${src}"
   fi
+
+  if about_res="$(find_about_resource "$src")"; then
+    about_dir="${OVERLAY_ROOT}/about"
+    about_ui="${about_dir}/$(basename "$about_res")"
+    if gresource extract "$src" "$about_res" > "$about_tmp" && [[ -s "$about_tmp" ]]; then
+      if patch_about_ui "$about_tmp" "$about_ui"; then
+        OVERLAY_SPEC="${OVERLAY_SPEC}:${about_res%/*}=${about_dir}"
+        log "added Software Update row to ${about_res}"
+      else
+        log "WARN: skipping About Software Update overlay"
+      fi
+    fi
+  fi
 else
   log "WARN: gnome-control-center appearance UI not found"
 fi
+
+install_wrapper
+write_env_files "$OVERLAY_SPEC"
 
 if [[ -s "$OVERLAY_UI" ]]; then
   log "overlay in place at ${OVERLAY_UI}"

@@ -59,6 +59,7 @@ export const DEFAULT_UTILITIES = [
     'org.gnome.Evince.desktop',
     'simple-scan.desktop',
     'nm-connection-editor.desktop',
+    'org.proxim.SoftwareUpdate.desktop',
 ];
 
 function clamp(v, lo, hi) {

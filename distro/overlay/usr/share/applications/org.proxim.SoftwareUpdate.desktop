@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Software Update
+Comment=Check for and install Proxim OS system updates
+Exec=/usr/bin/proxim-updater %U
+Icon=proxim-logo
+Terminal=false
+StartupNotify=true
+MimeType=x-scheme-handler/proxim-update;application/x-proxim-update;
+Categories=System;Settings;PackageManager;
+Keywords=update;upgrade;system;os;ota;proxim;
