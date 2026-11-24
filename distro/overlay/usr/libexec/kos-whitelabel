@@ -139,7 +139,8 @@ import json, sys
 path = sys.argv[1]
 drop = {"yelp.desktop", "org.gnome.Yelp.desktop",
         "gnome-tour.desktop", "org.gnome.Tour.desktop",
-        "gnome-initial-setup.desktop", "org.gnome.InitialSetup.desktop"}
+        "gnome-initial-setup.desktop", "org.gnome.InitialSetup.desktop",
+        "org.proxim.SoftwareUpdate.desktop"}
 try:
     with open(path, encoding="utf-8") as fh:
         data = json.load(fh)

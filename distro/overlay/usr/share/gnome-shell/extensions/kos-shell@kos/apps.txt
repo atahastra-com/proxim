@@ -19,4 +19,3 @@ org.gnome.baobab.desktop
 org.gnome.Evince.desktop
 org.gnome.Totem.desktop
 org.gnome.Papers.desktop
-org.proxim.SoftwareUpdate.desktop

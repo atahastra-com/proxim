@@ -5,6 +5,7 @@ Comment=Check for and install Proxim OS system updates
 Exec=/usr/bin/proxim-updater %U
 Icon=proxim-logo
 Terminal=false
+NoDisplay=true
 StartupNotify=true
 MimeType=x-scheme-handler/proxim-update;application/x-proxim-update;
 Categories=System;Settings;PackageManager;

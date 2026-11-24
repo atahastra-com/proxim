@@ -93,13 +93,13 @@ os.replace(tmp, dest)
 PY
 }
 
-find_about_resource() {
-  local f="$1" line
+find_ui_resource() {
+  local f="$1" pattern="$2" line
   [[ -f "$f" ]] || return 1
   command -v gresource >/dev/null || return 1
   while IFS= read -r line; do
     case "$line" in
-      */cc-about-page.ui)
+      $pattern)
         printf '%s\n' "$line"
         return 0
         ;;
@@ -108,28 +108,49 @@ find_about_resource() {
   return 1
 }
 
-patch_about_ui() {
-  python3 - "$1" "$2" << 'PY'
+patch_software_update_row() {
+  python3 - "$1" "$2" "$3" << 'PY'
 import os, re, sys
 import xml.etree.ElementTree as ET
 
-src, dest = sys.argv[1], sys.argv[2]
+src, dest, btn_id = sys.argv[1], sys.argv[2], sys.argv[3]
 text = open(src, encoding="utf-8").read()
-marker = "<!-- kos: Software Update row injected by kos-appearance. -->\n"
-if "kos_software_update_btn" not in text:
+marker = "<!-- kos: Embedded Software Update row injected by kos-appearance. -->\n"
+
+# Strip any previous link-button version so upgrades replace it cleanly.
+text = re.sub(
+    r'<child>\s*<object class="AdwPreferencesGroup">\s*<child>\s*<object class="AdwActionRow">.*?kos_software_update_btn.*?</object>\s*</child>\s*</object>\s*</child>\s*',
+    '',
+    text,
+    flags=re.S,
+)
+
+if btn_id not in text:
     snippet = (
         '<child>\n'
         '  <object class="AdwPreferencesGroup">\n'
         '    <child>\n'
         '      <object class="AdwActionRow">\n'
         '        <property name="title">Software Update</property>\n'
-        '        <property name="subtitle">Check for Proxim OS updates and release notes</property>\n'
-        '        <property name="activatable-widget">kos_software_update_btn</property>\n'
+        '        <property name="subtitle">Proxim OS updates and release notes</property>\n'
+        f'        <property name="activatable-widget">{btn_id}</property>\n'
+        '        <child type="prefix">\n'
+        '          <object class="GtkImage">\n'
+        '            <property name="icon-name">software-update-available-symbolic</property>\n'
+        '          </object>\n'
+        '        </child>\n'
         '        <child type="suffix">\n'
-        '          <object class="GtkLinkButton" id="kos_software_update_btn">\n'
-        '            <property name="label">Check for Updates…</property>\n'
-        '            <property name="uri">proxim-update://check</property>\n'
+        f'          <object class="GtkButton" id="{btn_id}">\n'
+        '            <property name="name">kos-open-software-update-btn</property>\n'
         '            <property name="valign">center</property>\n'
+        '            <style>\n'
+        '              <class name="flat"/>\n'
+        '            </style>\n'
+        '            <child>\n'
+        '              <object class="GtkImage">\n'
+        '                <property name="icon-name">go-next-symbolic</property>\n'
+        '              </object>\n'
+        '            </child>\n'
         '          </object>\n'
         '        </child>\n'
         '      </object>\n'
@@ -140,7 +161,7 @@ if "kos_software_update_btn" not in text:
     pat = re.compile(r'(<child>\s*<object class="AdwPreferencesGroup")')
     new_text, n = pat.subn(lambda m: snippet + m.group(1), text, count=1)
     if n != 1:
-        raise SystemExit(f"could not locate AdwPreferencesGroup in About UI (matches={n})")
+        raise SystemExit(f"could not locate AdwPreferencesGroup (matches={n})")
     text = new_text
 
 if marker not in text:
@@ -193,6 +214,9 @@ install_wrapper() {
 # KOS_APPEARANCE_WRAPPER
 # GLib wants resource-path=filesystem-path, not the reverse.
 export G_RESOURCE_OVERLAYS="${OVERLAY_SPEC}\${G_RESOURCE_OVERLAYS:+:\$G_RESOURCE_OVERLAYS}"
+if [[ -f /usr/lib/kos/libkos-settings-update.so ]]; then
+  export LD_PRELOAD="/usr/lib/kos/libkos-settings-update.so\${LD_PRELOAD:+:\$LD_PRELOAD}"
+fi
 exec /usr/bin/gnome-control-center.real "\$@"
 WRAP
   chmod 755 "$target"
@@ -255,18 +279,31 @@ if src="$(find_source)"; then
     log "WARN: could not extract ${RESOURCE_PATH} from ${src}"
   fi
 
-  if about_res="$(find_about_resource "$src")"; then
-    about_dir="${OVERLAY_ROOT}/about"
-    about_ui="${about_dir}/$(basename "$about_res")"
-    if gresource extract "$src" "$about_res" > "$about_tmp" && [[ -s "$about_tmp" ]]; then
-      if patch_about_ui "$about_tmp" "$about_ui"; then
-        OVERLAY_SPEC="${OVERLAY_SPEC}:${about_res%/*}=${about_dir}"
-        log "added Software Update row to ${about_res}"
-      else
-        log "WARN: skipping About Software Update overlay"
+  add_spec() {
+    local entry="$1"
+    case ":${OVERLAY_SPEC}:" in
+      *":${entry}:"*) ;;
+      *) OVERLAY_SPEC="${OVERLAY_SPEC}:${entry}" ;;
+    esac
+  }
+
+  for spec_pair in "*/cc-system-panel.ui:kos_sys_software_update_btn" "*/cc-about-page.ui:kos_about_software_update_btn"; do
+    pat="${spec_pair%%:*}"
+    bid="${spec_pair##*:}"
+    if ui_res="$(find_ui_resource "$src" "$pat")"; then
+      rel="${ui_res#/org/gnome/control-center/}"
+      ui_dest="${OVERLAY_ROOT}/${rel}"
+      ui_dir="$(dirname "$ui_dest")"
+      if gresource extract "$src" "$ui_res" > "$about_tmp" && [[ -s "$about_tmp" ]]; then
+        if patch_software_update_row "$about_tmp" "$ui_dest" "$bid"; then
+          add_spec "${ui_res%/*}=${ui_dir}"
+          log "added embedded Software Update row to ${ui_res}"
+        else
+          log "WARN: skipping Software Update overlay for ${ui_res}"
+        fi
       fi
     fi
-  fi
+  done
 else
   log "WARN: gnome-control-center appearance UI not found"
 fi

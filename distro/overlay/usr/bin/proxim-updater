@@ -549,10 +549,8 @@ class SoftwareUpdateApp(Adw.Application):
         )
 
     def do_activate(self):
-        win = self.props.active_window
-        if not win:
-            win = SoftwareUpdateWindow(self)
-        win.present()
+        os.environ.pop('LD_PRELOAD', None)
+        os.execvp('gnome-control-center', ['gnome-control-center', 'system'])
 
     def do_open(self, files, _n_files, _hint):
         bundle = None
@@ -564,6 +562,9 @@ class SoftwareUpdateApp(Adw.Application):
             if path and os.path.isfile(path):
                 bundle = path
                 break
+        if not bundle:
+            os.environ.pop('LD_PRELOAD', None)
+            os.execvp('gnome-control-center', ['gnome-control-center', 'system'])
         win = SoftwareUpdateWindow(self, initial_bundle=bundle)
         win.present()
 
