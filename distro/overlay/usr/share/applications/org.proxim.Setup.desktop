@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Proxim OS Setup
+Comment=Set up your Proxim OS user account and preferences
+Exec=/usr/bin/proxim-setup
+Icon=proxim-logo
+Terminal=false
+NoDisplay=true
+StartupNotify=true
+Categories=System;Settings;

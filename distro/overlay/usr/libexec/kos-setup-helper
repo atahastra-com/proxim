@@ -1,0 +1,88 @@
+#!/bin/bash
+# Privileged helper for Proxim OS First-Boot Setup (invoked via pkexec).
+# Reads JSON payload from stdin so passwords never appear in process args.
+set -euo pipefail
+
+python3 - << 'PY'
+import json, os, re, shutil, subprocess, sys
+
+data = json.load(sys.stdin)
+full_name = str(data.get("full_name", "")).strip()
+username = str(data.get("username", "")).strip().lower()
+password = str(data.get("password", ""))
+hostname = str(data.get("hostname", "")).strip().lower()
+timezone = str(data.get("timezone", "")).strip()
+autologin = bool(data.get("autologin", False))
+
+if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", username):
+    raise SystemExit(f"Invalid username: {username!r}")
+if not password:
+    raise SystemExit("Password cannot be empty")
+if hostname and not re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?", hostname):
+    raise SystemExit(f"Invalid computer name: {hostname!r}")
+
+# 1. Create user if it does not already exist, or update existing user.
+exists = subprocess.run(["id", username], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+if not exists:
+    cmd = ["useradd", "-m", "-s", "/bin/bash", "-G", "sudo,adm,audio,video,netdev,plugdev"]
+    if full_name:
+        cmd += ["-c", full_name]
+    cmd.append(username)
+    subprocess.run(cmd, check=True)
+elif full_name:
+    subprocess.run(["chfn", "-f", full_name, username], check=False)
+
+# 2. Set password securely via chpasswd stdin.
+subprocess.run(["chpasswd"], input=f"{username}:{password}\n", text=True, check=True)
+
+# 3. Copy kos skel configs if home is missing them.
+home = f"/home/{username}"
+for rel in (".config/gtk-3.0", ".config/gtk-4.0"):
+    src = f"/etc/skel/{rel}"
+    dst = f"{home}/{rel}"
+    if os.path.isdir(src) and not os.path.exists(dst):
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        shutil.copytree(src, dst)
+subprocess.run(["chown", "-R", f"{username}:{username}", f"{home}/.config"], check=False)
+
+# 4. Apply hostname if provided.
+if hostname:
+    subprocess.run(["hostnamectl", "set-hostname", hostname], check=False)
+    with open("/etc/hostname", "w", encoding="utf-8") as fh:
+        fh.write(hostname + "\n")
+
+# 5. Apply timezone if provided.
+if timezone:
+    subprocess.run(["timedatectl", "set-timezone", timezone], check=False)
+
+# 6. Configure GDM login mode.
+gdm_conf = "/etc/gdm3/custom.conf"
+if os.path.isfile(gdm_conf):
+    with open(gdm_conf, encoding="utf-8") as fh:
+        lines = fh.readlines()
+    out = []
+    for ln in lines:
+        if ln.startswith(("AutomaticLoginEnable=", "AutomaticLogin=", "TimedLoginEnable=", "TimedLogin=")):
+            continue
+        out.append(ln)
+    new_lines = []
+    inserted = False
+    for ln in out:
+        new_lines.append(ln)
+        if not inserted and ln.strip() == "[daemon]":
+            if autologin:
+                new_lines.append("AutomaticLoginEnable=true\n")
+                new_lines.append(f"AutomaticLogin={username}\n")
+            else:
+                new_lines.append("AutomaticLoginEnable=false\n")
+            inserted = True
+    with open(gdm_conf, "w", encoding="utf-8") as fh:
+        fh.writelines(new_lines)
+
+# 7. Mark setup complete and clear pending trigger.
+os.makedirs("/var/lib/kos", exist_ok=True)
+with open("/var/lib/kos/setup-done", "w", encoding="utf-8") as fh:
+    fh.write(f"user={username}\n")
+if os.path.exists("/var/lib/kos/setup-pending"):
+    os.unlink("/var/lib/kos/setup-pending")
+PY
