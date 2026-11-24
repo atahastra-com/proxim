@@ -12,14 +12,16 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
 
 import {DND, appIcon, getPins, later, makeDraggableIcon, pinAt} from './folders.js';
-import {squircleIcon} from './icons.js';
+import {squircleGIcon} from './icons.js';
 
 // Hover magnification is a scale transform, not a size reflow, so the
-// bar width never jumps. The icon grows upward out of the dock (pivot
-// at its bottom-center). Neighbours rise a little for a soft wave.
+// bar width never jumps. Only the hovered icon scales up; we load the
+// texture at HOVER_PX and scale down to ICON_SIZE at rest so enlarging
+// to hover is 1:1 native resolution (never blurry).
 const ICON_SIZE = 52;
-const HOVER_SCALE = 1.24;
-const NEIGHBOR_SCALE = 1.10;
+const HOVER_SCALE = 1.25;
+const HOVER_PX = Math.round(ICON_SIZE * HOVER_SCALE);
+const REST_SCALE = ICON_SIZE / HOVER_PX;
 const PIVOT_Y = 0.75;
 const GROW_MS = 220;
 const SHRINK_MS = 180;
@@ -251,16 +253,9 @@ export class KosDock {
         const items = this._items();
         const hovered = items.findIndex(c => c.hover);
         for (let i = 0; i < items.length; i++) {
-            let scale = 1;
-            if (hovered >= 0) {
-                const d = Math.abs(i - hovered);
-                if (d === 0)
-                    scale = HOVER_SCALE;
-                else if (d === 1)
-                    scale = NEIGHBOR_SCALE;
-            }
+            const scale = i === hovered ? 1 : REST_SCALE;
             items[i].setZoom(scale);
-            items[i].z_position = scale === HOVER_SCALE ? 2 : scale > 1 ? 1 : 0;
+            items[i].z_position = i === hovered ? 2 : 0;
         }
         if (hovered >= 0)
             this._showLabel(items[hovered]);
@@ -270,7 +265,7 @@ export class KosDock {
 
     _resetZoom(snap = false) {
         for (const item of this._items()) {
-            item.setZoom(1, snap);
+            item.setZoom(REST_SCALE, snap);
             item.z_position = 0;
         }
     }
@@ -335,15 +330,15 @@ export class KosDock {
     }
 
     _placeLabel(item) {
-        const icon = item._kosIcon;
+        const slot = item._kosSlot || item._kosIcon;
         const label = this._label;
-        if (!icon || !label)
+        if (!slot || !label)
             return;
         const [, natW] = label.get_preferred_width(-1);
         const [, natH] = label.get_preferred_height(-1);
-        const [ix, iy] = icon.get_transformed_position();
-        const visualTop = iy - icon.height * (HOVER_SCALE - 1) * PIVOT_Y;
-        const cx = ix + icon.width / 2;
+        const [ix, iy] = slot.get_transformed_position();
+        const visualTop = iy - (HOVER_PX - ICON_SIZE) * PIVOT_Y;
+        const cx = ix + ICON_SIZE / 2;
         const x = Math.round(cx - natW / 2);
         const y = Math.round(visualTop - 10 - natH);
         label.set_size(natW, natH);
@@ -385,21 +380,38 @@ class DockItem extends St.Button {
         });
 
         const gicon = app ? (app.get_icon() || app.app_info?.get_icon()) : null;
-        const icon = this._kosIcon = squircleIcon({
-            gicon,
-            icon_name: gicon ? null : (iconName || 'application-x-executable'),
+        const fallbackName = gicon ? null : (iconName || 'application-x-executable');
+        const baked = squircleGIcon(gicon, fallbackName, HOVER_PX) ||
+            squircleGIcon(null, 'application-x-executable', HOVER_PX);
+        const icon = this._kosIcon = new St.Icon({
+            gicon: baked || gicon,
+            icon_name: baked || gicon ? null : fallbackName,
             fallback_icon_name: 'application-x-executable',
-            icon_size: ICON_SIZE,
+            icon_size: HOVER_PX,
             style_class: 'kos-dock-item-icon',
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
         });
         icon.set_pivot_point(0.5, PIVOT_Y);
-        icon.set_scale(1, 1);
-        this._zoomTarget = 1;
+        icon.set_scale(REST_SCALE, REST_SCALE);
+        this._zoomTarget = REST_SCALE;
         this._zoomTick = 0;
+
+        // Fixed 52x52 slot so the dock never reflows while the 65px icon scales.
+        const slot = this._kosSlot = new St.Widget({
+            width: ICON_SIZE,
+            height: ICON_SIZE,
+            layout_manager: new Clutter.BinLayout(),
+            clip_to_allocation: false,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        slot.add_child(icon);
+
         this.clip_to_allocation = false;
         box.clip_to_allocation = false;
         icon.clip_to_allocation = false;
-        box.add_child(icon);
+        box.add_child(slot);
 
         this._dot = new St.Widget({
             style_class: 'kos-dock-dot',
@@ -445,7 +457,7 @@ class DockItem extends St.Button {
             icon.set_scale(scale, scale);
             return;
         }
-        const from = icon.scale_x || 1;
+        const from = icon.scale_x || REST_SCALE;
         const to = scale;
         if (Math.abs(to - from) < 0.001) {
             icon.set_scale(to, to);
