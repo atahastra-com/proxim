@@ -23,6 +23,8 @@ static struct {
     gulong (*g_signal_add_emission_hook)(guint, guint, gboolean (*)(gpointer, guint, const gpointer, gpointer), gpointer, gpointer);
     gpointer (*g_value_get_object)(const gpointer);
     gboolean (*g_type_check_instance_is_a)(gpointer, GType);
+    gpointer (*g_object_ref)(gpointer);
+    void (*g_object_unref)(gpointer);
 
     GType (*gtk_list_box_row_get_type)(void);
     GType (*gtk_label_get_type)(void);
@@ -31,7 +33,6 @@ static struct {
     gpointer (*gtk_widget_get_next_sibling)(gpointer);
     gpointer (*gtk_widget_get_parent)(gpointer);
     const char *(*gtk_widget_get_css_name)(gpointer);
-    gboolean (*gtk_widget_has_css_class)(gpointer, const char *);
     void (*gtk_widget_set_visible)(gpointer, gboolean);
 } api;
 
@@ -46,6 +47,8 @@ static gboolean load_symbols(void) {
     LOAD_SYM(g_signal_add_emission_hook);
     LOAD_SYM(g_value_get_object);
     LOAD_SYM(g_type_check_instance_is_a);
+    LOAD_SYM(g_object_ref);
+    LOAD_SYM(g_object_unref);
 
     LOAD_SYM(gtk_list_box_row_get_type);
     LOAD_SYM(gtk_label_get_type);
@@ -54,35 +57,48 @@ static gboolean load_symbols(void) {
     LOAD_SYM(gtk_widget_get_next_sibling);
     LOAD_SYM(gtk_widget_get_parent);
     LOAD_SYM(gtk_widget_get_css_name);
-    LOAD_SYM(gtk_widget_has_css_class);
     LOAD_SYM(gtk_widget_set_visible);
     return TRUE;
 }
 
-static gboolean in_places_sidebar(gpointer w) {
-    gpointer cur = api.gtk_widget_get_parent(w);
-    for (int depth = 0; cur && depth < 12; depth++) {
+static gboolean is_places_row(gpointer row) {
+    const char *row_css = api.gtk_widget_get_css_name(row);
+    if (!row_css || strcmp(row_css, "row") != 0)
+        return FALSE;
+    gpointer list = api.gtk_widget_get_parent(row);
+    if (!list)
+        return FALSE;
+    const char *list_css = api.gtk_widget_get_css_name(list);
+    if (!list_css || strcmp(list_css, "list") != 0)
+        return FALSE;
+    gpointer cur = api.gtk_widget_get_parent(list);
+    for (int depth = 0; cur && depth < 6; depth++) {
         const char *css = api.gtk_widget_get_css_name(cur);
         if (css && strcmp(css, "placessidebar") == 0)
-            return TRUE;
-        if (api.gtk_widget_has_css_class(cur, "sidebar-row") ||
-            api.gtk_widget_has_css_class(cur, "navigation-sidebar"))
             return TRUE;
         cur = api.gtk_widget_get_parent(cur);
     }
     return FALSE;
 }
 
-static gboolean has_home_label(gpointer w) {
+static gboolean has_home_label(gpointer w, int depth) {
+    if (depth > 6)
+        return FALSE;
     for (gpointer c = api.gtk_widget_get_first_child(w); c; c = api.gtk_widget_get_next_sibling(c)) {
         if (api.g_type_check_instance_is_a(c, api.gtk_label_get_type())) {
             const char *txt = api.gtk_label_get_text(c);
             if (txt && strcmp(txt, "Home") == 0)
                 return TRUE;
         }
-        if (has_home_label(c))
+        if (has_home_label(c, depth + 1))
             return TRUE;
     }
+    return FALSE;
+}
+
+static gboolean hide_row_idle(gpointer row) {
+    api.gtk_widget_set_visible(row, FALSE);
+    api.g_object_unref(row);
     return FALSE;
 }
 
@@ -93,8 +109,10 @@ static gboolean on_row_mapped(gpointer ihint, guint n_params, const gpointer par
     gpointer row = api.g_value_get_object(params);
     if (!row)
         return TRUE;
-    if (in_places_sidebar(row) && has_home_label(row))
-        api.gtk_widget_set_visible(row, FALSE);
+    if (is_places_row(row) && has_home_label(row, 0)) {
+        api.g_object_ref(row);
+        api.g_idle_add(hide_row_idle, row);
+    }
     return TRUE;
 }
 
