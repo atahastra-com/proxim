@@ -6,6 +6,7 @@
 
 #define _GNU_SOURCE
 #include <dlfcn.h>
+#include <stdio.h>
 #include <string.h>
 
 typedef unsigned long GType;
@@ -33,6 +34,7 @@ static struct {
     gpointer (*gtk_widget_get_next_sibling)(gpointer);
     gpointer (*gtk_widget_get_parent)(gpointer);
     const char *(*gtk_widget_get_css_name)(gpointer);
+    void (*gtk_widget_add_css_class)(gpointer, const char *);
     void (*gtk_widget_set_visible)(gpointer, gboolean);
 } api;
 
@@ -57,6 +59,7 @@ static gboolean load_symbols(void) {
     LOAD_SYM(gtk_widget_get_next_sibling);
     LOAD_SYM(gtk_widget_get_parent);
     LOAD_SYM(gtk_widget_get_css_name);
+    LOAD_SYM(gtk_widget_add_css_class);
     LOAD_SYM(gtk_widget_set_visible);
     return TRUE;
 }
@@ -86,7 +89,6 @@ static gboolean is_places_row(gpointer row) {
     const char *list_css = api.gtk_widget_get_css_name(list);
     if (!list_css || strcmp(list_css, "list") != 0)
         return FALSE;
-    /* Never hide a single-child container row; sidebar list has many rows. */
     int n_rows = 0;
     for (gpointer c = api.gtk_widget_get_first_child(list); c; c = api.gtk_widget_get_next_sibling(c)) {
         const char *ccss = api.gtk_widget_get_css_name(c);
@@ -120,8 +122,11 @@ static gboolean has_home_label(gpointer w, int depth) {
     return FALSE;
 }
 
-static gboolean hide_row_idle(gpointer row) {
-    api.gtk_widget_set_visible(row, FALSE);
+static gboolean collapse_row_idle(gpointer row) {
+    api.gtk_widget_add_css_class(row, "kos-hidden-home");
+    gpointer child = api.gtk_widget_get_first_child(row);
+    if (child)
+        api.gtk_widget_set_visible(child, FALSE);
     api.g_object_unref(row);
     return FALSE;
 }
@@ -135,7 +140,7 @@ static gboolean on_row_mapped(gpointer ihint, guint n_params, const gpointer par
         return TRUE;
     if (is_places_row(row) && has_home_label(row, 0)) {
         api.g_object_ref(row);
-        api.g_idle_add(hide_row_idle, row);
+        api.g_idle_add(collapse_row_idle, row);
     }
     return TRUE;
 }

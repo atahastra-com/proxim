@@ -164,6 +164,13 @@ placessidebar row {
     padding: 0 8px;
 }
 
+placessidebar row.kos-hidden-home {
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    border: none;
+}
+
 .navigation-sidebar separator,
 placessidebar separator {
     margin: 5px 12px;
