@@ -235,6 +235,8 @@ prune_backgrounds() {
     fi
   done
   rm -rf /usr/share/backgrounds/gnome /usr/share/backgrounds/debian*
+  # Drop legacy unused icon packs if left over from earlier builds.
+  rm -rf /usr/share/icons/Deepin2022 /usr/share/icons/kos-icons
 }
 prune_backgrounds
 
