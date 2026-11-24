@@ -24,11 +24,12 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 import {
     DND, KosFolderView, appIcon, beginPendingEdit, commitEditsOnPress,
-    commitPendingEdits, createDesktopDir, createDesktopFile,
+    commitPendingEdits, constrainIconLabel, createDesktopDir, createDesktopFile,
     deleteDesktopFile, endPendingEdit, desktopDirExists, desktopFile, desktopFileExists,
-    dirIcon, fileIcon, getPins, later, listUserDesktopEntries, loadLayout,
-    lookupApp, makeDraggableIcon, makeFolderSquare, moveDesktopFileToDir,
-    pinAt, renameDesktopFile, saveLayout, unpin,
+    dirIcon, fileIcon, folderCellSize, getPins, iconLabelHeight, later,
+    listUserDesktopEntries, loadLayout, lookupApp, makeDraggableIcon,
+    makeFolderSquare, moveDesktopFileToDir, pinAt, renameDesktopFile,
+    saveLayout, unpin,
 } from './folders.js';
 import {closeContextMenu, openContextMenu} from './contextMenu.js';
 
@@ -452,12 +453,15 @@ export class KosDesktopGrid {
 
     // All spacing comes from the work area, so it scales with resolution.
     // At 1280x744 (1280x800 minus the bar): 68px icons, a 1000px-wide block
-    // (~11% margin each side), 7 x 143px columns, 128px rows.
+    // (~11% margin each side), 7 x 143px columns, 128px rows. Labels use a
+    // 2-line slot (iconLabelHeight), so long names wrap then ellipsize
+    // inside the tile and never run into the neighbour. The tile itself is
+    // not clipped, so the 1.09x hover scale can still grow out of the cell.
     _metrics(wa, appCount) {
         const iconSize = clamp(Math.round(Math.min(wa.w / 19, wa.h / 11) / 4) * 4, 48, 112);
         const gridW = Math.min(Math.round(wa.w * 0.78), MAX_GRID_WIDTH);
         const colW = Math.floor(gridW / GRID_COLS);
-        const labelH = Math.round(iconSize * 0.26) + LABEL_GAP;
+        const labelH = iconLabelHeight();
         // Rows a bit shorter than columns: the label fills part of the
         // vertical gap, so icon-to-icon spacing looks even both ways.
         const rowH = Math.max(iconSize + labelH + 20, Math.round(colW * 0.9));
@@ -503,7 +507,7 @@ export class KosDesktopGrid {
         const tileH = m.iconSize + m.labelH + 16;
         this._tileSize = [tileW, tileH];
 
-        this._ensureFolderView(m.iconSize);
+        this._ensureFolderView();
 
         pageItems.forEach((item, i) => {
             const col = i % GRID_COLS;
@@ -551,12 +555,9 @@ export class KosDesktopGrid {
             style_class: 'kos-desktop-icon-label',
             x_align: Clutter.ActorAlign.CENTER,
         });
-        // One line, centered, "Disk Usage Ana…" for long names.
-        const ct = label.clutter_text;
-        ct.line_wrap = false;
-        ct.ellipsize = Pango.EllipsizeMode.END;
-        ct.line_alignment = Pango.Alignment.CENTER;
-        label.set_width(tileW - 8);
+        // Centered, wrap to two lines, then "Advanced Network Co…".
+        // Clip the label only — not the tile — so hover scale still works.
+        constrainIconLabel(label, tileW - 8);
 
         box.add_child(gicon);
         box.add_child(label);
@@ -608,11 +609,7 @@ export class KosDesktopGrid {
             style_class: 'kos-desktop-icon-label',
             x_align: Clutter.ActorAlign.CENTER,
         });
-        const ct = label.clutter_text;
-        ct.line_wrap = false;
-        ct.ellipsize = Pango.EllipsizeMode.END;
-        ct.line_alignment = Pango.Alignment.CENTER;
-        label.set_width(tileW - 8);
+        constrainIconLabel(label, tileW - 8);
         box.add_child(square);
         box.add_child(label);
 
@@ -660,11 +657,7 @@ export class KosDesktopGrid {
                 style_class: 'kos-desktop-icon-label',
                 x_align: Clutter.ActorAlign.CENTER,
             });
-            const ct = label.clutter_text;
-            ct.line_wrap = false;
-            ct.ellipsize = Pango.EllipsizeMode.END;
-            ct.line_alignment = Pango.Alignment.CENTER;
-            label.set_width(tileW - 8);
+            constrainIconLabel(label, tileW - 8);
             return label;
         };
 
@@ -894,17 +887,17 @@ export class KosDesktopGrid {
         this._commit();
     }
 
-    _ensureFolderView(iconSize) {
+    _ensureFolderView() {
         if (this._folderView)
             return;
         this._folderView = new KosFolderView({
             parent: this._actor,
-            tileSize: this._tileSize,
-            iconSize,
+            cellSize: () => folderCellSize(this._m.iconSize),
             makeTile: (id, folder) => {
-                const [tw] = this._tileSize;
-                const tile = this._makeIcon({type: 'app', id}, tw, iconSize, folder);
-                tile?.set_size(...this._tileSize);
+                const iconSize = this._m.iconSize;
+                const {w, h} = folderCellSize(iconSize);
+                const tile = this._makeIcon({type: 'app', id}, w, iconSize, folder);
+                tile?.set_size(w, h);
                 return tile;
             },
             // Only the grid tile shows the name; leave the open folder's

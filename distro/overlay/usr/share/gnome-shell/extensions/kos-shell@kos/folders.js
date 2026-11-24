@@ -20,6 +20,48 @@ import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 import {squircleIcon, squircleRadius} from './icons.js';
 
 export const FOLDER_COLS = 4;
+// Fixed cell for every app in an open folder. 104px is wide enough for a
+// 72px icon plus even side padding; bigger icons get icon size + 32px.
+export const FOLDER_CELL_MIN = 104;
+export const FOLDER_CELL_PAD = 32;
+export const FOLDER_GAP = 16; // row and column gap, both ways
+// Label typography shared with the home grid (matches .kos-desktop-icon-label).
+export const ICON_LABEL_GAP = 8;
+export const ICON_LABEL_LINES = 2;
+export const ICON_LABEL_LINE = 16;
+
+export function iconLabelHeight() {
+    return ICON_LABEL_GAP + ICON_LABEL_LINES * ICON_LABEL_LINE;
+}
+
+// Folder popup cell size for a given grid icon size.
+export function folderCellSize(iconSize) {
+    const w = Math.max(FOLDER_CELL_MIN, iconSize + FOLDER_CELL_PAD);
+    // 8px vertical padding on .kos-desktop-icon, then icon, then 2-line label.
+    const h = 16 + iconSize + iconLabelHeight();
+    return {w, h, gap: FOLDER_GAP};
+}
+
+// Cap an app/folder/file name to its cell: centered, wrap to 2 lines, then
+// ellipsize. clip_to_allocation stops a long string painting into the next
+// cell — St.Label often ignores set_width alone inside a BoxLayout.
+export function constrainIconLabel(label, width) {
+    const height = iconLabelHeight();
+    label.set({
+        x_expand: false,
+        x_align: Clutter.ActorAlign.CENTER,
+        y_align: Clutter.ActorAlign.START,
+        clip_to_allocation: true,
+    });
+    label.clutter_text.set({
+        line_wrap: true,
+        line_wrap_mode: Pango.WrapMode.WORD_CHAR,
+        ellipsize: Pango.EllipsizeMode.END,
+        line_alignment: Pango.Alignment.CENTER,
+        single_line_mode: false,
+    });
+    label.set_size(width, height);
+}
 
 // ---- favorites (dock pins) ------------------------------------------------
 // Written straight to org.gnome.shell favorite-apps: AppFavorites' public
@@ -359,13 +401,12 @@ export function makeFolderSquare(folder, size) {
 // Lives in the desktop layer above the grid (below app windows), like the
 // grid itself. Clicking outside the panel closes it.
 export class KosFolderView {
-    constructor({parent, onLaunch, onRename, onClosed, makeTile, tileSize, iconSize}) {
+    constructor({parent, onLaunch, onRename, onClosed, makeTile, cellSize}) {
         this._onLaunch = onLaunch;
         this._onRename = onRename;
         this._onClosed = onClosed;
         this._makeTile = makeTile;
-        this._tile = tileSize;
-        this._iconSize = iconSize;
+        this._cellSize = cellSize;
         this.folder = null;
 
         this.actor = new St.Widget({
@@ -432,6 +473,7 @@ export class KosFolderView {
         this._grid = new St.Widget({
             style_class: 'kos-folder-grid',
             layout_manager: new Clutter.FixedLayout(),
+            x_align: Clutter.ActorAlign.CENTER,
         });
         this._panel.add_child(this._grid);
 
@@ -447,15 +489,17 @@ export class KosFolderView {
         this._title.text = folder.name;
         this._grid.destroy_all_children();
 
+        const {w: tw, h: th, gap} = this._cellSize();
         const cols = Math.min(FOLDER_COLS, Math.max(2, folder.apps.length));
         const rows = Math.max(1, Math.ceil(folder.apps.length / cols));
-        const [tw, th] = this._tile;
         folder.apps.forEach((id, i) => {
             const tile = this._makeTile(id, folder);
-            tile.set_position((i % cols) * (tw + 12), Math.floor(i / cols) * (th + 8));
+            if (!tile)
+                return;
+            tile.set_position((i % cols) * (tw + gap), Math.floor(i / cols) * (th + gap));
             this._grid.add_child(tile);
         });
-        this._grid.set_size(cols * tw + (cols - 1) * 12, rows * th + (rows - 1) * 8);
+        this._grid.set_size(cols * tw + (cols - 1) * gap, rows * th + (rows - 1) * gap);
 
         this.actor.set_position(0, 0);
         this.actor.set_size(monitor.width, monitor.height);
