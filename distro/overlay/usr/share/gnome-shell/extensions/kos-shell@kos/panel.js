@@ -113,7 +113,7 @@ export class KosPanel {
         // Liquid Glass bar & popovers: strong blur with high luminosity so
         // wallpaper light and color refract through the glass cleanly.
         if (!this._blurEffect) {
-            const pair = addBlur(Main.panel, 48, 0.84);
+            const pair = addBlur(Main.panel, 28, 0.84);
             if (pair)
                 this._blurEffect = pair[1];
         }
@@ -121,7 +121,7 @@ export class KosPanel {
             const menu = Main.panel.statusArea[area]?.menu;
             const box = menu?.box;
             const pointer = menu?._boxPointer;
-            const pair = addBlur(box, 44, 0.78);
+            const pair = addBlur(box, 28, 0.78);
             if (pair) {
                 const [, effect] = pair;
                 if (pointer) {

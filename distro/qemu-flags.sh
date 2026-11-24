@@ -12,23 +12,27 @@ kos_qemu_detect() {
     echo "KVM is not usable; the desktop will be very slow." >&2
   fi
 
-  # Leave RAM for WSL itself. A default WSL VM is ~8G; a 4G guest is already
-  # tight. If the user raises .wslconfig memory, we automatically give the
-  # guest more.
-  local avail_kib
+  # Leave plenty of RAM/CPU for WSL + IDE. On an ~8G WSL host, a 4G/6-vCPU
+  # guest pushes the host into swap; cap at 2560M / 4 vCPUs unless the host
+  # has >10G available or the caller overrides KOS_QEMU_MEM / KOS_QEMU_SMP.
+  local avail_kib total_kib
   avail_kib=$(awk '/MemAvailable:/ {print $2}' /proc/meminfo)
+  total_kib=$(awk '/MemTotal:/ {print $2}' /proc/meminfo)
   local nproc
   nproc=$(nproc)
-  if (( avail_kib >= 9 * 1024 * 1024 )); then
-    KOS_QEMU_MEM=6G
-    KOS_QEMU_SMP=8
-  elif (( avail_kib >= 5 * 1024 * 1024 )); then
-    KOS_QEMU_MEM=4G
-    KOS_QEMU_SMP=6
+  local mem_auto smp_auto
+  if (( total_kib >= 12 * 1024 * 1024 && avail_kib >= 9 * 1024 * 1024 )); then
+    mem_auto=4G
+    smp_auto=6
+  elif (( total_kib >= 9 * 1024 * 1024 && avail_kib >= 5 * 1024 * 1024 )); then
+    mem_auto=3G
+    smp_auto=4
   else
-    KOS_QEMU_MEM=3G
-    KOS_QEMU_SMP=4
+    mem_auto=2560M
+    smp_auto=3
   fi
+  KOS_QEMU_MEM="${KOS_QEMU_MEM:-$mem_auto}"
+  KOS_QEMU_SMP="${KOS_QEMU_SMP:-$smp_auto}"
   if (( nproc > 4 )) && (( KOS_QEMU_SMP > nproc - 2 )); then
     KOS_QEMU_SMP=$((nproc - 2))
   fi
