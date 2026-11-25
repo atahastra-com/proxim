@@ -188,6 +188,18 @@ if [[ -f /etc/resolv.conf ]]; then
   cp -L /etc/resolv.conf "${TARGET}/etc/resolv.conf" 2>/dev/null || true
 fi
 
+# Preserve any Wi-Fi / network profiles connected during the live install.
+if [[ -d /etc/NetworkManager/system-connections ]]; then
+  mkdir -p "${TARGET}/etc/NetworkManager/system-connections"
+  chmod 755 "${TARGET}/etc/NetworkManager/system-connections"
+  for nmc in /etc/NetworkManager/system-connections/*.nmconnection; do
+    [[ -f "$nmc" ]] || continue
+    cp -f "$nmc" "${TARGET}/etc/NetworkManager/system-connections/"
+    chmod 600 "${TARGET}/etc/NetworkManager/system-connections/$(basename "$nmc")"
+    chown root:root "${TARGET}/etc/NetworkManager/system-connections/$(basename "$nmc")"
+  done
+fi
+
 export KOS_INST_USER="$USERNAME"
 export KOS_INST_FULL="$FULL_NAME"
 export KOS_INST_PASS="$PASSWORD"
@@ -299,6 +311,7 @@ emit "MSG Installing Proxim OS bootloader…"
 chroot "$TARGET" bash -lc '
   set -euo pipefail
   systemctl disable mnt-kosdev.mount kos-shell-dev.service 2>/dev/null || true
+  systemctl enable systemd-timesyncd.service 2>/dev/null || true
   if command -v os-prober >/dev/null 2>&1 && os-prober 2>/dev/null | grep -q .; then
     sed -i "s/^GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/; s/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=5/" /etc/default/grub
   fi

@@ -27,6 +27,7 @@ wireless-regdb
 rfkill
 dnsmasq-base
 gvfs-backends
+systemd-timesyncd
 
 # Graphical desktop (GNOME is the engine; the UI is kos).
 # gnome-core pulls yelp and gnome-user-docs; /usr/libexec/kos-whitelabel

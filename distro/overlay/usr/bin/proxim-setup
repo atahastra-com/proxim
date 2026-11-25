@@ -7,6 +7,7 @@ import re
 import subprocess
 import sys
 import threading
+import urllib.request
 
 import gi
 
@@ -48,6 +49,23 @@ def current_timezone():
         ).strip() or 'UTC'
     except Exception:
         return 'UTC'
+
+
+def detect_ip_timezone():
+    """Best-effort IP-based timezone lookup when online."""
+    for url in (
+        'https://ipapi.co/timezone',
+        'http://ip-api.com/line/?fields=timezone',
+    ):
+        try:
+            req = urllib.request.Request(url, headers={'User-Agent': 'ProximOS-Installer/1'})
+            with urllib.request.urlopen(req, timeout=3.5) as resp:
+                tz = resp.read().decode('utf-8').strip()
+                if tz and '/' in tz and ' ' not in tz:
+                    return tz
+        except Exception:
+            continue
+    return None
 
 
 def fmt_bytes(n):
@@ -144,6 +162,7 @@ class InstallerWindow(Adw.ApplicationWindow):
             self.set_deletable(False)
         self._page = 0
         self._username_edited = False
+        self._tz_edited = False
         self._zones = detect_timezones()
         self._disks = []
         self._partitions = []
@@ -398,7 +417,15 @@ class InstallerWindow(Adw.ApplicationWindow):
         cur = current_timezone()
         if cur in self._zones:
             self.tz_row.set_selected(self._zones.index(cur))
+        self.tz_row.connect('notify::selected', self._on_tz_changed)
         group.add(self.tz_row)
+
+        self.auto_tz_row = Adw.ActionRow(
+            title='Automatic Date & Time',
+            subtitle='Time syncs via internet (NTP); time zone auto-detected from IP when online',
+        )
+        self.auto_tz_row.add_prefix(Gtk.Image.new_from_icon_name('preferences-system-time-symbolic'))
+        group.add(self.auto_tz_row)
         box.append(group)
 
         priv_group = Adw.PreferencesGroup(title='System Updates & Privacy')
@@ -746,6 +773,29 @@ class InstallerWindow(Adw.ApplicationWindow):
 
         threading.Thread(target=worker, daemon=True).start()
 
+    def _on_tz_changed(self, row, _pspec):
+        if row.has_focus():
+            self._tz_edited = True
+
+    def _auto_detect_timezone_async(self):
+        if self._tz_edited:
+            return
+
+        def worker():
+            tz = detect_ip_timezone()
+            if not tz or tz not in self._zones:
+                return
+
+            def apply_tz():
+                if not self._tz_edited and tz in self._zones:
+                    self.tz_row.set_selected(self._zones.index(tz))
+                    self.auto_tz_row.set_subtitle(f'Detected {tz} from internet • Automatic NTP clock enabled')
+                return False
+
+            GLib.idle_add(apply_tz)
+
+        threading.Thread(target=worker, daemon=True).start()
+
     def _on_fullname_changed(self, row):
         if not self._username_edited:
             raw = row.get_text().strip().lower()
@@ -853,6 +903,7 @@ class InstallerWindow(Adw.ApplicationWindow):
             self.next_btn.set_visible(True)
             self.next_btn.set_sensitive(True)
         elif idx == 2:
+            self._auto_detect_timezone_async()
             self.next_btn.set_label('Continue')
             self.next_btn.set_visible(True)
             self.next_btn.set_sensitive(True)
