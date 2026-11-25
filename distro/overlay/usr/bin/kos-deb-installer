@@ -179,7 +179,7 @@ def format_size(kb_str):
 class DebInstallerWindow(Adw.ApplicationWindow):
     def __init__(self, app, deb_path=None, uninstall_spec=None):
         super().__init__(application=app, title='Package Installer')
-        self.set_default_size(480, 260)
+        self.set_default_size(480, -1)
         self.deb_path = os.path.abspath(deb_path) if deb_path else None
         self.uninstall_spec = uninstall_spec
         if uninstall_spec:
@@ -197,6 +197,8 @@ class DebInstallerWindow(Adw.ApplicationWindow):
 
         scroll = Gtk.ScrolledWindow(vexpand=True)
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll.set_propagate_natural_height(True)
+        scroll.set_max_content_height(620)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         box.set_margin_top(16)
@@ -256,6 +258,7 @@ class DebInstallerWindow(Adw.ApplicationWindow):
 
         expander = Adw.ExpanderRow(title='Package Details', subtitle=summary)
         expander.set_expanded(False)
+        expander.connect('notify::expanded', self._on_expander_toggled)
         for title, subtitle in [
             ('Installed Size', format_size(self.info.get('Installed-Size'))),
             ('Maintainer', self.info.get('Maintainer') or 'Unknown'),
@@ -284,6 +287,7 @@ class DebInstallerWindow(Adw.ApplicationWindow):
 
         self.log_expander = Gtk.Expander(label='Details')
         self.log_expander.set_expanded(False)
+        self.log_expander.connect('notify::expanded', self._on_expander_toggled)
         self.log_expander.set_child(log_scroll)
         self.progress_box.append(self.log_expander)
         box.append(self.progress_box)
@@ -314,6 +318,9 @@ class DebInstallerWindow(Adw.ApplicationWindow):
         toolbar.set_content(scroll)
         self.set_content(toolbar)
         self._refresh_status()
+
+    def _on_expander_toggled(self, *_args):
+        GLib.idle_add(lambda: (self.set_default_size(480, -1), False)[1])
 
     def _refresh_status(self):
         if self.uninstall_spec and self.uninstall_spec.get('kind') == 'flatpak':
