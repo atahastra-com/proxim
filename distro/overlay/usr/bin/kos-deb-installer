@@ -80,6 +80,92 @@ def find_installed_app_info(pkg_name):
     return candidates[0][1]
 
 
+def resolve_installed_package(desktop_id):
+    """Resolve a .desktop ID (or path) to an installed deb package or flatpak app."""
+    if not desktop_id:
+        return None
+    app_info = (
+        Gio.DesktopAppInfo.new_from_filename(desktop_id)
+        if os.path.isabs(desktop_id)
+        else Gio.DesktopAppInfo.new(desktop_id)
+    )
+    if not app_info:
+        return None
+    desktop_path = app_info.get_filename() or ''
+    app_name = app_info.get_name() or desktop_id
+    summary = app_info.get_description() or ''
+
+    if '/flatpak/' in desktop_path:
+        flatpak_id = os.path.basename(desktop_path)
+        if flatpak_id.endswith('.desktop'):
+            flatpak_id = flatpak_id[:-8]
+        return {
+            'kind': 'flatpak',
+            'flatpak_id': flatpak_id,
+            'pkg_name': flatpak_id,
+            'info': {
+                'Package': app_name,
+                'Version': 'Flatpak',
+                'Architecture': 'flatpak',
+                'Installed-Size': '',
+                'Maintainer': 'Flatpak',
+                'Description': summary or 'Flatpak application',
+            },
+        }
+
+    if not desktop_path:
+        return None
+
+    try:
+        owner = subprocess.check_output(
+            ['dpkg-query', '-S', desktop_path],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+    except subprocess.CalledProcessError:
+        return None
+
+    pkg_name = owner.split(':', 1)[0].split(',', 1)[0].strip()
+    if not pkg_name:
+        return None
+
+    info = {
+        'Package': pkg_name,
+        'Version': '',
+        'Architecture': '',
+        'Installed-Size': '',
+        'Maintainer': '',
+        'Description': summary or app_name,
+    }
+    try:
+        out = subprocess.check_output(
+            [
+                'dpkg-query',
+                '-W',
+                '-f=${Version}\t${Architecture}\t${Installed-Size}\t${Maintainer}\t${Description}',
+                pkg_name,
+            ],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        parts = out.split('\t', 4)
+        if len(parts) >= 4:
+            info['Version'] = parts[0]
+            info['Architecture'] = parts[1]
+            info['Installed-Size'] = parts[2]
+            info['Maintainer'] = parts[3]
+            if len(parts) == 5 and parts[4].strip():
+                info['Description'] = parts[4].strip()
+    except subprocess.CalledProcessError:
+        pass
+
+    return {
+        'kind': 'deb',
+        'pkg_name': pkg_name,
+        'info': info,
+    }
+
+
 def format_size(kb_str):
     try:
         kb = int(kb_str)
@@ -91,12 +177,17 @@ def format_size(kb_str):
 
 
 class DebInstallerWindow(Adw.ApplicationWindow):
-    def __init__(self, app, deb_path):
+    def __init__(self, app, deb_path=None, uninstall_spec=None):
         super().__init__(application=app, title='Package Installer')
         self.set_default_size(480, 260)
-        self.deb_path = os.path.abspath(deb_path)
-        self.info = read_deb_info(self.deb_path)
-        self.pkg_name = self.info.get('Package', '')
+        self.deb_path = os.path.abspath(deb_path) if deb_path else None
+        self.uninstall_spec = uninstall_spec
+        if uninstall_spec:
+            self.info = uninstall_spec['info']
+            self.pkg_name = uninstall_spec['pkg_name']
+        else:
+            self.info = read_deb_info(self.deb_path)
+            self.pkg_name = self.info.get('Package', '')
         self._busy = False
         self._pulse_id = 0
 
@@ -168,7 +259,7 @@ class DebInstallerWindow(Adw.ApplicationWindow):
         for title, subtitle in [
             ('Installed Size', format_size(self.info.get('Installed-Size'))),
             ('Maintainer', self.info.get('Maintainer') or 'Unknown'),
-            ('File', os.path.basename(self.deb_path)),
+            ('File', os.path.basename(self.deb_path) if self.deb_path else self.pkg_name),
         ]:
             row = Adw.ActionRow(title=title, subtitle=subtitle)
             row.set_subtitle_selectable(True)
@@ -225,14 +316,28 @@ class DebInstallerWindow(Adw.ApplicationWindow):
         self._refresh_status()
 
     def _refresh_status(self):
+        if self.uninstall_spec and self.uninstall_spec.get('kind') == 'flatpak':
+            self._app_info = Gio.DesktopAppInfo.new(f"{self.pkg_name}.desktop")
+            self.install_btn.set_visible(False)
+            self.open_btn.set_visible(self._app_info is not None)
+            self.open_btn.remove_css_class('suggested-action')
+            self.remove_btn.set_visible(True)
+            self.status_label.set_text('Installed (Flatpak)')
+            return
+
         cur = installed_version(self.pkg_name)
         pkg_ver = self.info.get('Version', '')
         if cur:
             self._app_info = find_installed_app_info(self.pkg_name)
             has_app = self._app_info is not None
             self.open_btn.set_visible(has_app)
-            if cur == pkg_ver:
+            if not self.deb_path:
                 self.status_label.set_text(f'Installed (version {cur})')
+                self.install_btn.set_visible(False)
+                self.open_btn.remove_css_class('suggested-action')
+            elif cur == pkg_ver:
+                self.status_label.set_text(f'Installed (version {cur})')
+                self.install_btn.set_visible(True)
                 self.install_btn.set_label('Reinstall')
                 if has_app:
                     self.install_btn.remove_css_class('suggested-action')
@@ -242,6 +347,7 @@ class DebInstallerWindow(Adw.ApplicationWindow):
                     self.open_btn.remove_css_class('suggested-action')
             else:
                 self.status_label.set_text(f'Installed: {cur}  →  Package: {pkg_ver}')
+                self.install_btn.set_visible(True)
                 self.install_btn.set_label('Update / Install')
                 self.install_btn.add_css_class('suggested-action')
                 self.open_btn.remove_css_class('suggested-action')
@@ -249,6 +355,7 @@ class DebInstallerWindow(Adw.ApplicationWindow):
         else:
             self._app_info = None
             self.status_label.set_text('Not installed')
+            self.install_btn.set_visible(bool(self.deb_path))
             self.install_btn.set_label('Install')
             self.install_btn.add_css_class('suggested-action')
             self.open_btn.set_visible(False)
@@ -338,6 +445,13 @@ class DebInstallerWindow(Adw.ApplicationWindow):
                 self.status_label.set_text(f'Could not launch: {exc}')
 
     def _on_uninstall(self, _btn):
+        if self.uninstall_spec and self.uninstall_spec.get('kind') == 'flatpak':
+            self._run_pkexec(
+                ['flatpak', 'uninstall', '-y', '--noninteractive', self.pkg_name],
+                'Uninstalling',
+                'Uninstalled',
+            )
+            return
         self._run_pkexec(
             ['apt-get', 'remove', '-y', self.pkg_name],
             'Uninstalling',
@@ -349,8 +463,44 @@ class DebInstallerApp(Adw.Application):
     def __init__(self):
         super().__init__(
             application_id='org.kos.DebInstaller',
-            flags=Gio.ApplicationFlags.HANDLES_OPEN,
+            flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE,
         )
+        self.add_main_option(
+            'uninstall-app',
+            0,
+            GLib.OptionFlags.NONE,
+            GLib.OptionArg.STRING,
+            'Uninstall app by .desktop ID',
+            'DESKTOP_ID',
+        )
+
+    def do_command_line(self, command_line):
+        options = command_line.get_options_dict()
+        desktop_id = options.lookup_value('uninstall-app', GLib.VariantType('s'))
+        if desktop_id is not None:
+            spec = resolve_installed_package(desktop_id.get_string())
+            if spec:
+                win = DebInstallerWindow(self, uninstall_spec=spec)
+                win.present()
+                return 0
+            dlg = Adw.AlertDialog(
+                heading='Cannot Uninstall',
+                body='This application is not managed by apt or Flatpak.',
+            )
+            dlg.add_response('ok', 'OK')
+            dlg.present(None)
+            return 1
+
+        args = command_line.get_arguments()[1:]
+        if args:
+            for arg in args:
+                path = command_line.create_file_for_arg(arg).get_path()
+                if path:
+                    win = DebInstallerWindow(self, deb_path=path)
+                    win.present()
+        else:
+            self.activate()
+        return 0
 
     def do_activate(self):
         dialog = Gtk.FileDialog(title='Select a .deb package to install')

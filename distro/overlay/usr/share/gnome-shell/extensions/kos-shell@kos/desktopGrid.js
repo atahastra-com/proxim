@@ -61,6 +61,14 @@ export const DEFAULT_UTILITIES = [
     'nm-connection-editor.desktop',
 ];
 
+const SYSTEM_DEFAULT_APPS = new Set([
+    ...DEFAULT_UTILITIES,
+    'org.gnome.Software.desktop',
+    'org.gnome.FileRoller.desktop',
+    'kos-deb-installer.desktop',
+    'proxim-setup.desktop',
+]);
+
 function clamp(v, lo, hi) {
     return Math.max(lo, Math.min(hi, v));
 }
@@ -933,7 +941,27 @@ export class KosDesktopGrid {
             this._folderView?.close({snap: true});
             pinAt(appId, getPins().length);
         }});
+        if (!this._isDefaultApp(appId)) {
+            entries.push({separator: true});
+            entries.push({label: 'Uninstall', action: () => this._uninstallApp(appId)});
+        }
         openContextMenu(x, y, entries);
+    }
+
+    _isDefaultApp(appId) {
+        if (SYSTEM_DEFAULT_APPS.has(appId))
+            return true;
+        return loadCuratedIds(this._extensionPath).includes(appId);
+    }
+
+    _uninstallApp(appId) {
+        this._folderView?.close({snap: true});
+        try {
+            GLib.spawn_async(null, ['kos-deb-installer', '--uninstall-app', appId], null,
+                GLib.SpawnFlags.SEARCH_PATH, null);
+        } catch (e) {
+            logError(e, 'kos-shell: failed to launch uninstaller');
+        }
     }
 
     // A kept (never auto-dissolved) folder at grid index `index`, opened
