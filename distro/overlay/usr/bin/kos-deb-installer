@@ -158,7 +158,11 @@ class DebInstallerWindow(Adw.ApplicationWindow):
         self.log_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
         self.log_buf = self.log_view.get_buffer()
         log_scroll.set_child(self.log_view)
-        self.progress_box.append(log_scroll)
+
+        self.log_expander = Gtk.Expander(label='Details')
+        self.log_expander.set_expanded(False)
+        self.log_expander.set_child(log_scroll)
+        self.progress_box.append(self.log_expander)
         box.append(self.progress_box)
 
         # Action buttons
@@ -230,6 +234,7 @@ class DebInstallerWindow(Adw.ApplicationWindow):
 
     def _run_pkexec(self, cmd, verb, done_msg):
         self.log_buf.set_text('')
+        self.log_expander.set_expanded(False)
         self._set_busy(True, f'{verb}…')
 
         def worker():
