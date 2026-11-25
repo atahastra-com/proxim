@@ -112,6 +112,8 @@ class InstallerWindow(Adw.ApplicationWindow):
         self.preview = preview
         self.set_default_size(680, 590)
         self.set_resizable(False)
+        if not preview:
+            self.set_deletable(False)
         self._page = 0
         self._username_edited = False
         self._zones = detect_timezones()
@@ -159,7 +161,7 @@ class InstallerWindow(Adw.ApplicationWindow):
         self.nav_bar.append(Gtk.Box(hexpand=True))
 
         self.try_btn = Gtk.Button(label='Try Proxim OS')
-        self.try_btn.connect('clicked', lambda _b: self.close())
+        self.try_btn.connect('clicked', self._on_try_live)
         self.nav_bar.append(self.try_btn)
 
         self.next_btn = Gtk.Button(label='Install Proxim OS')
@@ -510,6 +512,15 @@ class InstallerWindow(Adw.ApplicationWindow):
             self.next_btn.set_label('Restart Now')
             self.next_btn.set_visible(True)
             self.next_btn.set_sensitive(True)
+
+    def _on_try_live(self, _btn):
+        if not self.preview:
+            try:
+                with open('/tmp/kos-live-tried', 'w', encoding='utf-8') as fh:
+                    fh.write('1\n')
+            except OSError:
+                pass
+        self.close()
 
     def _on_back(self, _btn):
         if 1 <= self._page <= 4:

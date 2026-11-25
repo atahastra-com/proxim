@@ -76,6 +76,7 @@ export default class KosShellExtension extends Extension {
         // screen gets the kos look). Hide what must not show or be usable
         // there: the dock and the all-apps sheet.
         this._sessionId = Main.sessionMode.connect('updated', () => this._onSessionMode());
+        this._setupLiveInstallerGate();
         this._onSessionMode();
 
     }
@@ -94,6 +95,17 @@ export default class KosShellExtension extends Extension {
             Main.sessionMode.disconnect(this._sessionId);
             this._sessionId = 0;
         }
+        if (this._liveTryMonitor) {
+            if (this._liveTryMonitorId)
+                this._liveTryMonitor.disconnect(this._liveTryMonitorId);
+            this._liveTryMonitor.cancel();
+            this._liveTryMonitor = null;
+            this._liveTryMonitorId = 0;
+        }
+        if (Main.layoutManager.panelBox)
+            Main.layoutManager.panelBox.visible = true;
+        if (this._grid?._root)
+            this._grid._root.visible = true;
         this._windows?.disable();
         this._windows = null;
         this._lockScreen?.disable();
@@ -116,11 +128,34 @@ export default class KosShellExtension extends Extension {
         this._settingsHandles = [];
     }
 
+    _isInstallerOnlyMode() {
+        return GLib.file_test('/var/lib/kos/live-iso', GLib.FileTest.EXISTS) &&
+            !GLib.file_test('/tmp/kos-live-tried', GLib.FileTest.EXISTS);
+    }
+
+    _setupLiveInstallerGate() {
+        if (!this._isInstallerOnlyMode())
+            return;
+        try {
+            const f = Gio.File.new_for_path('/tmp/kos-live-tried');
+            this._liveTryMonitor = f.monitor_file(Gio.FileMonitorFlags.NONE, null);
+            this._liveTryMonitorId = this._liveTryMonitor.connect('changed', () => {
+                if (!this._isInstallerOnlyMode())
+                    this._onSessionMode();
+            });
+        } catch (_e) {}
+    }
+
     _onSessionMode() {
         const locked = Main.sessionMode.isLocked;
-        if (locked)
+        const installerOnly = !locked && this._isInstallerOnlyMode();
+        if (locked || installerOnly)
             this._allApps?.hide();
-        this._dock?.setVisible(!locked);
+        this._dock?.setVisible(!locked && !installerOnly);
+        if (Main.layoutManager.panelBox)
+            Main.layoutManager.panelBox.visible = !locked && !installerOnly;
+        if (this._grid?._root)
+            this._grid._root.visible = !installerOnly;
     }
 
     _restoreHasOverview() {
