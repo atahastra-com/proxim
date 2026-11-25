@@ -62,3 +62,13 @@ deepin-icon-theme
 # (a second apt-get update after appstream's hooks are installed).
 flatpak
 gnome-software-plugin-flatpak
+
+# Everyday laptop essentials: archives, media codecs, AppImage support
+file-roller
+7zip
+unzip
+ffmpeg
+gstreamer1.0-libav
+gstreamer1.0-plugins-bad
+gstreamer1.0-plugins-ugly
+libfuse2t64

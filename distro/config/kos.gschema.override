@@ -20,6 +20,7 @@ enable-hot-corners=false
 clock-show-date=true
 clock-show-weekday=true
 enable-animations=false
+show-battery-percentage=true
 
 [org.gnome.desktop.session]
 idle-delay=uint32 0
@@ -32,7 +33,7 @@ two-finger-scrolling-enabled=true
 [org.gnome.mutter]
 dynamic-workspaces=false
 overlay-key=''
-experimental-features=@as []
+experimental-features=['scale-monitor-framebuffer']
 
 [org.gnome.desktop.wm.preferences]
 num-workspaces=1
