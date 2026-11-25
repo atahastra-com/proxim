@@ -427,6 +427,8 @@ class DebInstallerWindow(Adw.ApplicationWindow):
                 self._refresh_status()
                 if rc == 0:
                     self.status_label.set_text(done_msg)
+                    if verb == 'Uninstalling':
+                        GLib.timeout_add(400, lambda: (self.close(), False)[1])
                 elif rc in (126, 127):
                     self.status_label.set_text('Authentication cancelled')
                 else:
