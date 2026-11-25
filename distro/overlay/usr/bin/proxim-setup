@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apple-style GTK4/libadwaita Live Installer & First-Boot User Setup for Proxim OS."""
+"""Apple-style GTK4/libadwaita OS Installer & First-Boot Setup for Proxim OS."""
 
 import json
 import os
@@ -105,13 +105,15 @@ def detect_install_disks():
 
 
 class InstallerWindow(Adw.ApplicationWindow):
-    """Live USB Welcome & Laptop Disk Installer."""
+    """Complete 7-step OS Installation & Account Setup Wizard for USB Live Boot."""
 
     def __init__(self, app):
-        super().__init__(application=app, title='Proxim OS')
-        self.set_default_size(640, 540)
+        super().__init__(application=app, title='Install Proxim OS')
+        self.set_default_size(680, 590)
         self.set_resizable(False)
         self._page = 0
+        self._username_edited = False
+        self._zones = detect_timezones()
         self._disks = []
         self._selected_disk = None
         self._installing = False
@@ -119,7 +121,7 @@ class InstallerWindow(Adw.ApplicationWindow):
         toolbar = Adw.ToolbarView()
         header = Adw.HeaderBar()
         header.set_show_title(False)
-        badge = Gtk.Label(label='Live Session')
+        badge = Gtk.Label(label='Proxim OS Installer')
         badge.add_css_class('dim-label')
         badge.add_css_class('caption')
         header.pack_start(badge)
@@ -130,10 +132,13 @@ class InstallerWindow(Adw.ApplicationWindow):
         self.carousel.set_vexpand(True)
         self.carousel.set_hexpand(True)
 
-        self.carousel.append(self._build_welcome_page())
-        self.carousel.append(self._build_disk_page())
-        self.carousel.append(self._build_progress_page())
-        self.carousel.append(self._build_done_page())
+        self.carousel.append(self._build_welcome_page())   # 0
+        self.carousel.append(self._build_region_page())    # 1
+        self.carousel.append(self._build_account_page())   # 2
+        self.carousel.append(self._build_disk_page())      # 3
+        self.carousel.append(self._build_summary_page())   # 4
+        self.carousel.append(self._build_progress_page())  # 5
+        self.carousel.append(self._build_done_page())      # 6
         root.append(self.carousel)
 
         dots = Adw.CarouselIndicatorDots(carousel=self.carousel)
@@ -167,9 +172,9 @@ class InstallerWindow(Adw.ApplicationWindow):
         self._refresh_disks()
 
     def _wrap_page(self, child):
-        clamp = Adw.Clamp(maximum_size=480)
-        clamp.set_margin_top(12)
-        clamp.set_margin_bottom(16)
+        clamp = Adw.Clamp(maximum_size=500)
+        clamp.set_margin_top(10)
+        clamp.set_margin_bottom(14)
         clamp.set_margin_start(28)
         clamp.set_margin_end(28)
         clamp.set_valign(Gtk.Align.CENTER)
@@ -190,12 +195,99 @@ class InstallerWindow(Adw.ApplicationWindow):
         box.append(title)
 
         sub = Gtk.Label(
-            label='Designed by Atahastra.\nTry Proxim OS live from USB, or install it onto your laptop.',
+            label='Designed by Atahastra.\nTry Proxim OS live from your USB drive, or install it onto your computer.',
             justify=Gtk.Justification.CENTER,
             wrap=True,
         )
         sub.add_css_class('dim-label')
         box.append(sub)
+        return self._wrap_page(box)
+
+    def _build_region_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+
+        hdr = Gtk.Label(label='Time Zone & Privacy', xalign=0)
+        hdr.add_css_class('title-2')
+        box.append(hdr)
+
+        sub = Gtk.Label(
+            label='Choose your time zone so your clock and calendar stay accurate.',
+            xalign=0,
+            wrap=True,
+        )
+        sub.add_css_class('dim-label')
+        box.append(sub)
+
+        group = Adw.PreferencesGroup()
+        self.tz_row = Adw.ComboRow(title='Time Zone')
+        self.tz_row.set_model(Gtk.StringList.new(self._zones))
+        cur = current_timezone()
+        if cur in self._zones:
+            self.tz_row.set_selected(self._zones.index(cur))
+        group.add(self.tz_row)
+        box.append(group)
+
+        priv_group = Adw.PreferencesGroup(title='Privacy')
+        priv_row = Adw.ActionRow(
+            title='No Telemetry or Tracking',
+            subtitle='Proxim OS never collects diagnostic data or usage analytics.',
+        )
+        priv_row.add_prefix(Gtk.Image.new_from_icon_name('security-high-symbolic'))
+        priv_group.add(priv_row)
+        box.append(priv_group)
+        return self._wrap_page(box)
+
+    def _build_account_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        hdr = Gtk.Label(label='Create Your Account', xalign=0)
+        hdr.add_css_class('title-2')
+        box.append(hdr)
+
+        sub = Gtk.Label(
+            label='Set up your personal account and computer name.',
+            xalign=0,
+            wrap=True,
+        )
+        sub.add_css_class('dim-label')
+        box.append(sub)
+
+        group = Adw.PreferencesGroup()
+
+        self.full_name_row = Adw.EntryRow(title='Full Name')
+        self.full_name_row.connect('changed', self._on_fullname_changed)
+        group.add(self.full_name_row)
+
+        self.username_row = Adw.EntryRow(title='Account Name (username)')
+        self.username_row.connect('changed', self._on_username_changed)
+        group.add(self.username_row)
+
+        self.pass_row = Adw.PasswordEntryRow(title='Password')
+        self.pass_row.connect('changed', lambda _r: self._validate_account())
+        group.add(self.pass_row)
+
+        self.confirm_row = Adw.PasswordEntryRow(title='Confirm Password')
+        self.confirm_row.connect('changed', lambda _r: self._validate_account())
+        group.add(self.confirm_row)
+
+        self.host_row = Adw.EntryRow(title='Computer Name')
+        self.host_row.set_text('proxim')
+        self.host_row.connect('changed', lambda _r: self._validate_account())
+        group.add(self.host_row)
+        box.append(group)
+
+        self.autologin_switch = Adw.SwitchRow(
+            title='Sign in automatically',
+            subtitle='Skip the lock screen password on startup',
+        )
+        opt_group = Adw.PreferencesGroup()
+        opt_group.add(self.autologin_switch)
+        box.append(opt_group)
+
+        self.account_err = Gtk.Label(xalign=0, wrap=True)
+        self.account_err.add_css_class('error')
+        self.account_err.add_css_class('caption')
+        box.append(self.account_err)
         return self._wrap_page(box)
 
     def _build_disk_page(self):
@@ -213,7 +305,7 @@ class InstallerWindow(Adw.ApplicationWindow):
         box.append(top)
 
         sub = Gtk.Label(
-            label='All existing data on the selected drive will be erased and replaced with Proxim OS.',
+            label='Select the drive where Proxim OS will be installed. All existing data on the selected drive will be erased.',
             xalign=0,
             wrap=True,
         )
@@ -234,6 +326,31 @@ class InstallerWindow(Adw.ApplicationWindow):
         box.append(self.no_disk_lbl)
         return self._wrap_page(box)
 
+    def _build_summary_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+
+        hdr = Gtk.Label(label='Ready to Install', xalign=0)
+        hdr.add_css_class('title-2')
+        box.append(hdr)
+
+        sub = Gtk.Label(
+            label='Review your settings below. Clicking Install Now will erase the selected disk and install Proxim OS.',
+            xalign=0,
+            wrap=True,
+        )
+        sub.add_css_class('dim-label')
+        box.append(sub)
+
+        group = Adw.PreferencesGroup()
+        self.sum_disk_row = Adw.ActionRow(title='Target Disk', subtitle='—')
+        self.sum_user_row = Adw.ActionRow(title='Account', subtitle='—')
+        self.sum_host_row = Adw.ActionRow(title='Computer Name', subtitle='—')
+        self.sum_tz_row = Adw.ActionRow(title='Time Zone', subtitle='—')
+        for r in (self.sum_disk_row, self.sum_user_row, self.sum_host_row, self.sum_tz_row):
+            group.add(r)
+        box.append(group)
+        return self._wrap_page(box)
+
     def _build_progress_page(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
         box.set_halign(Gtk.Align.CENTER)
@@ -251,7 +368,7 @@ class InstallerWindow(Adw.ApplicationWindow):
         box.append(self.inst_msg)
 
         self.inst_bar = Gtk.ProgressBar(show_text=True)
-        self.inst_bar.set_size_request(380, -1)
+        self.inst_bar.set_size_request(400, -1)
         box.append(self.inst_bar)
         return self._wrap_page(box)
 
@@ -264,18 +381,53 @@ class InstallerWindow(Adw.ApplicationWindow):
         icon.add_css_class('accent')
         box.append(icon)
 
-        title = Gtk.Label(label='Proxim OS is Installed')
+        title = Gtk.Label(label='Installation Complete')
         title.add_css_class('title-1')
         box.append(title)
 
         sub = Gtk.Label(
-            label='Remove your USB drive and restart your laptop.\nFirst-Boot User Setup will open automatically on startup.',
+            label='Proxim OS has been installed.\nRemove your USB flash drive and click Restart Now.',
             justify=Gtk.Justification.CENTER,
             wrap=True,
         )
         sub.add_css_class('dim-label')
         box.append(sub)
         return self._wrap_page(box)
+
+    def _on_fullname_changed(self, row):
+        if not self._username_edited:
+            raw = row.get_text().strip().lower()
+            slug = re.sub(r'[^a-z0-9_-]+', '', raw.split()[0] if raw else '')
+            self.username_row.set_text(slug[:24])
+        self._validate_account()
+
+    def _on_username_changed(self, row):
+        if row.has_focus():
+            self._username_edited = True
+        self._validate_account()
+
+    def _validate_account(self):
+        if self._page != 2:
+            return True
+        user = self.username_row.get_text().strip().lower()
+        p1 = self.pass_row.get_text()
+        p2 = self.confirm_row.get_text()
+        host = self.host_row.get_text().strip().lower()
+        err = ''
+        if not user:
+            err = 'Enter an account name.'
+        elif not re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', user):
+            err = 'Account name must start with a letter and use lowercase letters, numbers, - or _.'
+        elif not p1:
+            err = 'Enter a password.'
+        elif p1 != p2:
+            err = 'Passwords do not match.'
+        elif host and not re.fullmatch(r'[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?', host):
+            err = 'Computer name can only contain lowercase letters, numbers, and hyphens.'
+        self.account_err.set_text(err)
+        ok = (err == '')
+        self.next_btn.set_sensitive(ok)
+        return ok
 
     def _refresh_disks(self):
         for r in self.disk_rows:
@@ -300,70 +452,108 @@ class InstallerWindow(Adw.ApplicationWindow):
             self.disk_group.add(row)
             self.disk_rows.append(row)
 
-        if self._page == 1:
+        if self._page == 3:
             self.next_btn.set_sensitive(self._selected_disk is not None)
 
     def _on_disk_toggled(self, btn, path):
         if btn.get_active():
             self._selected_disk = path
 
+    def _update_summary(self):
+        disk_label = self._selected_disk or '—'
+        for p, title, _s in self._disks:
+            if p == self._selected_disk:
+                disk_label = f'{title}  ({p})'
+                break
+        tz_item = self.tz_row.get_selected_item()
+        self.sum_disk_row.set_subtitle(disk_label)
+        self.sum_user_row.set_subtitle(self.username_row.get_text().strip().lower())
+        self.sum_host_row.set_subtitle(self.host_row.get_text().strip().lower() or 'proxim')
+        self.sum_tz_row.set_subtitle(tz_item.get_string() if tz_item else 'UTC')
+
     def _go_to(self, idx):
         self._page = idx
         self.carousel.scroll_to(self.carousel.get_nth_page(idx), True)
         self.try_btn.set_visible(idx == 0)
-        self.back_btn.set_visible(idx == 1)
+        self.back_btn.set_visible(idx in (1, 2, 3, 4))
+        self.next_btn.remove_css_class('destructive-action')
+        self.next_btn.add_css_class('suggested-action')
+
         if idx == 0:
             self.next_btn.set_label('Install Proxim OS')
-            self.next_btn.add_css_class('suggested-action')
-            self.next_btn.remove_css_class('destructive-action')
             self.next_btn.set_visible(True)
             self.next_btn.set_sensitive(True)
         elif idx == 1:
+            self.next_btn.set_label('Continue')
+            self.next_btn.set_visible(True)
+            self.next_btn.set_sensitive(True)
+        elif idx == 2:
+            self.next_btn.set_label('Continue')
+            self.next_btn.set_visible(True)
+            self._validate_account()
+        elif idx == 3:
+            self._refresh_disks()
+            self.next_btn.set_label('Continue')
+            self.next_btn.set_visible(True)
+            self.next_btn.set_sensitive(self._selected_disk is not None)
+        elif idx == 4:
+            self._update_summary()
             self.next_btn.set_label('Erase Disk & Install')
             self.next_btn.remove_css_class('suggested-action')
             self.next_btn.add_css_class('destructive-action')
             self.next_btn.set_visible(True)
-            self.next_btn.set_sensitive(self._selected_disk is not None)
-        elif idx == 2:
-            self.back_btn.set_visible(False)
+            self.next_btn.set_sensitive(True)
+        elif idx == 5:
             self.next_btn.set_visible(False)
         else:
-            self.back_btn.set_visible(False)
             self.next_btn.set_label('Restart Now')
-            self.next_btn.remove_css_class('destructive-action')
-            self.next_btn.add_css_class('suggested-action')
             self.next_btn.set_visible(True)
             self.next_btn.set_sensitive(True)
 
     def _on_back(self, _btn):
-        if self._page == 1:
-            self._go_to(0)
+        if 1 <= self._page <= 4:
+            self._go_to(self._page - 1)
 
     def _on_next(self, _btn):
-        if self._page == 0:
-            self._refresh_disks()
-            self._go_to(1)
-        elif self._page == 1 and self._selected_disk:
-            self._start_install(self._selected_disk)
-        elif self._page == 3:
+        if self._page == 2 and not self._validate_account():
+            return
+        if self._page < 4:
+            self._go_to(self._page + 1)
+        elif self._page == 4 and self._selected_disk:
+            self._start_install()
+        elif self._page == 6:
             subprocess.Popen(['systemctl', 'reboot'])
             self.close()
 
-    def _start_install(self, disk):
+    def _start_install(self):
         self._installing = True
         self.set_deletable(False)
-        self._go_to(2)
+        self._go_to(5)
         self.inst_bar.set_fraction(0.02)
-        self.inst_msg.set_text(f'Starting installation on {disk}…')
+        self.inst_msg.set_text(f'Starting installation on {self._selected_disk}…')
+
+        tz_item = self.tz_row.get_selected_item()
+        payload = {
+            'disk': self._selected_disk,
+            'full_name': self.full_name_row.get_text().strip(),
+            'username': self.username_row.get_text().strip().lower(),
+            'password': self.pass_row.get_text(),
+            'hostname': self.host_row.get_text().strip().lower() or 'proxim',
+            'timezone': tz_item.get_string() if tz_item else 'UTC',
+            'autologin': self.autologin_switch.get_active(),
+        }
 
         def worker():
             proc = subprocess.Popen(
-                ['pkexec', '/usr/libexec/kos-install-helper', disk],
+                ['pkexec', '/usr/libexec/kos-install-helper'],
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
             )
+            proc.stdin.write(json.dumps(payload))
+            proc.stdin.close()
             last_err = ''
             for line in proc.stdout:
                 line = line.strip()
@@ -383,12 +573,11 @@ class InstallerWindow(Adw.ApplicationWindow):
                 self._installing = False
                 self.set_deletable(True)
                 if rc == 0:
-                    self._go_to(3)
+                    self._go_to(6)
                 else:
                     self.inst_msg.set_text(last_err or 'Installation failed.')
                     self.back_btn.set_visible(True)
-                    self.next_btn.set_visible(False)
-                    self._page = 1
+                    self._page = 4
                 return False
 
             GLib.idle_add(finish)
@@ -397,7 +586,7 @@ class InstallerWindow(Adw.ApplicationWindow):
 
 
 class SetupWindow(Adw.ApplicationWindow):
-    """First-Boot User Account & Preferences Setup."""
+    """First-Boot User Account & Preferences Setup (non-live OOBE)."""
 
     def __init__(self, app, preview=False):
         super().__init__(application=app, title='Proxim OS Setup')
@@ -489,7 +678,6 @@ class SetupWindow(Adw.ApplicationWindow):
         )
         sub.add_css_class('dim-label')
         box.append(sub)
-
         return self._wrap_page(box)
 
     def _build_account_page(self):
@@ -529,7 +717,6 @@ class SetupWindow(Adw.ApplicationWindow):
         self.host_row.set_text('proxim')
         self.host_row.connect('changed', lambda _r: self._validate_account())
         group.add(self.host_row)
-
         box.append(group)
 
         self.autologin_switch = Adw.SwitchRow(
@@ -544,7 +731,6 @@ class SetupWindow(Adw.ApplicationWindow):
         self.account_err.add_css_class('error')
         self.account_err.add_css_class('caption')
         box.append(self.account_err)
-
         return self._wrap_page(box)
 
     def _build_region_page(self):
@@ -564,8 +750,7 @@ class SetupWindow(Adw.ApplicationWindow):
 
         group = Adw.PreferencesGroup()
         self.tz_row = Adw.ComboRow(title='Time Zone')
-        model = Gtk.StringList.new(self._zones)
-        self.tz_row.set_model(model)
+        self.tz_row.set_model(Gtk.StringList.new(self._zones))
         cur = current_timezone()
         if cur in self._zones:
             self.tz_row.set_selected(self._zones.index(cur))
@@ -580,7 +765,6 @@ class SetupWindow(Adw.ApplicationWindow):
         priv_row.add_prefix(Gtk.Image.new_from_icon_name('security-high-symbolic'))
         priv_group.add(priv_row)
         box.append(priv_group)
-
         return self._wrap_page(box)
 
     def _build_finish_page(self):
@@ -607,7 +791,6 @@ class SetupWindow(Adw.ApplicationWindow):
         self.done_spinner = Gtk.Spinner()
         self.done_spinner.set_visible(False)
         box.append(self.done_spinner)
-
         return self._wrap_page(box)
 
     def _on_fullname_changed(self, row):
