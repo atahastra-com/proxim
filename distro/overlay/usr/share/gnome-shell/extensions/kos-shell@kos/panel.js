@@ -7,6 +7,7 @@
 // kos: clock on the left, dock in the center, and GNOME's stock system
 // status cluster (network/volume/power) left alone on the right.
 
+import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
@@ -15,6 +16,7 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import Meta from 'gi://Meta';
 import {easeOutCubic, hookBoxPointer, stop, tween, unhookBoxPointer} from './anim.js';
+import {openContextMenu} from './contextMenu.js';
 
 export const PANEL_HEIGHT = 72;
 // The calendar (clock, left) and quick settings (right) popups float as
@@ -303,6 +305,17 @@ export class KosPanel {
         this._placeEdgeTrigger();
 
         this._connect(this._edgeTrigger, 'enter-event', () => this._revealDock());
+        this._connect(Main.panel, 'button-press-event', (_a, event) => {
+            if (event.get_button() !== Clutter.BUTTON_SECONDARY)
+                return Clutter.EVENT_PROPAGATE;
+            const [x, y] = event.get_coords();
+            const on = getAutoHideDock();
+            openContextMenu(x, y, [{
+                label: on ? '✓ Auto-Hide Dock' : 'Auto-Hide Dock',
+                action: () => setAutoHideDock(!on),
+            }]);
+            return Clutter.EVENT_STOP;
+        });
         this._connect(Main.panel, 'notify::hover', () => this._scheduleAutoHide());
         this._connect(global.display, 'window-created', () => this._scheduleAutoHide());
         this._connect(global.window_manager, 'minimize', () => this._scheduleAutoHide());

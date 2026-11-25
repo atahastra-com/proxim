@@ -14,6 +14,7 @@ import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
 
 import {DND, appIcon, getPins, later, makeDraggableIcon, pinAt, unpin} from './folders.js';
 import {openContextMenu} from './contextMenu.js';
+import {getAutoHideDock, setAutoHideDock} from './panel.js';
 import {squircleGIcon} from './icons.js';
 import {BOUNCE_MS, DOT_FADE_MS, easeOutCubic, stop, tween} from './anim.js';
 
@@ -275,6 +276,12 @@ export class KosDock {
             entries.push({separator: true});
             entries.push({label: 'Quit', action: () => app.request_quit()});
         }
+        entries.push({separator: true});
+        const on = getAutoHideDock();
+        entries.push({
+            label: on ? '✓ Auto-Hide Dock' : 'Auto-Hide Dock',
+            action: () => setAutoHideDock(!on),
+        });
         openContextMenu(x, y, entries);
     }
 
