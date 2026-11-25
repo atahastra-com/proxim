@@ -48,6 +48,38 @@ def installed_version(pkg_name):
     return None
 
 
+def find_installed_app_info(pkg_name):
+    """Return a visible Gio.DesktopAppInfo for an installed package, if any."""
+    if not pkg_name:
+        return None
+    try:
+        out = subprocess.check_output(
+            ['dpkg-query', '-L', pkg_name],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+    except subprocess.CalledProcessError:
+        return None
+
+    candidates = []
+    for line in out.splitlines():
+        path = line.strip()
+        if path.endswith('.desktop') and (
+            path.startswith('/usr/share/applications/')
+            or path.startswith('/usr/local/share/applications/')
+        ):
+            app_info = Gio.DesktopAppInfo.new_from_filename(path)
+            if app_info and app_info.should_show():
+                candidates.append((path, app_info))
+
+    if not candidates:
+        return None
+    for path, app_info in candidates:
+        if pkg_name in os.path.basename(path):
+            return app_info
+    return candidates[0][1]
+
+
 def format_size(kb_str):
     try:
         kb = int(kb_str)
@@ -179,8 +211,14 @@ class DebInstallerWindow(Adw.ApplicationWindow):
         self.install_btn.connect('clicked', self._on_install)
         btn_row.append(self.install_btn)
 
+        self.open_btn = Gtk.Button(label='Open Now')
+        self.open_btn.connect('clicked', self._on_open)
+        self.open_btn.set_visible(False)
+        btn_row.append(self.open_btn)
+
         box.append(btn_row)
 
+        self._app_info = None
         scroll.set_child(box)
         toolbar.set_content(scroll)
         self.set_content(toolbar)
@@ -190,16 +228,31 @@ class DebInstallerWindow(Adw.ApplicationWindow):
         cur = installed_version(self.pkg_name)
         pkg_ver = self.info.get('Version', '')
         if cur:
+            self._app_info = find_installed_app_info(self.pkg_name)
+            has_app = self._app_info is not None
+            self.open_btn.set_visible(has_app)
             if cur == pkg_ver:
                 self.status_label.set_text(f'Installed (version {cur})')
                 self.install_btn.set_label('Reinstall')
+                if has_app:
+                    self.install_btn.remove_css_class('suggested-action')
+                    self.open_btn.add_css_class('suggested-action')
+                else:
+                    self.install_btn.add_css_class('suggested-action')
+                    self.open_btn.remove_css_class('suggested-action')
             else:
                 self.status_label.set_text(f'Installed: {cur}  →  Package: {pkg_ver}')
                 self.install_btn.set_label('Update / Install')
+                self.install_btn.add_css_class('suggested-action')
+                self.open_btn.remove_css_class('suggested-action')
             self.remove_btn.set_visible(True)
         else:
+            self._app_info = None
             self.status_label.set_text('Not installed')
             self.install_btn.set_label('Install')
+            self.install_btn.add_css_class('suggested-action')
+            self.open_btn.set_visible(False)
+            self.open_btn.remove_css_class('suggested-action')
             self.remove_btn.set_visible(False)
 
     def _append_log(self, text):
@@ -213,6 +266,7 @@ class DebInstallerWindow(Adw.ApplicationWindow):
         self._busy = busy
         self.install_btn.set_sensitive(not busy)
         self.remove_btn.set_sensitive(not busy)
+        self.open_btn.set_sensitive(not busy)
         if status_text:
             self.status_label.set_text(status_text)
         if busy:
@@ -275,6 +329,13 @@ class DebInstallerWindow(Adw.ApplicationWindow):
             'Installing',
             'Installed — available in Applications',
         )
+
+    def _on_open(self, _btn):
+        if self._app_info:
+            try:
+                self._app_info.launch([], None)
+            except Exception as exc:
+                self.status_label.set_text(f'Could not launch: {exc}')
 
     def _on_uninstall(self, _btn):
         self._run_pkexec(
