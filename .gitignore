@@ -38,3 +38,7 @@ distro/overlay/usr/share/icons/Deepin2022/
 # Local proof screenshots of the distro desktop
 /distro-shot.png
 /distro-desktop.png
+
+# Private OTA update signing keys and generated update artifacts
+.keys/
+updates-out/
