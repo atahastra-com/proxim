@@ -3,6 +3,11 @@ linux-image-amd64
 e2fsprogs
 firmware-linux-free
 firmware-linux
+firmware-iwlwifi
+firmware-realtek
+firmware-atheros
+firmware-mediatek
+firmware-brcm80211
 grub-pc
 sudo
 locales
@@ -11,10 +16,16 @@ dbus
 dbus-user-session
 polkitd
 pkexec
+power-profiles-daemon
 
 # Networking
 network-manager
 network-manager-gnome
+wpasupplicant
+wireless-regdb
+rfkill
+dnsmasq-base
+gvfs-backends
 
 # Graphical desktop (GNOME is the engine; the UI is kos).
 # gnome-core pulls yelp and gnome-user-docs; /usr/libexec/kos-whitelabel
