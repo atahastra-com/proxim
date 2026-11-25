@@ -61,7 +61,7 @@ def format_size(kb_str):
 class DebInstallerWindow(Adw.ApplicationWindow):
     def __init__(self, app, deb_path):
         super().__init__(application=app, title='Package Installer')
-        self.set_default_size(500, 440)
+        self.set_default_size(480, 260)
         self.deb_path = os.path.abspath(deb_path)
         self.info = read_deb_info(self.deb_path)
         self.pkg_name = self.info.get('Package', '')
@@ -126,20 +126,22 @@ class DebInstallerWindow(Adw.ApplicationWindow):
             self.set_content(toolbar)
             return
 
-        # Package metadata card
+        # Collapsible package details dropdown (collapsed by default for quick install)
         meta_group = Adw.PreferencesGroup()
         desc_lines = [l for l in self.info.get('Description', '').splitlines() if l.strip()]
         summary = desc_lines[0] if desc_lines else 'Debian software package'
 
+        expander = Adw.ExpanderRow(title='Package Details', subtitle=summary)
+        expander.set_expanded(False)
         for title, subtitle in [
-            ('Summary', summary),
             ('Installed Size', format_size(self.info.get('Installed-Size'))),
             ('Maintainer', self.info.get('Maintainer') or 'Unknown'),
             ('File', os.path.basename(self.deb_path)),
         ]:
             row = Adw.ActionRow(title=title, subtitle=subtitle)
             row.set_subtitle_selectable(True)
-            meta_group.add(row)
+            expander.add_row(row)
+        meta_group.add(expander)
         box.append(meta_group)
 
         # Progress + log output (shown once an action starts)
