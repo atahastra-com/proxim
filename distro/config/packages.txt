@@ -9,6 +9,7 @@ firmware-atheros
 firmware-mediatek
 firmware-brcm80211
 grub-pc
+os-prober
 sudo
 locales
 ca-certificates
