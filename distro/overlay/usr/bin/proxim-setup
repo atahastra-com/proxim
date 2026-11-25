@@ -166,12 +166,13 @@ class InstallerWindow(Adw.ApplicationWindow):
         self.carousel.set_hexpand(True)
 
         self.carousel.append(self._build_welcome_page())   # 0
-        self.carousel.append(self._build_region_page())    # 1
-        self.carousel.append(self._build_account_page())   # 2
-        self.carousel.append(self._build_disk_page())      # 3
-        self.carousel.append(self._build_summary_page())   # 4
-        self.carousel.append(self._build_progress_page())  # 5
-        self.carousel.append(self._build_done_page())      # 6
+        self.carousel.append(self._build_network_page())   # 1
+        self.carousel.append(self._build_region_page())    # 2
+        self.carousel.append(self._build_account_page())   # 3
+        self.carousel.append(self._build_disk_page())      # 4
+        self.carousel.append(self._build_summary_page())   # 5
+        self.carousel.append(self._build_progress_page())  # 6
+        self.carousel.append(self._build_done_page())      # 7
         root.append(self.carousel)
 
         dots = Adw.CarouselIndicatorDots(carousel=self.carousel)
@@ -235,6 +236,146 @@ class InstallerWindow(Adw.ApplicationWindow):
         sub.add_css_class('dim-label')
         box.append(sub)
         return self._wrap_page(box)
+
+    def _build_network_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        hdr = Gtk.Label(label='Connect to Internet', xalign=0, hexpand=True)
+        hdr.add_css_class('title-2')
+        top.append(hdr)
+
+        ref_btn = Gtk.Button.new_from_icon_name('view-refresh-symbolic')
+        ref_btn.set_tooltip_text('Scan Wi-Fi Networks')
+        ref_btn.connect('clicked', lambda _b: self._refresh_network())
+        top.append(ref_btn)
+        box.append(top)
+
+        self.net_sub = Gtk.Label(
+            label='Connect to Wi-Fi to download updates during setup, or continue offline.',
+            xalign=0,
+            wrap=True,
+        )
+        self.net_sub.add_css_class('dim-label')
+        box.append(self.net_sub)
+
+        status_group = Adw.PreferencesGroup()
+        self.net_status_row = Adw.ActionRow(title='Checking connection…', subtitle='')
+        self.net_status_icon = Gtk.Image.new_from_icon_name('network-wireless-symbolic')
+        self.net_status_row.add_prefix(self.net_status_icon)
+        status_group.add(self.net_status_row)
+        box.append(status_group)
+
+        self.wifi_group = Adw.PreferencesGroup(title='Wi-Fi Network')
+        self.wifi_ssid_row = Adw.ComboRow(title='Network')
+        self.wifi_group.add(self.wifi_ssid_row)
+        self.wifi_pass_row = Adw.PasswordEntryRow(title='Wi-Fi Password')
+        self.wifi_group.add(self.wifi_pass_row)
+
+        conn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        conn_box.set_margin_top(6)
+        self.wifi_err = Gtk.Label(xalign=0, hexpand=True, wrap=True)
+        self.wifi_err.add_css_class('dim-label')
+        self.wifi_err.add_css_class('caption')
+        conn_box.append(self.wifi_err)
+
+        self.wifi_connect_btn = Gtk.Button(label='Connect')
+        self.wifi_connect_btn.connect('clicked', self._on_wifi_connect)
+        conn_box.append(self.wifi_connect_btn)
+        box.append(self.wifi_group)
+        box.append(conn_box)
+        self._wifi_conn_box = conn_box
+        return self._wrap_page(box)
+
+    def _refresh_network(self):
+        eth_up = False
+        wifi_conn = ''
+        ssids = []
+        try:
+            out = subprocess.check_output(
+                ['nmcli', '-t', '-f', 'TYPE,STATE,CONNECTION', 'dev'],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            for ln in out.splitlines():
+                parts = ln.split(':', 2)
+                if len(parts) == 3 and parts[1] == 'connected':
+                    if parts[0] == 'ethernet':
+                        eth_up = True
+                    elif parts[0] == 'wifi':
+                        wifi_conn = parts[2]
+        except Exception:
+            pass
+
+        if eth_up:
+            self.net_status_row.set_title('Connected via Ethernet')
+            self.net_status_row.set_subtitle('Ready for online updates — no Wi-Fi setup needed.')
+            self.net_status_icon.set_from_icon_name('network-wired-symbolic')
+            self.wifi_group.set_visible(False)
+            self._wifi_conn_box.set_visible(False)
+            return
+
+        if wifi_conn:
+            self.net_status_row.set_title(f'Connected to {wifi_conn}')
+            self.net_status_row.set_subtitle('Wi-Fi is connected.')
+            self.net_status_icon.set_from_icon_name('network-wireless-signal-excellent-symbolic')
+        else:
+            self.net_status_row.set_title('Not Connected')
+            self.net_status_row.set_subtitle('Select a Wi-Fi network below or click Continue to install offline.')
+            self.net_status_icon.set_from_icon_name('network-wireless-offline-symbolic')
+
+        self.wifi_group.set_visible(True)
+        self._wifi_conn_box.set_visible(True)
+        try:
+            wout = subprocess.check_output(
+                ['nmcli', '-t', '-f', 'SSID', 'dev', 'wifi', 'list', '--rescan', 'auto'],
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=8,
+            )
+            seen = set()
+            for raw in wout.splitlines():
+                s = raw.strip()
+                if s and s not in seen:
+                    seen.add(s)
+                    ssids.append(s)
+        except Exception:
+            pass
+        if not ssids:
+            ssids = ['No Wi-Fi networks found']
+            self.wifi_connect_btn.set_sensitive(False)
+        else:
+            self.wifi_connect_btn.set_sensitive(True)
+        self.wifi_ssid_row.set_model(Gtk.StringList.new(ssids))
+
+    def _on_wifi_connect(self, _btn):
+        item = self.wifi_ssid_row.get_selected_item()
+        ssid = item.get_string() if item else ''
+        if not ssid or ssid == 'No Wi-Fi networks found':
+            return
+        pw = self.wifi_pass_row.get_text()
+        self.wifi_connect_btn.set_sensitive(False)
+        self.wifi_err.set_text(f'Connecting to {ssid}…')
+
+        def worker():
+            cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid]
+            if pw:
+                cmd += ['password', pw]
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+
+            def done():
+                self.wifi_connect_btn.set_sensitive(True)
+                if proc.returncode == 0:
+                    self.wifi_err.set_text(f'Connected to {ssid}.')
+                    self._refresh_network()
+                else:
+                    msg = (proc.stderr or proc.stdout or 'Connection failed').strip()
+                    self.wifi_err.set_text(msg.splitlines()[-1] if msg else 'Connection failed')
+                return False
+
+            GLib.idle_add(done)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _build_region_page(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
@@ -457,13 +598,153 @@ class InstallerWindow(Adw.ApplicationWindow):
         box.append(title)
 
         sub = Gtk.Label(
-            label='Proxim OS has been installed.\nRemove your USB flash drive and click Restart Now.',
+            label='Proxim OS has been installed.\nClick Restart Now, then remove your USB flash drive once the system restarts.',
             justify=Gtk.Justification.CENTER,
             wrap=True,
         )
         sub.add_css_class('dim-label')
         box.append(sub)
         return self._wrap_page(box)
+
+    def _build_network_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        hdr = Gtk.Label(label='Connect to Internet', xalign=0, hexpand=True)
+        hdr.add_css_class('title-2')
+        top.append(hdr)
+
+        ref_btn = Gtk.Button.new_from_icon_name('view-refresh-symbolic')
+        ref_btn.set_tooltip_text('Scan Wi-Fi Networks')
+        ref_btn.connect('clicked', lambda _b: self._refresh_network())
+        top.append(ref_btn)
+        box.append(top)
+
+        self.net_sub = Gtk.Label(
+            label='Connect to Wi-Fi to download updates during setup, or continue offline.',
+            xalign=0,
+            wrap=True,
+        )
+        self.net_sub.add_css_class('dim-label')
+        box.append(self.net_sub)
+
+        status_group = Adw.PreferencesGroup()
+        self.net_status_row = Adw.ActionRow(title='Checking connection…', subtitle='')
+        self.net_status_icon = Gtk.Image.new_from_icon_name('network-wireless-symbolic')
+        self.net_status_row.add_prefix(self.net_status_icon)
+        status_group.add(self.net_status_row)
+        box.append(status_group)
+
+        self.wifi_group = Adw.PreferencesGroup(title='Wi-Fi Network')
+        self.wifi_ssid_row = Adw.ComboRow(title='Network')
+        self.wifi_group.add(self.wifi_ssid_row)
+        self.wifi_pass_row = Adw.PasswordEntryRow(title='Wi-Fi Password')
+        self.wifi_group.add(self.wifi_pass_row)
+
+        conn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        conn_box.set_margin_top(6)
+        self.wifi_err = Gtk.Label(xalign=0, hexpand=True, wrap=True)
+        self.wifi_err.add_css_class('dim-label')
+        self.wifi_err.add_css_class('caption')
+        conn_box.append(self.wifi_err)
+
+        self.wifi_connect_btn = Gtk.Button(label='Connect')
+        self.wifi_connect_btn.connect('clicked', self._on_wifi_connect)
+        conn_box.append(self.wifi_connect_btn)
+        box.append(self.wifi_group)
+        box.append(conn_box)
+        self._wifi_conn_box = conn_box
+        return self._wrap_page(box)
+
+    def _refresh_network(self):
+        eth_up = False
+        wifi_conn = ''
+        ssids = []
+        try:
+            out = subprocess.check_output(
+                ['nmcli', '-t', '-f', 'TYPE,STATE,CONNECTION', 'dev'],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            for ln in out.splitlines():
+                parts = ln.split(':', 2)
+                if len(parts) == 3 and parts[1] == 'connected':
+                    if parts[0] == 'ethernet':
+                        eth_up = True
+                    elif parts[0] == 'wifi':
+                        wifi_conn = parts[2]
+        except Exception:
+            pass
+
+        if eth_up:
+            self.net_status_row.set_title('Connected via Ethernet')
+            self.net_status_row.set_subtitle('Ready for online updates — no Wi-Fi setup needed.')
+            self.net_status_icon.set_from_icon_name('network-wired-symbolic')
+            self.wifi_group.set_visible(False)
+            self._wifi_conn_box.set_visible(False)
+            return
+
+        if wifi_conn:
+            self.net_status_row.set_title(f'Connected to {wifi_conn}')
+            self.net_status_row.set_subtitle('Wi-Fi is connected.')
+            self.net_status_icon.set_from_icon_name('network-wireless-signal-excellent-symbolic')
+        else:
+            self.net_status_row.set_title('Not Connected')
+            self.net_status_row.set_subtitle('Select a Wi-Fi network below or click Continue to install offline.')
+            self.net_status_icon.set_from_icon_name('network-wireless-offline-symbolic')
+
+        self.wifi_group.set_visible(True)
+        self._wifi_conn_box.set_visible(True)
+        try:
+            wout = subprocess.check_output(
+                ['nmcli', '-t', '-f', 'SSID', 'dev', 'wifi', 'list', '--rescan', 'auto'],
+                stderr=subprocess.DEVNULL,
+                text=True,
+                timeout=8,
+            )
+            seen = set()
+            for raw in wout.splitlines():
+                s = raw.strip()
+                if s and s not in seen:
+                    seen.add(s)
+                    ssids.append(s)
+        except Exception:
+            pass
+        if not ssids:
+            ssids = ['No Wi-Fi networks found']
+            self.wifi_connect_btn.set_sensitive(False)
+        else:
+            self.wifi_connect_btn.set_sensitive(True)
+        self.wifi_ssid_row.set_model(Gtk.StringList.new(ssids))
+
+    def _on_wifi_connect(self, _btn):
+        item = self.wifi_ssid_row.get_selected_item()
+        ssid = item.get_string() if item else ''
+        if not ssid or ssid == 'No Wi-Fi networks found':
+            return
+        pw = self.wifi_pass_row.get_text()
+        self.wifi_connect_btn.set_sensitive(False)
+        self.wifi_err.set_text(f'Connecting to {ssid}…')
+
+        def worker():
+            cmd = ['nmcli', 'dev', 'wifi', 'connect', ssid]
+            if pw:
+                cmd += ['password', pw]
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+
+            def done():
+                self.wifi_connect_btn.set_sensitive(True)
+                if proc.returncode == 0:
+                    self.wifi_err.set_text(f'Connected to {ssid}.')
+                    self._refresh_network()
+                else:
+                    msg = (proc.stderr or proc.stdout or 'Connection failed').strip()
+                    self.wifi_err.set_text(msg.splitlines()[-1] if msg else 'Connection failed')
+                return False
+
+            GLib.idle_add(done)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _on_fullname_changed(self, row):
         if not self._username_edited:
@@ -478,7 +759,7 @@ class InstallerWindow(Adw.ApplicationWindow):
         self._validate_account()
 
     def _validate_account(self):
-        if self._page != 2:
+        if self._page != 3:
             return True
         user = self.username_row.get_text().strip().lower()
         p1 = self.pass_row.get_text()
@@ -528,7 +809,7 @@ class InstallerWindow(Adw.ApplicationWindow):
         self.root_part_row.set_model(Gtk.StringList.new(root_labels))
         self.efi_part_row.set_model(Gtk.StringList.new(efi_labels))
 
-        if self._page == 3:
+        if self._page == 4:
             self.next_btn.set_sensitive(self._selected_disk is not None)
 
     def _on_mode_changed(self, mode, btn):
@@ -558,7 +839,7 @@ class InstallerWindow(Adw.ApplicationWindow):
         self._page = idx
         self.carousel.scroll_to(self.carousel.get_nth_page(idx), True)
         self.try_btn.set_visible(idx == 0)
-        self.back_btn.set_visible(idx in (1, 2, 3, 4))
+        self.back_btn.set_visible(idx in (1, 2, 3, 4, 5))
         self.next_btn.remove_css_class('destructive-action')
         self.next_btn.add_css_class('suggested-action')
 
@@ -567,26 +848,31 @@ class InstallerWindow(Adw.ApplicationWindow):
             self.next_btn.set_visible(True)
             self.next_btn.set_sensitive(True)
         elif idx == 1:
+            self._refresh_network()
             self.next_btn.set_label('Continue')
             self.next_btn.set_visible(True)
             self.next_btn.set_sensitive(True)
         elif idx == 2:
             self.next_btn.set_label('Continue')
             self.next_btn.set_visible(True)
-            self._validate_account()
+            self.next_btn.set_sensitive(True)
         elif idx == 3:
+            self.next_btn.set_label('Continue')
+            self.next_btn.set_visible(True)
+            self._validate_account()
+        elif idx == 4:
             self._refresh_disks()
             self.next_btn.set_label('Continue')
             self.next_btn.set_visible(True)
             self.next_btn.set_sensitive(self._selected_disk is not None)
-        elif idx == 4:
+        elif idx == 5:
             self._update_summary()
             self.next_btn.set_label('Erase Disk & Install')
             self.next_btn.remove_css_class('suggested-action')
             self.next_btn.add_css_class('destructive-action')
             self.next_btn.set_visible(True)
             self.next_btn.set_sensitive(True)
-        elif idx == 5:
+        elif idx == 6:
             self.next_btn.set_visible(False)
         else:
             self.next_btn.set_label('Restart Now')
@@ -603,27 +889,27 @@ class InstallerWindow(Adw.ApplicationWindow):
         self.close()
 
     def _on_back(self, _btn):
-        if 1 <= self._page <= 4:
+        if 1 <= self._page <= 5:
             self._go_to(self._page - 1)
 
     def _on_next(self, _btn):
-        if self._page == 2 and not self._validate_account():
+        if self._page == 3 and not self._validate_account():
             return
-        if self._page < 4:
+        if self._page < 5:
             self._go_to(self._page + 1)
-        elif self._page == 4 and self._selected_disk:
+        elif self._page == 5 and self._selected_disk:
             self._start_install()
-        elif self._page == 6:
+        elif self._page == 7:
             subprocess.Popen(['systemctl', 'reboot'])
             self.close()
 
     def _start_install(self):
         if self.preview:
-            self._go_to(6)
+            self._go_to(7)
             return
         self._installing = True
         self.set_deletable(False)
-        self._go_to(5)
+        self._go_to(6)
         self.inst_bar.set_fraction(0.02)
         self.inst_msg.set_text(f'Starting installation on {self._selected_disk}…')
 
@@ -676,11 +962,11 @@ class InstallerWindow(Adw.ApplicationWindow):
                 self._installing = False
                 self.set_deletable(True)
                 if rc == 0:
-                    self._go_to(6)
+                    self._go_to(7)
                 else:
                     self.inst_msg.set_text(last_err or 'Installation failed.')
                     self.back_btn.set_visible(True)
-                    self._page = 4
+                    self._page = 5
                 return False
 
             GLib.idle_add(finish)
