@@ -164,6 +164,8 @@ function findIconFile(gicon, iconName) {
         if (p && GLib.file_test(p, GLib.FileTest.IS_REGULAR))
             return p;
     }
+    if (iconName && iconName.startsWith('/') && GLib.file_test(iconName, GLib.FileTest.IS_REGULAR))
+        return iconName;
     const names = iconNames(gicon, iconName);
     const key = names.join(',');
     if (_pathCache.has(key))
@@ -173,6 +175,10 @@ function findIconFile(gicon, iconName) {
     const themes = themeList();
     let found = null;
     outer: for (const name of names) {
+        if (name.startsWith('/') && GLib.file_test(name, GLib.FileTest.IS_REGULAR)) {
+            found = name;
+            break outer;
+        }
         for (const root of roots) {
             for (const theme of themes) {
                 const dirs = [];
@@ -194,6 +200,13 @@ function findIconFile(gicon, iconName) {
                         }
                     }
                 }
+            }
+        }
+        for (const ext of ['.svg', '.png', '.xpm']) {
+            const pix = `/usr/share/pixmaps/${name}${ext}`;
+            if (GLib.file_test(pix, GLib.FileTest.IS_REGULAR)) {
+                found = pix;
+                break outer;
             }
         }
     }

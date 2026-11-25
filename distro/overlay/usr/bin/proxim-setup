@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apple-style GTK4/libadwaita First-Boot User Setup Assistant for Proxim OS."""
+"""Apple-style GTK4/libadwaita Live Installer & First-Boot User Setup for Proxim OS."""
 
 import json
 import os
@@ -12,7 +12,7 @@ import gi
 
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Adw, Gio, GLib, Gtk
+from gi.repository import Adw, GLib, Gtk
 
 
 def detect_timezones():
@@ -50,7 +50,355 @@ def current_timezone():
         return 'UTC'
 
 
+def fmt_bytes(n):
+    for unit in ('B', 'KB', 'MB', 'GB', 'TB'):
+        if n < 1000.0 or unit == 'TB':
+            return f'{n:.1f} {unit}' if unit != 'B' else f'{int(n)} B'
+        n /= 1000.0
+    return f'{n:.1f} TB'
+
+
+def detect_install_disks():
+    """Return list of (dev_path, label, subtitle) excluding the live USB medium."""
+    live_disk = ''
+    try:
+        src = subprocess.check_output(
+            ['findmnt', '-n', '-o', 'SOURCE', '/run/live/medium'],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        ).strip()
+        if src:
+            pk = subprocess.check_output(
+                ['lsblk', '-no', 'PKNAME', src],
+                stderr=subprocess.DEVNULL,
+                text=True,
+            ).strip()
+            live_disk = pk or os.path.basename(src)
+    except Exception:
+        pass
+
+    disks = []
+    try:
+        raw = subprocess.check_output(
+            ['lsblk', '-J', '-d', '-b', '-o', 'NAME,SIZE,MODEL,TRAN,RM,TYPE'],
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        data = json.loads(raw)
+        for dev in data.get('blockdevices', []):
+            if dev.get('type') != 'disk':
+                continue
+            name = dev.get('name', '')
+            if not name or name == live_disk or name.startswith(('loop', 'ram', 'zram', 'sr')):
+                continue
+            size = int(dev.get('size') or 0)
+            if size < 4 * 1000 * 1000 * 1000:
+                continue
+            model = (dev.get('model') or 'Internal Disk').strip()
+            tran = (dev.get('tran') or '').upper()
+            title = f'{model} ({fmt_bytes(size)})'
+            sub = f'/dev/{name}' + (f'  •  {tran}' if tran else '')
+            disks.append((f'/dev/{name}', title, sub))
+    except Exception:
+        pass
+    return disks
+
+
+class InstallerWindow(Adw.ApplicationWindow):
+    """Live USB Welcome & Laptop Disk Installer."""
+
+    def __init__(self, app):
+        super().__init__(application=app, title='Proxim OS')
+        self.set_default_size(640, 540)
+        self.set_resizable(False)
+        self._page = 0
+        self._disks = []
+        self._selected_disk = None
+        self._installing = False
+
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        header.set_show_title(False)
+        badge = Gtk.Label(label='Live Session')
+        badge.add_css_class('dim-label')
+        badge.add_css_class('caption')
+        header.pack_start(badge)
+        toolbar.add_top_bar(header)
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.carousel = Adw.Carousel(allow_mouse_drag=False, allow_scroll_wheel=False)
+        self.carousel.set_vexpand(True)
+        self.carousel.set_hexpand(True)
+
+        self.carousel.append(self._build_welcome_page())
+        self.carousel.append(self._build_disk_page())
+        self.carousel.append(self._build_progress_page())
+        self.carousel.append(self._build_done_page())
+        root.append(self.carousel)
+
+        dots = Adw.CarouselIndicatorDots(carousel=self.carousel)
+        dots.set_margin_bottom(8)
+        root.append(dots)
+
+        self.nav_bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.nav_bar.set_margin_start(32)
+        self.nav_bar.set_margin_end(32)
+        self.nav_bar.set_margin_bottom(24)
+
+        self.back_btn = Gtk.Button(label='Back')
+        self.back_btn.set_visible(False)
+        self.back_btn.connect('clicked', self._on_back)
+        self.nav_bar.append(self.back_btn)
+
+        self.nav_bar.append(Gtk.Box(hexpand=True))
+
+        self.try_btn = Gtk.Button(label='Try Proxim OS')
+        self.try_btn.connect('clicked', lambda _b: self.close())
+        self.nav_bar.append(self.try_btn)
+
+        self.next_btn = Gtk.Button(label='Install Proxim OS')
+        self.next_btn.add_css_class('suggested-action')
+        self.next_btn.connect('clicked', self._on_next)
+        self.nav_bar.append(self.next_btn)
+
+        root.append(self.nav_bar)
+        toolbar.set_content(root)
+        self.set_content(toolbar)
+        self._refresh_disks()
+
+    def _wrap_page(self, child):
+        clamp = Adw.Clamp(maximum_size=480)
+        clamp.set_margin_top(12)
+        clamp.set_margin_bottom(16)
+        clamp.set_margin_start(28)
+        clamp.set_margin_end(28)
+        clamp.set_valign(Gtk.Align.CENTER)
+        clamp.set_child(child)
+        return clamp
+
+    def _build_welcome_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        box.set_halign(Gtk.Align.CENTER)
+
+        logo = Gtk.Image.new_from_icon_name('proxim-logo')
+        logo.set_pixel_size(96)
+        logo.set_margin_bottom(8)
+        box.append(logo)
+
+        title = Gtk.Label(label='Welcome to Proxim OS')
+        title.add_css_class('title-1')
+        box.append(title)
+
+        sub = Gtk.Label(
+            label='Designed by Atahastra.\nTry Proxim OS live from USB, or install it onto your laptop.',
+            justify=Gtk.Justification.CENTER,
+            wrap=True,
+        )
+        sub.add_css_class('dim-label')
+        box.append(sub)
+        return self._wrap_page(box)
+
+    def _build_disk_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+
+        top = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        hdr = Gtk.Label(label='Choose Installation Disk', xalign=0, hexpand=True)
+        hdr.add_css_class('title-2')
+        top.append(hdr)
+
+        ref_btn = Gtk.Button.new_from_icon_name('view-refresh-symbolic')
+        ref_btn.set_tooltip_text('Refresh Disks')
+        ref_btn.connect('clicked', lambda _b: self._refresh_disks())
+        top.append(ref_btn)
+        box.append(top)
+
+        sub = Gtk.Label(
+            label='All existing data on the selected drive will be erased and replaced with Proxim OS.',
+            xalign=0,
+            wrap=True,
+        )
+        sub.add_css_class('dim-label')
+        box.append(sub)
+
+        self.disk_group = Adw.PreferencesGroup()
+        self.disk_rows = []
+        box.append(self.disk_group)
+
+        self.no_disk_lbl = Gtk.Label(
+            label='No internal disk found. Connect a drive and click Refresh.',
+            xalign=0,
+            wrap=True,
+        )
+        self.no_disk_lbl.add_css_class('error')
+        self.no_disk_lbl.set_visible(False)
+        box.append(self.no_disk_lbl)
+        return self._wrap_page(box)
+
+    def _build_progress_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16)
+        box.set_halign(Gtk.Align.CENTER)
+
+        logo = Gtk.Image.new_from_icon_name('proxim-logo')
+        logo.set_pixel_size(72)
+        box.append(logo)
+
+        title = Gtk.Label(label='Installing Proxim OS')
+        title.add_css_class('title-2')
+        box.append(title)
+
+        self.inst_msg = Gtk.Label(label='Preparing installation…', justify=Gtk.Justification.CENTER, wrap=True)
+        self.inst_msg.add_css_class('dim-label')
+        box.append(self.inst_msg)
+
+        self.inst_bar = Gtk.ProgressBar(show_text=True)
+        self.inst_bar.set_size_request(380, -1)
+        box.append(self.inst_bar)
+        return self._wrap_page(box)
+
+    def _build_done_page(self):
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        box.set_halign(Gtk.Align.CENTER)
+
+        icon = Gtk.Image.new_from_icon_name('emblem-ok-symbolic')
+        icon.set_pixel_size(64)
+        icon.add_css_class('accent')
+        box.append(icon)
+
+        title = Gtk.Label(label='Proxim OS is Installed')
+        title.add_css_class('title-1')
+        box.append(title)
+
+        sub = Gtk.Label(
+            label='Remove your USB drive and restart your laptop.\nFirst-Boot User Setup will open automatically on startup.',
+            justify=Gtk.Justification.CENTER,
+            wrap=True,
+        )
+        sub.add_css_class('dim-label')
+        box.append(sub)
+        return self._wrap_page(box)
+
+    def _refresh_disks(self):
+        for r in self.disk_rows:
+            self.disk_group.remove(r)
+        self.disk_rows.clear()
+        self._disks = detect_install_disks()
+        self._selected_disk = self._disks[0][0] if self._disks else None
+        self.no_disk_lbl.set_visible(len(self._disks) == 0)
+
+        first_chk = None
+        for idx, (dev_path, title, sub) in enumerate(self._disks):
+            row = Adw.ActionRow(title=title, subtitle=sub)
+            chk = Gtk.CheckButton()
+            if first_chk is None:
+                first_chk = chk
+            else:
+                chk.set_group(first_chk)
+            chk.set_active(idx == 0)
+            chk.connect('toggled', lambda btn, p=dev_path: self._on_disk_toggled(btn, p))
+            row.add_prefix(chk)
+            row.set_activatable_widget(chk)
+            self.disk_group.add(row)
+            self.disk_rows.append(row)
+
+        if self._page == 1:
+            self.next_btn.set_sensitive(self._selected_disk is not None)
+
+    def _on_disk_toggled(self, btn, path):
+        if btn.get_active():
+            self._selected_disk = path
+
+    def _go_to(self, idx):
+        self._page = idx
+        self.carousel.scroll_to(self.carousel.get_nth_page(idx), True)
+        self.try_btn.set_visible(idx == 0)
+        self.back_btn.set_visible(idx == 1)
+        if idx == 0:
+            self.next_btn.set_label('Install Proxim OS')
+            self.next_btn.add_css_class('suggested-action')
+            self.next_btn.remove_css_class('destructive-action')
+            self.next_btn.set_visible(True)
+            self.next_btn.set_sensitive(True)
+        elif idx == 1:
+            self.next_btn.set_label('Erase Disk & Install')
+            self.next_btn.remove_css_class('suggested-action')
+            self.next_btn.add_css_class('destructive-action')
+            self.next_btn.set_visible(True)
+            self.next_btn.set_sensitive(self._selected_disk is not None)
+        elif idx == 2:
+            self.back_btn.set_visible(False)
+            self.next_btn.set_visible(False)
+        else:
+            self.back_btn.set_visible(False)
+            self.next_btn.set_label('Restart Now')
+            self.next_btn.remove_css_class('destructive-action')
+            self.next_btn.add_css_class('suggested-action')
+            self.next_btn.set_visible(True)
+            self.next_btn.set_sensitive(True)
+
+    def _on_back(self, _btn):
+        if self._page == 1:
+            self._go_to(0)
+
+    def _on_next(self, _btn):
+        if self._page == 0:
+            self._refresh_disks()
+            self._go_to(1)
+        elif self._page == 1 and self._selected_disk:
+            self._start_install(self._selected_disk)
+        elif self._page == 3:
+            subprocess.Popen(['systemctl', 'reboot'])
+            self.close()
+
+    def _start_install(self, disk):
+        self._installing = True
+        self.set_deletable(False)
+        self._go_to(2)
+        self.inst_bar.set_fraction(0.02)
+        self.inst_msg.set_text(f'Starting installation on {disk}…')
+
+        def worker():
+            proc = subprocess.Popen(
+                ['pkexec', '/usr/libexec/kos-install-helper', disk],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            last_err = ''
+            for line in proc.stdout:
+                line = line.strip()
+                if line.startswith('PCT '):
+                    try:
+                        frac = max(0.0, min(1.0, float(line[4:])))
+                        GLib.idle_add(self.inst_bar.set_fraction, frac)
+                    except ValueError:
+                        pass
+                elif line.startswith('MSG '):
+                    GLib.idle_add(self.inst_msg.set_text, line[4:])
+                elif line.startswith('ERROR '):
+                    last_err = line[6:]
+            rc = proc.wait()
+
+            def finish():
+                self._installing = False
+                self.set_deletable(True)
+                if rc == 0:
+                    self._go_to(3)
+                else:
+                    self.inst_msg.set_text(last_err or 'Installation failed.')
+                    self.back_btn.set_visible(True)
+                    self.next_btn.set_visible(False)
+                    self._page = 1
+                return False
+
+            GLib.idle_add(finish)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+
 class SetupWindow(Adw.ApplicationWindow):
+    """First-Boot User Account & Preferences Setup."""
+
     def __init__(self, app, preview=False):
         super().__init__(application=app, title='Proxim OS Setup')
         self.preview = preview
@@ -374,20 +722,33 @@ class SetupWindow(Adw.ApplicationWindow):
 
 
 class SetupApp(Adw.Application):
-    def __init__(self, preview=False):
+    def __init__(self, mode='setup', preview=False):
         super().__init__(application_id='org.proxim.Setup')
+        self.mode = mode
         self.preview = preview
 
     def do_activate(self):
         win = self.props.active_window
         if not win:
-            win = SetupWindow(self, preview=self.preview)
+            if self.mode == 'install':
+                win = InstallerWindow(self)
+            else:
+                win = SetupWindow(self, preview=self.preview)
         win.present()
 
 
 def main():
-    preview = '--preview' in sys.argv[1:]
-    app = SetupApp(preview=preview)
+    args = sys.argv[1:]
+    preview = '--preview' in args
+    if '--install' in args:
+        mode = 'install'
+    elif preview or '--setup-only' in args:
+        mode = 'setup'
+    elif os.path.exists('/var/lib/kos/live-iso'):
+        mode = 'install'
+    else:
+        mode = 'setup'
+    app = SetupApp(mode=mode, preview=preview)
     return app.run([])
 
 

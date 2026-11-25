@@ -83,10 +83,13 @@ if os.path.isfile(gdm_conf):
     with open(gdm_conf, "w", encoding="utf-8") as fh:
         fh.writelines(new_lines)
 
-# 7. Mark setup complete and clear pending trigger.
+# 7. Mark setup complete, remove temporary OOBE/live account if replaced, and clear pending trigger.
 os.makedirs("/var/lib/kos", exist_ok=True)
 with open("/var/lib/kos/setup-done", "w", encoding="utf-8") as fh:
     fh.write(f"user={username}\n")
 if os.path.exists("/var/lib/kos/setup-pending"):
     os.unlink("/var/lib/kos/setup-pending")
+if username != "proxim":
+    if subprocess.run(["id", "proxim"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        subprocess.run(["userdel", "-f", "-r", "proxim"], check=False)
 PY

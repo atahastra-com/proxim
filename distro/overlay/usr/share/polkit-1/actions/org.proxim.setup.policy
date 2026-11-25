@@ -16,4 +16,16 @@
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kos-setup-helper</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">false</annotate>
   </action>
+  <action id="org.proxim.install.apply">
+    <description>Install Proxim OS onto a disk</description>
+    <message>Authentication is required to install Proxim OS</message>
+    <icon_name>proxim-logo</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kos-install-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">false</annotate>
+  </action>
 </policyconfig>

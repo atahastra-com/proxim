@@ -1,0 +1,166 @@
+#!/bin/bash
+# Privileged disk installer for Proxim OS Live ISO (invoked via pkexec).
+# Partitions target disk (GPT: 512MiB EFI + ext4 root), extracts live squashfs,
+# installs UEFI/BIOS GRUB, and enables first-boot user setup on the new disk.
+set -euo pipefail
+
+DISK="${1:-}"
+SQUASH="/run/live/medium/live/filesystem.squashfs"
+VMLINUZ="/run/live/medium/live/vmlinuz"
+INITRD="/run/live/medium/live/initrd.img"
+TARGET="/tmp/kos-install-target"
+
+emit() { printf '%s\n' "$1"; }
+fail() { emit "ERROR $1"; exit 1; }
+
+if [[ -z "$DISK" || ! -b "$DISK" ]]; then
+  fail "Invalid target disk: ${DISK}"
+fi
+if [[ ! -f "$SQUASH" ]]; then
+  fail "Live system image not found at ${SQUASH}"
+fi
+
+# Prevent accidentally wiping the live USB boot device itself.
+LIVE_SRC="$(findmnt -n -o SOURCE /run/live/medium 2>/dev/null || true)"
+if [[ -n "$LIVE_SRC" ]]; then
+  LIVE_PK="$(lsblk -no PKNAME "$LIVE_SRC" 2>/dev/null || true)"
+  if [[ "$LIVE_SRC" == "${DISK}"* || "/dev/${LIVE_PK}" == "$DISK" ]]; then
+    fail "Cannot install onto the live USB drive (${DISK})."
+  fi
+fi
+
+cleanup() {
+  set +e
+  umount -R "$TARGET" 2>/dev/null || true
+  rmdir "$TARGET" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+emit "PCT 0.03"
+emit "MSG Preparing ${DISK}…"
+
+# Unmount any existing partitions on the target disk.
+while read -r mp; do
+  [[ -n "$mp" ]] && umount -f "$mp" 2>/dev/null || true
+done < <(lsblk -nr -o MOUNTPOINT "$DISK" 2>/dev/null | grep -v '^$' || true)
+swapoff -a 2>/dev/null || true
+
+part_for() {
+  local d="$1" n="$2"
+  if [[ "$d" =~ [0-9]$ ]]; then
+    printf '%sp%s\n' "$d" "$n"
+  else
+    printf '%s%s\n' "$d" "$n"
+  fi
+}
+
+emit "PCT 0.06"
+emit "MSG Creating GPT partitions on ${DISK}…"
+wipefs -a "$DISK" >/dev/null 2>&1 || true
+parted -s "$DISK" mklabel gpt
+parted -s "$DISK" mkpart EFI fat32 1MiB 513MiB
+parted -s "$DISK" set 1 esp on
+parted -s "$DISK" mkpart root ext4 513MiB 100%
+partprobe "$DISK" || true
+sleep 1
+
+P_EFI="$(part_for "$DISK" 1)"
+P_ROOT="$(part_for "$DISK" 2)"
+for _ in $(seq 1 20); do
+  [[ -b "$P_EFI" && -b "$P_ROOT" ]] && break
+  sleep 0.3
+done
+[[ -b "$P_EFI" && -b "$P_ROOT" ]] || fail "Partition nodes did not appear on ${DISK}"
+
+emit "PCT 0.10"
+emit "MSG Formatting EFI and root partitions…"
+mkfs.vfat -F32 -n EFI "$P_EFI" >/dev/null
+mkfs.ext4 -F -L proxim-os "$P_ROOT" >/dev/null
+
+mkdir -p "$TARGET"
+mount "$P_ROOT" "$TARGET"
+mkdir -p "${TARGET}/boot/efi"
+mount "$P_EFI" "${TARGET}/boot/efi"
+
+emit "PCT 0.14"
+emit "MSG Copying Proxim OS system files (this takes a minute)…"
+
+# Run unsquashfs and estimate progress from target disk usage vs ~5 GiB unpacked.
+unsquashfs -f -d "$TARGET" "$SQUASH" >/tmp/kos-unsquash.log 2>&1 &
+UPID=$!
+while kill -0 "$UPID" 2>/dev/null; do
+  used_kib=$(df -k --output=used "$TARGET" 2>/dev/null | tail -n 1 | tr -dc '0-9')
+  used_kib="${used_kib:-0}"
+  # Unpacked system is ~5.0 GiB (~5200000 KiB); map to 0.14..0.78
+  frac=$(awk -v u="$used_kib" 'BEGIN { f = 0.14 + (u / 5200000.0) * 0.64; if (f > 0.78) f = 0.78; printf "%.2f", f }')
+  emit "PCT ${frac}"
+  sleep 1
+done
+wait "$UPID" || fail "Failed to extract system files (see /tmp/kos-unsquash.log)"
+
+emit "PCT 0.80"
+emit "MSG Configuring installed system and bootloader…"
+
+# Copy kernel and initrd into /boot on the installed disk.
+KVER="$(ls -1 "${TARGET}/lib/modules" | sort -V | tail -n 1)"
+if [[ -f "$VMLINUZ" ]]; then
+  cp -f "$VMLINUZ" "${TARGET}/boot/vmlinuz-${KVER}"
+fi
+if [[ -f "$INITRD" ]]; then
+  cp -f "$INITRD" "${TARGET}/boot/initrd.img-${KVER}"
+fi
+
+ROOT_UUID="$(blkid -s UUID -o value "$P_ROOT")"
+EFI_UUID="$(blkid -s UUID -o value "$P_EFI")"
+
+cat > "${TARGET}/etc/fstab" << FSTAB
+# /etc/fstab: static file system information.
+UUID=${ROOT_UUID}  /          ext4  errors=remount-ro  0  1
+UUID=${EFI_UUID}   /boot/efi  vfat  umask=0077         0  1
+FSTAB
+
+# Reset to fresh installed First-Boot User Setup state.
+rm -f "${TARGET}/var/lib/kos/live-iso" \
+      "${TARGET}/var/lib/kos/setup-done" \
+      "${TARGET}/etc/sudoers.d/proxim-live"
+rm -f "${TARGET}/usr/share/applications/org.proxim.Installer.desktop"
+mkdir -p "${TARGET}/var/lib/kos"
+touch "${TARGET}/var/lib/kos/setup-pending"
+
+# Bind mounts for GRUB installation inside chroot.
+mount --bind /dev "${TARGET}/dev"
+mount --bind /dev/pts "${TARGET}/dev/pts"
+mount -t proc proc "${TARGET}/proc"
+mount -t sysfs sysfs "${TARGET}/sys"
+if [[ -d /sys/firmware/efi/efivars ]]; then
+  mount --bind /sys/firmware/efi/efivars "${TARGET}/sys/firmware/efi/efivars" 2>/dev/null || true
+fi
+
+emit "PCT 0.88"
+emit "MSG Installing Proxim OS bootloader…"
+
+chroot "$TARGET" bash -lc '
+  set -euo pipefail
+  systemctl disable mnt-kosdev.mount kos-shell-dev.service 2>/dev/null || true
+  if [[ -d /sys/firmware/efi ]]; then
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=proxim --recheck || \
+      grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=proxim --no-nvram --recheck
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --no-nvram --recheck || true
+  else
+    grub-install --target=i386-pc --recheck "'"${DISK}"'"
+  fi
+  update-grub
+  if [[ -x /usr/libexec/kos-grub-brand ]]; then
+    /usr/libexec/kos-grub-brand
+  fi
+'
+
+emit "PCT 0.98"
+emit "MSG Finalizing installation…"
+sync
+umount -R "$TARGET"
+rmdir "$TARGET" 2>/dev/null || true
+trap - EXIT
+
+emit "PCT 1.00"
+emit "DONE"
