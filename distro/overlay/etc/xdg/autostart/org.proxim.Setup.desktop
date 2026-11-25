@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=Proxim OS First-Boot Setup
-Exec=/bin/sh -c '[ -f /var/lib/kos/setup-pending ] && exec /usr/bin/proxim-setup'
+Name=Proxim OS Installer
+Exec=/bin/sh -c '[ -f /var/lib/kos/live-iso ] && exec /usr/bin/proxim-setup'
 OnlyShowIn=GNOME;
 NoDisplay=true
 X-GNOME-Autostart-enabled=true
