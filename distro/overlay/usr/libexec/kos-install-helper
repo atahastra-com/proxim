@@ -234,12 +234,17 @@ elif full:
 subprocess.run(["chpasswd"], input=f"{user}:{pw}\n", text=True, check=True)
 
 home = f"/home/{user}"
-for rel in (".config/gtk-3.0", ".config/gtk-4.0"):
+for rel in (".config/gtk-3.0", ".config/gtk-4.0", ".local/share/keyrings"):
     src = f"/etc/skel/{rel}"
     dst = f"{home}/{rel}"
     if os.path.isdir(src) and not os.path.exists(dst):
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         shutil.copytree(src, dst)
+kr_dir = f"{home}/.local/share/keyrings"
+if os.path.isdir(kr_dir):
+    os.chmod(kr_dir, 0o700)
+    for fn in os.listdir(kr_dir):
+        os.chmod(os.path.join(kr_dir, fn), 0o600)
 os.makedirs(f"{home}/.config/gtk-3.0", exist_ok=True)
 with open(f"{home}/.config/gtk-3.0/bookmarks", "w", encoding="utf-8") as bf:
     for folder in ("Desktop", "Documents", "Downloads", "Music", "Pictures", "Public", "Templates", "Videos"):
