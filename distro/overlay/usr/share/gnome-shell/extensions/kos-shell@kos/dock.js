@@ -12,7 +12,8 @@ import St from 'gi://St';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as AppFavorites from 'resource:///org/gnome/shell/ui/appFavorites.js';
 
-import {DND, appIcon, getPins, later, makeDraggableIcon, pinAt} from './folders.js';
+import {DND, appIcon, getPins, later, makeDraggableIcon, pinAt, unpin} from './folders.js';
+import {openContextMenu} from './contextMenu.js';
 import {squircleGIcon} from './icons.js';
 import {BOUNCE_MS, DOT_FADE_MS, easeOutCubic, stop, tween} from './anim.js';
 
@@ -207,6 +208,13 @@ export class KosDock {
         });
         // These die with the item on rebuild; don't store them on the dock.
         item.connect('notify::hover', () => this._updateZoom());
+        item.connect('button-press-event', (_a, event) => {
+            if (event.get_button() !== Clutter.BUTTON_SECONDARY)
+                return Clutter.EVENT_PROPAGATE;
+            const [x, y] = event.get_coords();
+            this._openDockMenu(app, pinned, x, y);
+            return Clutter.EVENT_STOP;
+        });
         draggable.connect('drag-begin', () => {
             this._dragZoom = true;
             this._resetZoom(true);
@@ -249,9 +257,45 @@ export class KosDock {
         return true;
     }
 
-    _activate(app) {
-        // Focus an existing window (unminimizing if needed) or launch it.
+    _openDockMenu(app, pinned, x, y) {
+        const entries = [];
         const windows = app.get_windows();
+        for (const w of windows) {
+            const title = (w.get_title() || app.get_name() || 'Window').slice(0, 42);
+            entries.push({label: title, action: () => Main.activateWindow(w)});
+        }
+        if (entries.length > 0)
+            entries.push({separator: true});
+        entries.push({label: 'New Window', action: () => app.open_new_window(-1)});
+        if (pinned)
+            entries.push({label: 'Remove from Dock', action: () => later(() => unpin(app.get_id()))});
+        else
+            entries.push({label: 'Keep in Dock', action: () => later(() => pinAt(app.get_id()))});
+        if (windows.length > 0) {
+            entries.push({separator: true});
+            entries.push({label: 'Quit', action: () => app.request_quit()});
+        }
+        openContextMenu(x, y, entries);
+    }
+
+    _activate(app) {
+        // Focus an existing window (unminimizing if needed), show a window
+        // switcher menu when multiple windows are open, or launch it.
+        const windows = app.get_windows();
+        if (windows.length > 1) {
+            const item = this._items().find(c => c._app === app);
+            if (item) {
+                const [ix, iy] = item.get_transformed_position();
+                const entries = windows.map(w => ({
+                    label: (w.get_title() || app.get_name() || 'Window').slice(0, 42),
+                    action: () => Main.activateWindow(w),
+                }));
+                entries.push({separator: true});
+                entries.push({label: 'New Window', action: () => app.open_new_window(-1)});
+                openContextMenu(ix + item.width / 2, iy, entries);
+                return;
+            }
+        }
         if (windows.length > 0) {
             const focused = Shell.WindowTracker.get_default().focus_app === app;
             if (focused && windows.length === 1 && windows[0].can_minimize()) {
