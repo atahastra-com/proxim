@@ -25,11 +25,11 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {
     DND, KosFolderView, appIcon, beginPendingEdit, commitEditsOnPress,
     commitPendingEdits, constrainIconLabel, createDesktopDir, createDesktopFile,
-    deleteDesktopFile, endPendingEdit, desktopDirExists, desktopFile, desktopFileExists,
-    dirIcon, fileIcon, folderCellSize, getPins, iconLabelHeight, later,
-    listUserDesktopEntries, loadLayout, lookupApp, makeDraggableIcon,
-    makeFolderSquare, moveDesktopFileToDir, pinAt, renameDesktopFile,
-    saveLayout, unpin,
+    deleteDesktopFile, endPendingEdit, desktopDirExists, desktopDirPath,
+    desktopFile, desktopFileExists, dirIcon, fileIcon, folderCellSize,
+    getPins, iconLabelHeight, later, listUserDesktopEntries, loadLayout,
+    lookupApp, makeDraggableIcon, makeFolderSquare, moveDesktopFileToDir,
+    pinAt, renameDesktopFile, saveLayout, unpin,
 } from './folders.js';
 import {closeContextMenu, openContextMenu} from './contextMenu.js';
 import {CLOSE_MS, OPEN_MS, SWIPE_MS, after, easeOutCubic, easeOutQuint, stop, tween} from './anim.js';
@@ -199,9 +199,44 @@ export class KosDesktopGrid {
             if (global.display.focus_window)
                 commitPendingEdits();
         });
+        this._watchDesktopDir();
+    }
+
+    _watchDesktopDir() {
+        try {
+            const dir = desktopDirPath();
+            GLib.mkdir_with_parents(dir, 0o755);
+            this._desktopMonitor = Gio.File.new_for_path(dir).monitor_directory(
+                Gio.FileMonitorFlags.WATCH_MOVES, null);
+            this._desktopMonitorId = this._desktopMonitor.connect('changed', () => {
+                if (this._renamingFile)
+                    return;
+                if (this._desktopSyncId)
+                    GLib.source_remove(this._desktopSyncId);
+                this._desktopSyncId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
+                    this._desktopSyncId = 0;
+                    if (!this._renamingFile)
+                        this._scheduleRebuild();
+                    return GLib.SOURCE_REMOVE;
+                });
+            });
+        } catch (e) {
+            logError(e, 'kos-shell: watching ~/Desktop');
+        }
     }
 
     disable() {
+        if (this._desktopSyncId) {
+            GLib.source_remove(this._desktopSyncId);
+            this._desktopSyncId = 0;
+        }
+        if (this._desktopMonitor) {
+            if (this._desktopMonitorId)
+                this._desktopMonitor.disconnect(this._desktopMonitorId);
+            this._desktopMonitor.cancel();
+            this._desktopMonitor = null;
+            this._desktopMonitorId = 0;
+        }
         if (this._rebuildIdleId) {
             GLib.source_remove(this._rebuildIdleId);
             this._rebuildIdleId = 0;
