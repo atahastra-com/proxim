@@ -13,7 +13,8 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
-import {hookBoxPointer, unhookBoxPointer} from './anim.js';
+import Meta from 'gi://Meta';
+import {easeOutCubic, hookBoxPointer, stop, tween, unhookBoxPointer} from './anim.js';
 
 export const PANEL_HEIGHT = 72;
 // The calendar (clock, left) and quick settings (right) popups float as
@@ -21,6 +22,40 @@ export const PANEL_HEIGHT = 72;
 // screen edge, no arrow.
 export const POPUP_GAP = 12;
 export const POPUP_INSET = 12;
+
+const SETTINGS_PATH = GLib.build_filenamev([GLib.get_user_config_dir(), 'kos', 'settings.json']);
+const _autoHideListeners = new Set();
+
+export function getAutoHideDock() {
+    try {
+        if (!GLib.file_test(SETTINGS_PATH, GLib.FileTest.IS_REGULAR))
+            return false;
+        const [, bytes] = Gio.File.new_for_path(SETTINGS_PATH).load_contents(null);
+        const obj = JSON.parse(new TextDecoder().decode(bytes));
+        return Boolean(obj?.autoHideDock);
+    } catch (_e) {
+        return false;
+    }
+}
+
+export function setAutoHideDock(enabled) {
+    const val = Boolean(enabled);
+    try {
+        const dir = GLib.path_get_dirname(SETTINGS_PATH);
+        GLib.mkdir_with_parents(dir, 0o755);
+        let obj = {};
+        if (GLib.file_test(SETTINGS_PATH, GLib.FileTest.IS_REGULAR)) {
+            const [, bytes] = Gio.File.new_for_path(SETTINGS_PATH).load_contents(null);
+            obj = JSON.parse(new TextDecoder().decode(bytes)) || {};
+        }
+        obj.autoHideDock = val;
+        GLib.file_set_contents(SETTINGS_PATH, JSON.stringify(obj, null, 2) + '\n');
+    } catch (e) {
+        logError(e, 'kos-shell: saving settings.json');
+    }
+    for (const cb of _autoHideListeners)
+        cb(val);
+}
 
 export class KosPanel {
     constructor({extensionPath} = {}) {
@@ -42,6 +77,7 @@ export class KosPanel {
         this._moveDateMenuToLeft();
         this._movePanelToBottom();
         this._applyStatusIcons();
+        this._initAutoHide();
 
         // Re-run layout when monitors change or the bar is reallocated
         // (like a resize listener on window.resize).
@@ -68,6 +104,7 @@ export class KosPanel {
     }
 
     disable() {
+        this._destroyAutoHide();
         for (const [obj, id] of this._signals)
             obj.disconnect(id);
         this._signals = [];
@@ -113,7 +150,7 @@ export class KosPanel {
         // Liquid Glass bar & popovers: strong blur with high luminosity so
         // wallpaper light and color refract through the glass cleanly.
         if (!this._blurEffect) {
-            const pair = addBlur(Main.panel, 28, 0.84);
+            const pair = addBlur(Main.panel, 48, 0.84);
             if (pair)
                 this._blurEffect = pair[1];
         }
@@ -121,7 +158,7 @@ export class KosPanel {
             const menu = Main.panel.statusArea[area]?.menu;
             const box = menu?.box;
             const pointer = menu?._boxPointer;
-            const pair = addBlur(box, 28, 0.78);
+            const pair = addBlur(box, 44, 0.78);
             if (pair) {
                 const [, effect] = pair;
                 if (pointer) {
@@ -250,6 +287,145 @@ export class KosPanel {
         if (box.width !== monitor.width || box.height !== height)
             box.set_size(monitor.width, height);
         this._disableHotCorners();
+        this._placeEdgeTrigger();
+    }
+
+    _initAutoHide() {
+        this._autoHide = getAutoHideDock();
+        this._dockHidden = false;
+        this._hideTimer = 0;
+        this._edgeTrigger = new St.Widget({
+            reactive: true,
+            visible: false,
+            opacity: 0,
+        });
+        Main.uiGroup.add_child(this._edgeTrigger);
+        this._placeEdgeTrigger();
+
+        this._connect(this._edgeTrigger, 'enter-event', () => this._revealDock());
+        this._connect(Main.panel, 'notify::hover', () => this._scheduleAutoHide());
+        this._connect(global.display, 'window-created', () => this._scheduleAutoHide());
+        this._connect(global.window_manager, 'minimize', () => this._scheduleAutoHide());
+        this._connect(global.window_manager, 'unminimize', () => this._scheduleAutoHide());
+        this._connect(global.window_manager, 'destroy', () => this._scheduleAutoHide());
+        this._connect(global.display, 'notify::focus-window', () => this._scheduleAutoHide());
+        for (const area of ['dateMenu', 'quickSettings']) {
+            const menu = Main.panel.statusArea[area]?.menu;
+            if (menu)
+                this._connect(menu, 'open-state-changed', () => this._scheduleAutoHide());
+        }
+
+        this._autoHideListener = val => {
+            this._autoHide = val;
+            if (!val)
+                this._revealDock();
+            else
+                this._scheduleAutoHide();
+        };
+        _autoHideListeners.add(this._autoHideListener);
+        this._scheduleAutoHide();
+    }
+
+    _destroyAutoHide() {
+        if (this._autoHideListener) {
+            _autoHideListeners.delete(this._autoHideListener);
+            this._autoHideListener = null;
+        }
+        if (this._hideTimer) {
+            GLib.source_remove(this._hideTimer);
+            this._hideTimer = 0;
+        }
+        if (this._edgeTrigger) {
+            this._edgeTrigger.destroy();
+            this._edgeTrigger = null;
+        }
+        const box = Main.layoutManager.panelBox;
+        if (box) {
+            stop(box);
+            box.translation_y = 0;
+            box.visible = true;
+        }
+    }
+
+    _placeEdgeTrigger() {
+        if (!this._edgeTrigger)
+            return;
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor)
+            return;
+        this._edgeTrigger.set_position(monitor.x, monitor.y + monitor.height - 4);
+        this._edgeTrigger.set_size(monitor.width, 4);
+    }
+
+    _hasVisibleWindow() {
+        return global.get_window_actors().some(a => {
+            const w = a.meta_window;
+            return w && !w.minimized && w.get_window_type() === Meta.WindowType.NORMAL;
+        });
+    }
+
+    _menuOpen() {
+        for (const area of ['dateMenu', 'quickSettings']) {
+            if (Main.panel.statusArea[area]?.menu?.isOpen)
+                return true;
+        }
+        return false;
+    }
+
+    _scheduleAutoHide() {
+        if (this._hideTimer) {
+            GLib.source_remove(this._hideTimer);
+            this._hideTimer = 0;
+        }
+        if (!this._autoHide || Main.sessionMode.isLocked) {
+            this._revealDock();
+            return;
+        }
+        if (Main.panel.hover || this._menuOpen() || !this._hasVisibleWindow()) {
+            this._revealDock();
+            return;
+        }
+        this._hideTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 450, () => {
+            this._hideTimer = 0;
+            if (this._autoHide && !Main.panel.hover && !this._menuOpen() && this._hasVisibleWindow())
+                this._concealDock();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    _revealDock() {
+        if (this._edgeTrigger)
+            this._edgeTrigger.visible = false;
+        const box = Main.layoutManager.panelBox;
+        if (!box)
+            return;
+        if (!this._dockHidden && box.visible && box.translation_y === 0)
+            return;
+        this._dockHidden = false;
+        box.visible = true;
+        tween(box, {
+            translationY: 0,
+            duration: 180,
+            easing: easeOutCubic,
+        });
+    }
+
+    _concealDock() {
+        const box = Main.layoutManager.panelBox;
+        if (!box || this._dockHidden)
+            return;
+        this._dockHidden = true;
+        if (this._edgeTrigger)
+            this._edgeTrigger.visible = true;
+        tween(box, {
+            translationY: PANEL_HEIGHT,
+            duration: 200,
+            easing: easeOutCubic,
+            onComplete: () => {
+                if (this._dockHidden)
+                    box.visible = false;
+            },
+        });
     }
 
     _restorePanel() {

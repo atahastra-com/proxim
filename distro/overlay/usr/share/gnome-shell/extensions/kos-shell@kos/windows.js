@@ -17,8 +17,6 @@ import {dockIconCenter} from './dock.js';
 
 const ANIMATED_TYPES = new Set([
     Meta.WindowType.NORMAL,
-    Meta.WindowType.DIALOG,
-    Meta.WindowType.MODAL_DIALOG,
 ]);
 
 function windowType(actor) {

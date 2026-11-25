@@ -24,6 +24,7 @@ import {PopupAnimation} from 'resource:///org/gnome/shell/ui/boxpointer.js';
 import {
     QuickToggle, QuickMenuToggle, QuickSlider,
 } from 'resource:///org/gnome/shell/ui/quickSettings.js';
+import {getAutoHideDock, setAutoHideDock} from './panel.js';
 
 // Preferred column counts; the first that divides the tile count wins.
 const COLUMN_CHOICES = [4, 3];
@@ -297,6 +298,13 @@ export class KosQuickPanel {
             add('System Monitor', 'utilities-system-monitor-symbolic', () => this._afterClose(
                 () => monitor.activate()));
         }
+
+        const autoHide = add('Auto-Hide Dock', 'go-bottom-symbolic', () => {
+            const next = !getAutoHideDock();
+            setAutoHideDock(next);
+            autoHide.checked = next;
+        });
+        autoHide.checked = getAutoHideDock();
     }
 
     // Same order GNOME's own screenshot button uses: close, then act.
