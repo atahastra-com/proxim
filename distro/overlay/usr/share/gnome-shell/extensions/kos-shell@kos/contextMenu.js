@@ -36,7 +36,7 @@ export function openContextMenu(stageX, stageY, entries) {
     manager.addMenu(menu);
 
     const effect = new Shell.BlurEffect({mode: Shell.BlurMode.BACKGROUND, brightness: 0.78});
-    effect.radius = 28;
+    effect.radius = 44;
     menu.box.add_effect(effect);
 
     for (const e of entries) {
