@@ -424,10 +424,22 @@ function rasterSize(size) {
 function fileMtime(path) {
     try {
         const info = Gio.File.new_for_path(path).query_info(
-            'time::modified', Gio.FileQueryInfoFlags.NONE, null);
-        return info.get_modification_date_time()?.to_unix() ?? 0;
+            'time::modified,standard::size', Gio.FileQueryInfoFlags.NONE, null);
+        return `${info.get_modification_date_time()?.to_unix() ?? 0}:${info.get_size()}`;
     } catch (_e) {
-        return 0;
+        return '0:0';
+    }
+}
+
+function validCachedPng(diskPath) {
+    try {
+        if (!GLib.file_test(diskPath, GLib.FileTest.IS_REGULAR))
+            return false;
+        const info = Gio.File.new_for_path(diskPath).query_info(
+            'standard::size', Gio.FileQueryInfoFlags.NONE, null);
+        return info.get_size() > 64;
+    } catch (_e) {
+        return false;
     }
 }
 
@@ -445,13 +457,21 @@ export function squircleGIcon(gicon, iconName, size) {
     let out = null;
     try {
         if (path) {
-            const cacheKey = fnv1a(`v3|${path}|${fileMtime(path)}|${rSize}`);
-            const diskPath = GLib.build_filenamev([cacheDir(), `v3-${cacheKey}.png`]);
-            if (!GLib.file_test(diskPath, GLib.FileTest.IS_REGULAR)) {
+            const cacheKey = fnv1a(`v4|${path}|${fileMtime(path)}|${rSize}`);
+            const diskPath = GLib.build_filenamev([cacheDir(), `v4-${cacheKey}.png`]);
+            if (!validCachedPng(diskPath)) {
                 const src = loadPixbuf(path, rSize);
-                tilePixbuf(src, rSize).savev(diskPath, 'png', [], []);
+                if (src && src.get_width() > 0 && src.get_height() > 0) {
+                    const tmpPath = `${diskPath}.tmp`;
+                    tilePixbuf(src, rSize).savev(tmpPath, 'png', [], []);
+                    if (validCachedPng(tmpPath))
+                        Gio.File.new_for_path(tmpPath).move(
+                            Gio.File.new_for_path(diskPath),
+                            Gio.FileCopyFlags.OVERWRITE, null, null);
+                }
             }
-            out = Gio.FileIcon.new(Gio.File.new_for_path(diskPath));
+            if (validCachedPng(diskPath))
+                out = Gio.FileIcon.new(Gio.File.new_for_path(diskPath));
         }
     } catch (e) {
         logError(e, `kos-shell: squircle icon ${path || iconName}`);
