@@ -146,6 +146,34 @@ def make_summary(manifest):
     }
 
 
+def check_apt_updates():
+    """Fallback online check via apt when custom OTA server is not hosted."""
+    try:
+        ref = subprocess.run(
+            ['pkexec', '/usr/libexec/kos-update-helper', 'apt-refresh'],
+            capture_output=True,
+            text=True,
+            timeout=35,
+        )
+        if ref.returncode != 0:
+            return None
+        sim = subprocess.run(
+            ['apt-get', '-s', 'upgrade'],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        pkgs = []
+        for ln in sim.stdout.splitlines():
+            if ln.startswith('Inst '):
+                parts = ln.split()
+                if len(parts) >= 2:
+                    pkgs.append(parts[1])
+        return pkgs
+    except Exception:
+        return None
+
+
 def cmd_check():
     os_info = get_os_info()
     cfg = get_update_config()
@@ -179,13 +207,47 @@ def cmd_check():
         with urllib.request.urlopen(req, timeout=8) as resp:
             manifest = json.loads(resp.read().decode('utf-8'))
     except Exception:
+        pkgs = check_apt_updates()
+        if pkgs is None:
+            emit({
+                'event': 'status',
+                'state': 'up_to_date',
+                'os': os_info,
+                'channel': cfg.get('CHANNEL', 'stable'),
+                'message': f"{os_info['pretty']} is up to date (offline).",
+                'update': None,
+                'last': last,
+            })
+            return 0
+        if not pkgs:
+            emit({
+                'event': 'status',
+                'state': 'up_to_date',
+                'os': os_info,
+                'channel': cfg.get('CHANNEL', 'stable'),
+                'message': f"{os_info['pretty']} is up to date.",
+                'update': None,
+                'last': last,
+            })
+            return 0
+        manifest = {
+            '_apt_upgrade': True,
+            'version': f'{len(pkgs)} updates',
+            'name': 'System & Security Updates',
+            'subtitle': f'{len(pkgs)} package(s) ready to download and install',
+            'notes': [f'Updated package: {p}' for p in pkgs[:12]],
+        }
+        cache_dir = os.path.expanduser('~/.cache/kos')
+        os.makedirs(cache_dir, exist_ok=True)
+        with open(os.path.join(cache_dir, 'latest-manifest.json'), 'w', encoding='utf-8') as fh:
+            json.dump(manifest, fh)
         emit({
             'event': 'status',
-            'state': 'up_to_date',
+            'state': 'available',
             'os': os_info,
             'channel': cfg.get('CHANNEL', 'stable'),
-            'message': f"{os_info['pretty']} is up to date (update server offline).",
-            'update': None,
+            'message': f'{len(pkgs)} system update(s) available.',
+            'update': make_summary(manifest),
             'last': last,
         })
         return 0
@@ -332,6 +394,20 @@ def cmd_install():
         return 1
     with open(manifest_file, encoding='utf-8') as fh:
         manifest = json.load(fh)
+
+    if manifest.get('_apt_upgrade'):
+        emit({'event': 'progress', 'fraction': 0.25, 'text': 'Downloading and installing system updates…'})
+        proc = subprocess.run(
+            ['pkexec', '/usr/libexec/kos-update-helper', 'apt-upgrade'],
+            capture_output=True,
+            text=True,
+        )
+        if proc.returncode != 0:
+            err = (proc.stderr or proc.stdout or 'System update failed.').strip()
+            emit({'event': 'error', 'message': err})
+            return 1
+        emit({'event': 'progress', 'fraction': 1.0, 'text': 'System updated'})
+        return cmd_check()
 
     local_bundle = manifest.get('_local_bundle')
     if local_bundle and os.path.isfile(local_bundle):

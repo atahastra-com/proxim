@@ -29,13 +29,34 @@ case "$CMD" in
   stage|stage-and-reboot)
     [[ -n "$BUNDLE" && -f "$BUNDLE" ]] || die "missing update bundle file"
     ;;
+  apt-refresh)
+    apt-get update -qq
+    exit 0
+    ;;
+  apt-upgrade)
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get update -qq
+    apt-get upgrade -y --no-install-recommends
+    apt-get clean
+    mkdir -p "$STATE_DIR"
+    python3 - "${STATE_DIR}/last-result.json" << 'PY'
+import datetime, json, sys
+with open(sys.argv[1], "w", encoding="utf-8") as fh:
+    json.dump({
+        "status": "ok",
+        "message": "System packages updated",
+        "updated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+    }, fh)
+PY
+    exit 0
+    ;;
   cancel)
     rm -f /system-update "${STATE_DIR}/pending.pxu" "${STATE_DIR}/pending.json"
     echo "Cancelled staged update."
     exit 0
     ;;
   *)
-    die "usage: kos-update-helper <stage|stage-and-reboot|cancel> [bundle.pxu] [bundle.sig]"
+    die "usage: kos-update-helper <stage|stage-and-reboot|apt-refresh|apt-upgrade|cancel> [bundle.pxu] [bundle.sig]"
     ;;
 esac
 

@@ -1,9 +1,8 @@
 #!/bin/bash
 # Privileged disk installer for Proxim OS Live ISO (invoked via pkexec).
 # Reads JSON config from stdin:
-#   {disk, full_name, username, password, hostname, timezone, autologin}
-# Partitions target disk (GPT: 512MiB EFI + ext4 root), extracts live squashfs,
-# creates the user's account, installs UEFI/BIOS GRUB, and finalizes the OS.
+#   {mode, disk, partition, efi_partition, download_updates,
+#    full_name, username, password, hostname, timezone, autologin}
 set -euo pipefail
 
 SQUASH="/run/live/medium/live/filesystem.squashfs"
@@ -18,32 +17,44 @@ CFG_JSON="$(cat)"
 readarray -t CFG < <(python3 -c '
 import json, re, sys
 d = json.loads(sys.stdin.read())
+mode = str(d.get("mode", "erase")).strip()
 disk = str(d.get("disk", "")).strip()
+part = str(d.get("partition", "")).strip()
+efi_part = str(d.get("efi_partition", "")).strip()
+updates = "1" if d.get("download_updates", False) else "0"
 full_name = str(d.get("full_name", "")).strip()
 username = str(d.get("username", "")).strip().lower()
 password = str(d.get("password", ""))
 hostname = str(d.get("hostname", "")).strip().lower() or "proxim"
 timezone = str(d.get("timezone", "")).strip() or "UTC"
 autologin = "1" if d.get("autologin", False) else "0"
+if mode not in ("erase", "partition"):
+    raise SystemExit("Invalid install mode")
 if not disk.startswith("/dev/"):
     raise SystemExit("Invalid disk")
+if mode == "partition" and not part.startswith("/dev/"):
+    raise SystemExit("Invalid root partition")
 if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", username):
     raise SystemExit("Invalid username")
 if not password:
     raise SystemExit("Password cannot be empty")
 if not re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?", hostname):
     raise SystemExit("Invalid computer name")
-for v in (disk, full_name, username, password, hostname, timezone, autologin):
+for v in (mode, disk, part, efi_part, updates, full_name, username, password, hostname, timezone, autologin):
     print(v.replace("\n", " "))
 ' <<< "$CFG_JSON")
 
-DISK="${CFG[0]}"
-FULL_NAME="${CFG[1]}"
-USERNAME="${CFG[2]}"
-PASSWORD="${CFG[3]}"
-HOSTNAME="${CFG[4]}"
-TIMEZONE="${CFG[5]}"
-AUTOLOGIN="${CFG[6]}"
+MODE="${CFG[0]}"
+DISK="${CFG[1]}"
+PART_ROOT="${CFG[2]}"
+PART_EFI="${CFG[3]}"
+DOWNLOAD_UPDATES="${CFG[4]}"
+FULL_NAME="${CFG[5]}"
+USERNAME="${CFG[6]}"
+PASSWORD="${CFG[7]}"
+HOSTNAME="${CFG[8]}"
+TIMEZONE="${CFG[9]}"
+AUTOLOGIN="${CFG[10]}"
 
 if [[ -z "$DISK" || ! -b "$DISK" ]]; then
   fail "Invalid target disk: ${DISK}"
@@ -67,14 +78,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-emit "PCT 0.03"
-emit "MSG Preparing ${DISK}…"
-
-while read -r mp; do
-  [[ -n "$mp" ]] && umount -f "$mp" 2>/dev/null || true
-done < <(lsblk -nr -o MOUNTPOINT "$DISK" 2>/dev/null | grep -v '^$' || true)
-swapoff -a 2>/dev/null || true
-
 part_for() {
   local d="$1" n="$2"
   if [[ "$d" =~ [0-9]$ ]]; then
@@ -84,33 +87,57 @@ part_for() {
   fi
 }
 
-emit "PCT 0.06"
-emit "MSG Creating GPT partitions on ${DISK}…"
-wipefs -a "$DISK" >/dev/null 2>&1 || true
-parted -s "$DISK" mklabel gpt
-parted -s "$DISK" mkpart EFI fat32 1MiB 513MiB
-parted -s "$DISK" set 1 esp on
-parted -s "$DISK" mkpart root ext4 513MiB 100%
-partprobe "$DISK" || true
-sleep 1
+emit "PCT 0.03"
+emit "MSG Preparing storage…"
 
-P_EFI="$(part_for "$DISK" 1)"
-P_ROOT="$(part_for "$DISK" 2)"
-for _ in $(seq 1 20); do
-  [[ -b "$P_EFI" && -b "$P_ROOT" ]] && break
-  sleep 0.3
-done
-[[ -b "$P_EFI" && -b "$P_ROOT" ]] || fail "Partition nodes did not appear on ${DISK}"
+if [[ "$MODE" == "erase" ]]; then
+  while read -r mp; do
+    [[ -n "$mp" ]] && umount -f "$mp" 2>/dev/null || true
+  done < <(lsblk -nr -o MOUNTPOINT "$DISK" 2>/dev/null | grep -v '^$' || true)
+  swapoff -a 2>/dev/null || true
 
-emit "PCT 0.10"
-emit "MSG Formatting EFI and root partitions…"
-mkfs.vfat -F32 -n EFI "$P_EFI" >/dev/null
-mkfs.ext4 -F -L proxim-os "$P_ROOT" >/dev/null
+  emit "PCT 0.06"
+  emit "MSG Creating GPT partitions on ${DISK}…"
+  wipefs -a "$DISK" >/dev/null 2>&1 || true
+  parted -s "$DISK" mklabel gpt
+  parted -s "$DISK" mkpart EFI fat32 1MiB 513MiB
+  parted -s "$DISK" set 1 esp on
+  parted -s "$DISK" mkpart root ext4 513MiB 100%
+  partprobe "$DISK" || true
+  sleep 1
+
+  P_EFI="$(part_for "$DISK" 1)"
+  P_ROOT="$(part_for "$DISK" 2)"
+  for _ in $(seq 1 20); do
+    [[ -b "$P_EFI" && -b "$P_ROOT" ]] && break
+    sleep 0.3
+  done
+  [[ -b "$P_EFI" && -b "$P_ROOT" ]] || fail "Partition nodes did not appear on ${DISK}"
+
+  emit "PCT 0.10"
+  emit "MSG Formatting EFI and root partitions…"
+  mkfs.vfat -F32 -n EFI "$P_EFI" >/dev/null
+  mkfs.ext4 -F -L proxim-os "$P_ROOT" >/dev/null
+else
+  [[ -b "$PART_ROOT" ]] || fail "Invalid root partition: ${PART_ROOT}"
+  for p in "$PART_ROOT" "$PART_EFI"; do
+    [[ -n "$p" ]] || continue
+    mp="$(lsblk -nr -o MOUNTPOINT "$p" 2>/dev/null | head -n 1 || true)"
+    [[ -n "$mp" ]] && umount -f "$mp" 2>/dev/null || true
+  done
+  P_ROOT="$PART_ROOT"
+  P_EFI="$PART_EFI"
+  emit "PCT 0.10"
+  emit "MSG Formatting root partition ${P_ROOT}…"
+  mkfs.ext4 -F -L proxim-os "$P_ROOT" >/dev/null
+fi
 
 mkdir -p "$TARGET"
 mount "$P_ROOT" "$TARGET"
-mkdir -p "${TARGET}/boot/efi"
-mount "$P_EFI" "${TARGET}/boot/efi"
+if [[ -n "$P_EFI" && -b "$P_EFI" ]]; then
+  mkdir -p "${TARGET}/boot/efi"
+  mount "$P_EFI" "${TARGET}/boot/efi"
+fi
 
 emit "PCT 0.14"
 emit "MSG Copying Proxim OS system files (this takes a minute)…"
@@ -120,13 +147,13 @@ UPID=$!
 while kill -0 "$UPID" 2>/dev/null; do
   used_kib=$(df -k --output=used "$TARGET" 2>/dev/null | tail -n 1 | tr -dc '0-9')
   used_kib="${used_kib:-0}"
-  frac=$(awk -v u="$used_kib" 'BEGIN { f = 0.14 + (u / 5200000.0) * 0.62; if (f > 0.76) f = 0.76; printf "%.2f", f }')
+  frac=$(awk -v u="$used_kib" 'BEGIN { f = 0.14 + (u / 5200000.0) * 0.60; if (f > 0.74) f = 0.74; printf "%.2f", f }')
   emit "PCT ${frac}"
   sleep 1
 done
 wait "$UPID" || fail "Failed to extract system files (see /tmp/kos-unsquash.log)"
 
-emit "PCT 0.78"
+emit "PCT 0.76"
 emit "MSG Creating user account (${USERNAME}) and system settings…"
 
 KVER="$(ls -1 "${TARGET}/lib/modules" | sort -V | tail -n 1)"
@@ -134,13 +161,14 @@ KVER="$(ls -1 "${TARGET}/lib/modules" | sort -V | tail -n 1)"
 [[ -f "$INITRD" ]] && cp -f "$INITRD" "${TARGET}/boot/initrd.img-${KVER}"
 
 ROOT_UUID="$(blkid -s UUID -o value "$P_ROOT")"
-EFI_UUID="$(blkid -s UUID -o value "$P_EFI")"
-
-cat > "${TARGET}/etc/fstab" << FSTAB
-# /etc/fstab: static file system information.
-UUID=${ROOT_UUID}  /          ext4  errors=remount-ro  0  1
-UUID=${EFI_UUID}   /boot/efi  vfat  umask=0077         0  1
-FSTAB
+{
+  echo "# /etc/fstab: static file system information."
+  echo "UUID=${ROOT_UUID}  /          ext4  errors=remount-ro  0  1"
+  if [[ -n "$P_EFI" && -b "$P_EFI" ]]; then
+    EFI_UUID="$(blkid -s UUID -o value "$P_EFI")"
+    echo "UUID=${EFI_UUID}   /boot/efi  vfat  umask=0077         0  1"
+  fi
+} > "${TARGET}/etc/fstab"
 
 rm -f "${TARGET}/var/lib/kos/live-iso" \
       "${TARGET}/var/lib/kos/setup-pending" \
@@ -156,6 +184,9 @@ mount -t sysfs sysfs "${TARGET}/sys"
 if [[ -d /sys/firmware/efi/efivars ]]; then
   mount --bind /sys/firmware/efi/efivars "${TARGET}/sys/firmware/efi/efivars" 2>/dev/null || true
 fi
+if [[ -f /etc/resolv.conf ]]; then
+  cp -L /etc/resolv.conf "${TARGET}/etc/resolv.conf" 2>/dev/null || true
+fi
 
 export KOS_INST_USER="$USERNAME"
 export KOS_INST_FULL="$FULL_NAME"
@@ -163,7 +194,6 @@ export KOS_INST_PASS="$PASSWORD"
 export KOS_INST_HOST="$HOSTNAME"
 export KOS_INST_TZ="$TIMEZONE"
 export KOS_INST_AUTO="$AUTOLOGIN"
-export KOS_INST_DISK="$DISK"
 
 chroot "$TARGET" python3 - << 'PY'
 import os, shutil, subprocess
@@ -251,13 +281,25 @@ for gdm_conf in ("/etc/gdm3/daemon.conf", "/etc/gdm3/custom.conf"):
             fh.writelines(new_lines)
 PY
 
-emit "PCT 0.88"
+if [[ "$DOWNLOAD_UPDATES" == "1" ]]; then
+  emit "PCT 0.82"
+  emit "MSG Downloading and installing latest system updates…"
+  chroot "$TARGET" bash -lc '
+    export DEBIAN_FRONTEND=noninteractive
+    if apt-get update -qq >/dev/null 2>&1; then
+      apt-get upgrade -y --no-install-recommends >/dev/null 2>&1 || true
+      apt-get clean >/dev/null 2>&1 || true
+    fi
+  ' || true
+fi
+
+emit "PCT 0.90"
 emit "MSG Installing Proxim OS bootloader…"
 
 chroot "$TARGET" bash -lc '
   set -euo pipefail
   systemctl disable mnt-kosdev.mount kos-shell-dev.service 2>/dev/null || true
-  if [[ -d /sys/firmware/efi ]]; then
+  if [[ -d /sys/firmware/efi && -n "'"${P_EFI}"'" ]]; then
     grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=proxim --recheck || \
       grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=proxim --no-nvram --recheck
     grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable --no-nvram --recheck || true

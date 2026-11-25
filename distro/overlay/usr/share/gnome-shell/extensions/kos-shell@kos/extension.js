@@ -104,8 +104,10 @@ export default class KosShellExtension extends Extension {
         }
         if (Main.layoutManager.panelBox)
             Main.layoutManager.panelBox.visible = true;
-        if (this._grid?._root)
-            this._grid._root.visible = true;
+        if (this._grid?._actor)
+            this._grid._actor.visible = true;
+        if (this._grid?._backdrop)
+            this._grid._backdrop.visible = true;
         this._windows?.disable();
         this._windows = null;
         this._lockScreen?.disable();
@@ -154,8 +156,10 @@ export default class KosShellExtension extends Extension {
         this._dock?.setVisible(!locked && !installerOnly);
         if (Main.layoutManager.panelBox)
             Main.layoutManager.panelBox.visible = !locked && !installerOnly;
-        if (this._grid?._root)
-            this._grid._root.visible = !installerOnly;
+        if (this._grid?._actor)
+            this._grid._actor.visible = !installerOnly;
+        if (this._grid?._backdrop)
+            this._grid._backdrop.visible = !installerOnly;
     }
 
     _restoreHasOverview() {

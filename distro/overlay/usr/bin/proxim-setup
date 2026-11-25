@@ -59,7 +59,11 @@ def fmt_bytes(n):
 
 
 def detect_install_disks():
-    """Return list of (dev_path, label, subtitle) excluding the live USB medium."""
+    """Return (disks, partitions) excluding the live USB medium.
+
+    disks: [(dev_path, title, subtitle)]
+    partitions: [(part_path, label, disk_path, is_efi)]
+    """
     live_disk = ''
     try:
         src = subprocess.check_output(
@@ -78,9 +82,10 @@ def detect_install_disks():
         pass
 
     disks = []
+    partitions = []
     try:
         raw = subprocess.check_output(
-            ['lsblk', '-J', '-d', '-b', '-o', 'NAME,SIZE,MODEL,TRAN,RM,TYPE'],
+            ['lsblk', '-J', '-b', '-o', 'NAME,SIZE,MODEL,TRAN,RM,TYPE,FSTYPE,LABEL,PARTLABEL'],
             stderr=subprocess.DEVNULL,
             text=True,
         )
@@ -96,12 +101,35 @@ def detect_install_disks():
                 continue
             model = (dev.get('model') or 'Internal Disk').strip()
             tran = (dev.get('tran') or '').upper()
+            part_summaries = []
+            for ch in dev.get('children') or []:
+                if ch.get('type') != 'part':
+                    continue
+                pname = ch.get('name', '')
+                psize = int(ch.get('size') or 0)
+                fstype = (ch.get('fstype') or 'unformatted').lower()
+                plabel = (ch.get('label') or ch.get('partlabel') or '').strip()
+                is_efi = fstype in ('vfat', 'fat32') and psize <= 1024 * 1024 * 1024
+                tag = f'{plabel} ({fstype}, {fmt_bytes(psize)})' if plabel else f'{fstype} ({fmt_bytes(psize)})'
+                part_summaries.append(tag)
+                partitions.append((
+                    f'/dev/{pname}',
+                    f'/dev/{pname} — {tag}',
+                    f'/dev/{name}',
+                    is_efi,
+                ))
             title = f'{model} ({fmt_bytes(size)})'
             sub = f'/dev/{name}' + (f'  •  {tran}' if tran else '')
+            if part_summaries:
+                sub += '\nPartitions: ' + ', '.join(part_summaries[:4])
+                if len(part_summaries) > 4:
+                    sub += f' (+{len(part_summaries) - 4} more)'
+            else:
+                sub += '\nUnpartitioned / Empty Drive'
             disks.append((f'/dev/{name}', title, sub))
     except Exception:
         pass
-    return disks
+    return disks, partitions
 
 
 class InstallerWindow(Adw.ApplicationWindow):
@@ -118,7 +146,9 @@ class InstallerWindow(Adw.ApplicationWindow):
         self._username_edited = False
         self._zones = detect_timezones()
         self._disks = []
+        self._partitions = []
         self._selected_disk = None
+        self._install_mode = 'erase'
         self._installing = False
 
         toolbar = Adw.ToolbarView()
@@ -230,7 +260,14 @@ class InstallerWindow(Adw.ApplicationWindow):
         group.add(self.tz_row)
         box.append(group)
 
-        priv_group = Adw.PreferencesGroup(title='Privacy')
+        priv_group = Adw.PreferencesGroup(title='System Updates & Privacy')
+        self.updates_switch = Adw.SwitchRow(
+            title='Download & install system updates',
+            subtitle='Fetch latest security and OS updates during installation (when online)',
+        )
+        self.updates_switch.set_active(True)
+        priv_group.add(self.updates_switch)
+
         priv_row = Adw.ActionRow(
             title='No Telemetry or Tracking',
             subtitle='Proxim OS never collects diagnostic data or usage analytics.',
@@ -315,9 +352,40 @@ class InstallerWindow(Adw.ApplicationWindow):
         sub.add_css_class('dim-label')
         box.append(sub)
 
-        self.disk_group = Adw.PreferencesGroup()
+        self.disk_group = Adw.PreferencesGroup(title='Available Drives')
         self.disk_rows = []
         box.append(self.disk_group)
+
+        self.mode_group = Adw.PreferencesGroup(title='Installation Mode')
+        self.erase_chk = Gtk.CheckButton()
+        self.erase_chk.set_active(True)
+        self.erase_chk.connect('toggled', lambda b: self._on_mode_changed('erase', b))
+        erase_row = Adw.ActionRow(
+            title='Erase Selected Disk & Install Proxim OS',
+            subtitle='Creates GPT EFI + ext4 partitions automatically (recommended)',
+        )
+        erase_row.add_prefix(self.erase_chk)
+        erase_row.set_activatable_widget(self.erase_chk)
+        self.mode_group.add(erase_row)
+
+        self.part_chk = Gtk.CheckButton()
+        self.part_chk.set_group(self.erase_chk)
+        self.part_chk.connect('toggled', lambda b: self._on_mode_changed('partition', b))
+        part_row = Adw.ActionRow(
+            title='Install to Existing Partition (Dual-Boot / Custom)',
+            subtitle='Formats only the chosen partition and keeps all other partitions',
+        )
+        part_row.add_prefix(self.part_chk)
+        part_row.set_activatable_widget(self.part_chk)
+        self.mode_group.add(part_row)
+
+        self.root_part_row = Adw.ComboRow(title='Root (/) Partition')
+        self.efi_part_row = Adw.ComboRow(title='EFI Boot Partition')
+        self.root_part_row.set_visible(False)
+        self.efi_part_row.set_visible(False)
+        self.mode_group.add(self.root_part_row)
+        self.mode_group.add(self.efi_part_row)
+        box.append(self.mode_group)
 
         self.no_disk_lbl = Gtk.Label(
             label='No internal disk found. Connect a drive and click Refresh.',
@@ -436,7 +504,7 @@ class InstallerWindow(Adw.ApplicationWindow):
         for r in self.disk_rows:
             self.disk_group.remove(r)
         self.disk_rows.clear()
-        self._disks = detect_install_disks()
+        self._disks, self._partitions = detect_install_disks()
         self._selected_disk = self._disks[0][0] if self._disks else None
         self.no_disk_lbl.set_visible(len(self._disks) == 0)
 
@@ -455,8 +523,20 @@ class InstallerWindow(Adw.ApplicationWindow):
             self.disk_group.add(row)
             self.disk_rows.append(row)
 
+        root_labels = [p[1] for p in self._partitions if not p[3]] or ['No non-EFI partitions found']
+        efi_labels = [p[1] for p in self._partitions if p[3]] or ['None (Legacy BIOS)']
+        self.root_part_row.set_model(Gtk.StringList.new(root_labels))
+        self.efi_part_row.set_model(Gtk.StringList.new(efi_labels))
+
         if self._page == 3:
             self.next_btn.set_sensitive(self._selected_disk is not None)
+
+    def _on_mode_changed(self, mode, btn):
+        if btn.get_active():
+            self._install_mode = mode
+            show_part = (mode == 'partition')
+            self.root_part_row.set_visible(show_part)
+            self.efi_part_row.set_visible(show_part)
 
     def _on_disk_toggled(self, btn, path):
         if btn.get_active():
@@ -548,8 +628,16 @@ class InstallerWindow(Adw.ApplicationWindow):
         self.inst_msg.set_text(f'Starting installation on {self._selected_disk}…')
 
         tz_item = self.tz_row.get_selected_item()
+        root_parts = [p[0] for p in self._partitions if not p[3]]
+        efi_parts = [p[0] for p in self._partitions if p[3]]
+        sel_root = root_parts[self.root_part_row.get_selected()] if root_parts else ''
+        sel_efi = efi_parts[self.efi_part_row.get_selected()] if efi_parts else ''
         payload = {
+            'mode': self._install_mode,
             'disk': self._selected_disk,
+            'partition': sel_root,
+            'efi_partition': sel_efi,
+            'download_updates': self.updates_switch.get_active(),
             'full_name': self.full_name_row.get_text().strip(),
             'username': self.username_row.get_text().strip().lower(),
             'password': self.pass_row.get_text(),
