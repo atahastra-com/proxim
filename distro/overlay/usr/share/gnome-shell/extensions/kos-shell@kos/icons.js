@@ -19,43 +19,19 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 
-// GNOME Icon= names → Deepin bloom artwork (same package, clearer match
-// than the Papirus fallback bloom inherits).
+// GNOME Icon= names -> WhiteSur artwork aliases.
 const ALIASES = {
     'firefox-esr': 'firefox',
-    'firefox': 'firefox',
-    'org.gnome.Nautilus': 'dde-file-manager',
-    'org.gnome.Files': 'dde-file-manager',
-    'system-file-manager': 'dde-file-manager',
-    'org.gnome.Terminal': 'deepin-terminal',
-    'org.gnome.Console': 'deepin-terminal',
-    'utilities-terminal': 'deepin-terminal',
-    'org.gnome.Settings': 'preferences-system',
-    'org.gnome.TextEditor': 'deepin-editor',
-    'accessories-text-editor': 'deepin-editor',
-    'org.gnome.Calculator': 'deepin-calculator',
-    'accessories-calculator': 'deepin-calculator',
-    'org.gnome.Calendar': 'dde-calendar',
-    'gnome-calendar': 'dde-calendar',
-    'org.gnome.Snapshot': 'deepin-camera',
-    'camera-photo': 'deepin-camera',
-    'org.gnome.Loupe': 'deepin-image-viewer',
-    'org.gnome.eog': 'deepin-image-viewer',
-    'org.gnome.SystemMonitor': 'deepin-system-monitor',
-    'utilities-system-monitor': 'deepin-system-monitor',
-    'org.gnome.font-viewer': 'deepin-font-manager',
-    'org.gnome.baobab': 'deepin-diskmanager',
-    'baobab': 'deepin-diskmanager',
-    'org.gnome.Evince': 'evince',
-    'org.gnome.Papers': 'evince',
-    'org.gnome.Totem': 'deepin-movie',
-    'totem': 'deepin-movie',
-    'yelp': 'deepin-manual',
-    'org.gnome.Yelp': 'deepin-manual',
-    'help-browser': 'deepin-manual',
+    'org.gnome.Files': 'org.gnome.Nautilus',
+    'system-file-manager': 'org.gnome.Nautilus',
+    'org.gnome.Console': 'org.gnome.Terminal',
+    'utilities-terminal': 'org.gnome.Terminal',
+    'org.gnome.Papers': 'org.gnome.Evince',
+    'org.gnome.eog': 'org.gnome.Loupe',
+    'utilities-system-monitor': 'org.gnome.SystemMonitor',
 };
 
-const THEMES = ['bloom', 'bloom-dark', 'Papirus', 'Papirus-Dark', 'Adwaita', 'hicolor'];
+const THEMES = ['WhiteSur-dark', 'WhiteSur', 'Papirus-Dark', 'Papirus', 'Adwaita', 'hicolor'];
 const CONTEXTS = ['apps', 'places', 'mimetypes', 'devices', 'categories', 'status', 'actions'];
 const SIZES = [512, 256, 128, 96, 64, 'scalable', 48, 32, 24, 22, 16];
 const EXTS = ['.svg', '.png'];
@@ -457,8 +433,8 @@ export function squircleGIcon(gicon, iconName, size) {
     let out = null;
     try {
         if (path) {
-            const cacheKey = fnv1a(`v5|${path}|${fileMtime(path)}|${rSize}`);
-            const diskPath = GLib.build_filenamev([cacheDir(), `v5-${cacheKey}.png`]);
+            const cacheKey = fnv1a(`v6|${path}|${fileMtime(path)}|${rSize}`);
+            const diskPath = GLib.build_filenamev([cacheDir(), `v6-${cacheKey}.png`]);
             if (!validCachedPng(diskPath)) {
                 const src = loadPixbuf(path, Math.max(256, rSize * 2));
                 if (src && src.get_width() > 0 && src.get_height() > 0) {
