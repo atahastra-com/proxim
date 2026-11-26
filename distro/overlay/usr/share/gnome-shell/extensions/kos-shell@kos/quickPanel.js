@@ -48,6 +48,7 @@ export class KosQuickPanel {
         this._qs.menu.box.add_style_class_name('kos-cc');
 
         this._addOwnTiles();
+        this._wireAirplaneSync();
         // GNOME adds its items asynchronously, and other extensions can add
         // more later, so redo the layout whenever the grid gains a child.
         this._childAddedId = this._grid.connect('child-added', () => this._queueRelayout());
@@ -297,6 +298,27 @@ export class KosQuickPanel {
             add('System Monitor', 'utilities-system-monitor-symbolic', () => this._afterClose(
                 () => monitor.activate()));
         }
+    }
+
+    _wireAirplaneSync() {
+        const rf = this._qs?._rfkill;
+        const toggle = rf?.quickSettingsItems?.[0];
+        if (!toggle)
+            return;
+        const id = toggle.connect('notify::checked', () => {
+            const on = !!toggle.checked;
+            try {
+                Gio.Subprocess.new(
+                    ['rfkill', on ? 'block' : 'unblock', 'all'],
+                    Gio.SubprocessFlags.NONE);
+                Gio.Subprocess.new(
+                    ['nmcli', 'radio', 'wifi', on ? 'off' : 'on'],
+                    Gio.SubprocessFlags.NONE);
+            } catch (e) {
+                logError(e, 'kos-shell: airplane mode sync');
+            }
+        });
+        this._undo.push(() => toggle.disconnect(id));
     }
 
     // Same order GNOME's own screenshot button uses: close, then act.

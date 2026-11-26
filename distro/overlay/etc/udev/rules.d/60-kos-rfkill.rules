@@ -1,0 +1,2 @@
+# Allow gsd-rfkill / desktop users to toggle kernel rfkill switches even on autologin seats.
+KERNEL=="rfkill", SUBSYSTEM=="misc", MODE="0666"
