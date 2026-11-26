@@ -43,6 +43,7 @@ export default class KosShellExtension extends Extension {
                 // If the shell started its overview animation before we were
                 // enabled, it has finished now and is safe to close.
                 GLibIdleHide(() => this._hideOverview());
+                this._onSessionMode();
             });
         } else {
             this._hideOverview();
@@ -95,6 +96,18 @@ export default class KosShellExtension extends Extension {
             Main.sessionMode.disconnect(this._sessionId);
             this._sessionId = 0;
         }
+        if (this._setupWinCreatedId) {
+            global.display.disconnect(this._setupWinCreatedId);
+            this._setupWinCreatedId = 0;
+        }
+        if (this._setupWinDestroyIds) {
+            for (const [win, id] of this._setupWinDestroyIds) {
+                try {
+                    win.disconnect(id);
+                } catch (_e) {}
+            }
+            this._setupWinDestroyIds = null;
+        }
         if (this._liveTryMonitor) {
             if (this._liveTryMonitorId)
                 this._liveTryMonitor.disconnect(this._liveTryMonitorId);
@@ -135,7 +148,33 @@ export default class KosShellExtension extends Extension {
             !GLib.file_test('/tmp/kos-live-tried', GLib.FileTest.EXISTS);
     }
 
+    _isSetupWin(win) {
+        if (!win)
+            return false;
+        const cls = `${win.get_wm_class() || ''} ${win.get_wm_class_instance() || ''} ${win.get_gtk_application_id?.() || ''}`;
+        return /proxim\.Setup|proxim-setup/i.test(cls);
+    }
+
+    _isSetupWindowOpen() {
+        try {
+            return global.get_window_actors().some(a => this._isSetupWin(a.meta_window));
+        } catch (_e) {
+            return false;
+        }
+    }
+
     _setupLiveInstallerGate() {
+        this._setupWinDestroyIds = new Map();
+        this._setupWinCreatedId = global.display.connect('window-created', (_d, win) => {
+            if (!this._isSetupWin(win))
+                return;
+            const id = win.connect('unmanaged', () => {
+                this._setupWinDestroyIds?.delete(win);
+                this._onSessionMode();
+            });
+            this._setupWinDestroyIds.set(win, id);
+            this._onSessionMode();
+        });
         if (!this._isInstallerOnlyMode())
             return;
         try {
@@ -151,11 +190,13 @@ export default class KosShellExtension extends Extension {
     _onSessionMode() {
         const locked = Main.sessionMode.isLocked;
         const installerOnly = !locked && this._isInstallerOnlyMode();
-        if (locked || installerOnly)
+        const setupOpen = !locked && this._isSetupWindowOpen();
+        const hideBar = locked || installerOnly || setupOpen;
+        if (hideBar)
             this._allApps?.hide();
-        this._dock?.setVisible(!locked && !installerOnly);
+        this._dock?.setVisible(!hideBar);
         if (Main.layoutManager.panelBox)
-            Main.layoutManager.panelBox.visible = !locked && !installerOnly;
+            Main.layoutManager.panelBox.visible = !hideBar;
         if (this._grid?._actor)
             this._grid._actor.visible = !installerOnly;
         if (this._grid?._backdrop)
