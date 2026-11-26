@@ -19,7 +19,7 @@ import GLib from 'gi://GLib';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
 
-// GNOME Icon= names -> WhiteSur artwork aliases.
+// GNOME Icon= names -> Colloid artwork aliases.
 const ALIASES = {
     'firefox-esr': 'firefox',
     'org.gnome.Files': 'org.gnome.Nautilus',
@@ -31,7 +31,7 @@ const ALIASES = {
     'utilities-system-monitor': 'org.gnome.SystemMonitor',
 };
 
-const THEMES = ['WhiteSur-dark', 'WhiteSur', 'Papirus-Dark', 'Papirus', 'Adwaita', 'hicolor'];
+const THEMES = ['Colloid-Dark', 'Colloid', 'Papirus-Dark', 'Papirus', 'Adwaita', 'hicolor'];
 const CONTEXTS = ['apps', 'places', 'mimetypes', 'devices', 'categories', 'status', 'actions'];
 const SIZES = [512, 256, 128, 96, 64, 'scalable', 48, 32, 24, 22, 16];
 const EXTS = ['.svg', '.png'];
@@ -433,8 +433,8 @@ export function squircleGIcon(gicon, iconName, size) {
     let out = null;
     try {
         if (path) {
-            const cacheKey = fnv1a(`v6|${path}|${fileMtime(path)}|${rSize}`);
-            const diskPath = GLib.build_filenamev([cacheDir(), `v6-${cacheKey}.png`]);
+            const cacheKey = fnv1a(`v7|${path}|${fileMtime(path)}|${rSize}`);
+            const diskPath = GLib.build_filenamev([cacheDir(), `v7-${cacheKey}.png`]);
             if (!validCachedPng(diskPath)) {
                 const src = loadPixbuf(path, Math.max(256, rSize * 2));
                 if (src && src.get_width() > 0 && src.get_height() > 0) {
