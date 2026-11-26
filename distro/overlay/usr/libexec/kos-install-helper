@@ -250,6 +250,7 @@ with open(f"{home}/.config/gtk-3.0/bookmarks", "w", encoding="utf-8") as bf:
     for folder in ("Desktop", "Documents", "Downloads", "Music", "Pictures", "Public", "Templates", "Videos"):
         os.makedirs(f"{home}/{folder}", exist_ok=True)
         bf.write(f"file://{home}/{folder}\n")
+    bf.write("file:/// System\n")
 subprocess.run(["chown", "-R", f"{user}:{user}", home], check=False)
 
 with open("/etc/hostname", "w", encoding="utf-8") as fh:
