@@ -385,11 +385,32 @@ export class KosPanel {
         return false;
     }
 
+    setBlocked(blocked) {
+        this._blocked = !!blocked;
+        if (this._hideTimer) {
+            GLib.source_remove(this._hideTimer);
+            this._hideTimer = 0;
+        }
+        const box = Main.layoutManager.panelBox;
+        if (this._blocked) {
+            if (this._edgeTrigger)
+                this._edgeTrigger.visible = false;
+            if (box) {
+                stop(box);
+                box.visible = false;
+            }
+        } else {
+            this._scheduleAutoHide();
+        }
+    }
+
     _scheduleAutoHide() {
         if (this._hideTimer) {
             GLib.source_remove(this._hideTimer);
             this._hideTimer = 0;
         }
+        if (this._blocked)
+            return;
         if (!this._autoHide || Main.sessionMode.isLocked) {
             this._revealDock();
             return;
@@ -407,6 +428,8 @@ export class KosPanel {
     }
 
     _revealDock() {
+        if (this._blocked)
+            return;
         if (this._edgeTrigger)
             this._edgeTrigger.visible = false;
         const box = Main.layoutManager.panelBox;
