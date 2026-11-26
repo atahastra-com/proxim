@@ -29,6 +29,8 @@ const ALIASES = {
     'org.gnome.Papers': 'org.gnome.Evince',
     'org.gnome.eog': 'org.gnome.Loupe',
     'utilities-system-monitor': 'org.gnome.SystemMonitor',
+    'org.gnome.Software': 'softwarecenter',
+    'gnome-software': 'softwarecenter',
 };
 
 const THEMES = ['kora', 'Papirus-Dark', 'Papirus', 'Adwaita', 'hicolor'];
@@ -433,8 +435,8 @@ export function squircleGIcon(gicon, iconName, size) {
     let out = null;
     try {
         if (path) {
-            const cacheKey = fnv1a(`v9|${path}|${fileMtime(path)}|${rSize}`);
-            const diskPath = GLib.build_filenamev([cacheDir(), `v9-${cacheKey}.png`]);
+            const cacheKey = fnv1a(`v10|${path}|${fileMtime(path)}|${rSize}`);
+            const diskPath = GLib.build_filenamev([cacheDir(), `v10-${cacheKey}.png`]);
             if (!validCachedPng(diskPath)) {
                 const src = loadPixbuf(path, Math.max(256, rSize * 2));
                 if (src && src.get_width() > 0 && src.get_height() > 0) {

@@ -17,7 +17,7 @@ export DEBIAN_FRONTEND=noninteractive
 export LANG="${LANG:-C.UTF-8}"
 export LC_ALL=C
 
-DROP=(yelp gnome-user-docs gnome-tour gnome-initial-setup)
+DROP=(yelp gnome-user-docs gnome-tour gnome-initial-setup gnome-maps)
 # Also hide these .desktop ids if a package left them behind.
 DESKTOPS=(
   yelp.desktop
@@ -27,6 +27,8 @@ DESKTOPS=(
   gnome-initial-setup.desktop
   org.gnome.InitialSetup.desktop
   gnome-online-accounts-panel.desktop
+  gnome-maps.desktop
+  org.gnome.Maps.desktop
 )
 PROTECTED=(
   gnome-shell
@@ -140,6 +142,7 @@ path = sys.argv[1]
 drop = {"yelp.desktop", "org.gnome.Yelp.desktop",
         "gnome-tour.desktop", "org.gnome.Tour.desktop",
         "gnome-initial-setup.desktop", "org.gnome.InitialSetup.desktop",
+        "gnome-maps.desktop", "org.gnome.Maps.desktop",
         "org.proxim.SoftwareUpdate.desktop"}
 try:
     with open(path, encoding="utf-8") as fh:
