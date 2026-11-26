@@ -82,8 +82,8 @@ function fnv1a(str) {
     return (h >>> 0).toString(16);
 }
 
-// ~13% padding on each side of artwork that sits on the shared tile.
-const INSET = 0.74;
+// ~15% padding on each side of artwork that sits on the shared tile.
+const INSET = 0.70;
 const SQUIRCLE_N = 5;
 const MIN_EDGE_FILL = 0.55;
 const EDGE_SAMPLE_INSET = 0.03;
@@ -298,9 +298,9 @@ function applySquircleMask(pb, addGlass = false) {
     const cx = (w - 1) / 2;
     const cy = (h - 1) / 2;
     const a = Math.min(cx, cy);
-    const aa = 1 + 2.5 / a;
+    const aa = 1 + 1.5 / a;
     const invAa = 1 / (aa - 1);
-    const uIn = Math.max(0, 1 - 1.6 / a);
+    const uIn = Math.max(0, 1 - 1.4 / a);
     const rimIn = uIn * uIn * uIn * uIn * uIn;
     const invRim = 1 / Math.max(0.001, 1 - rimIn);
     const px5 = new Float32Array(w);
@@ -321,11 +321,11 @@ function applySquircleMask(pb, addGlass = false) {
         const vy = py5[y];
         const row = y * stride;
         if (addGlass) {
-            const gr0 = 68 - 32 * yt;
-            const gg0 = 74 - 34 * yt;
-            const gb0 = 94 - 40 * yt;
-            const ga0 = (148 + 20 * yt) / 255;
-            const rimAlpha = 0.14 * (1 - 0.55 * yt);
+            const gr0 = 42 - 18 * yt;
+            const gg0 = 48 - 20 * yt;
+            const gb0 = 66 - 24 * yt;
+            const ga0 = (232 + 14 * yt) / 255;
+            const rimAlpha = 0.24 * (1 - 0.70 * yt);
             for (let x = 0; x < w; x++) {
                 const v = vy + px5[x];
                 const m = v <= 1 ? 1 : (v >= aa ? 0 : 1 - (v - 1) * invAa);
@@ -380,7 +380,7 @@ function scaleInto(src, dest, fill) {
     src.composite(
         dest, dx, dy, nw, nh,
         dx - x0 * scale, dy - y0 * scale,
-        scale, scale, GdkPixbuf.InterpType.BILINEAR, 255);
+        scale, scale, GdkPixbuf.InterpType.HYPER, 255);
 }
 
 function coverInto(src, dest) {
@@ -396,7 +396,7 @@ function coverInto(src, dest) {
     src.composite(
         dest, 0, 0, size, size,
         dx - x0 * scale, dy - y0 * scale,
-        scale, scale, GdkPixbuf.InterpType.BILINEAR, 255);
+        scale, scale, GdkPixbuf.InterpType.HYPER, 255);
 }
 
 function tilePixbuf(src, size) {
@@ -457,10 +457,10 @@ export function squircleGIcon(gicon, iconName, size) {
     let out = null;
     try {
         if (path) {
-            const cacheKey = fnv1a(`v4|${path}|${fileMtime(path)}|${rSize}`);
-            const diskPath = GLib.build_filenamev([cacheDir(), `v4-${cacheKey}.png`]);
+            const cacheKey = fnv1a(`v5|${path}|${fileMtime(path)}|${rSize}`);
+            const diskPath = GLib.build_filenamev([cacheDir(), `v5-${cacheKey}.png`]);
             if (!validCachedPng(diskPath)) {
-                const src = loadPixbuf(path, rSize);
+                const src = loadPixbuf(path, Math.max(256, rSize * 2));
                 if (src && src.get_width() > 0 && src.get_height() > 0) {
                     const tmpPath = `${diskPath}.tmp`;
                     tilePixbuf(src, rSize).savev(tmpPath, 'png', [], []);
