@@ -1,7 +1,8 @@
 /* Proxim OS window style for GTK4 / libadwaita apps: simple, flat, neutral dark.
  * One charcoal surface (#1f2128) for titlebar and content, a slightly darker
- * sidebar (#1a1c22), gray (#2c2f38) controls and cards with no borders or
- * glows, solid #0081ff selection, thin plain min/max/close glyphs.
+ * sidebar (#1a1c22). Header buttons are bare icons (no boxes), the path bar
+ * is plain text, grouped lists are one quiet group; no borders or glows,
+ * solid #0081ff selection, thin plain min/max/close glyphs.
  * Kept identical in /etc/skel/.config/gtk-4.0/gtk.css. */
 
 :root {
@@ -28,7 +29,7 @@
     --secondary-sidebar-backdrop-color: #1a1c22;
     --secondary-sidebar-border-color: transparent;
     --secondary-sidebar-shade-color: transparent;
-    --card-bg-color: #2c2f38;
+    --card-bg-color: #262830;
     --card-fg-color: rgba(255, 255, 255, 0.92);
     --card-shade-color: transparent;
     --popover-bg-color: #2a2c34;
@@ -77,49 +78,76 @@ headerbar:backdrop {
     background-color: #1a1c22;
 }
 
-/* Header buttons: flat gray rounded squares, no outline */
-headerbar button.image-button:not(.titlebutton),
+/* Header buttons: icon only, no box. A faint square shows on hover. */
+headerbar button,
+headerbar button.image-button,
 headerbar menubutton > button,
 headerbar splitbutton > button,
-headerbar splitbutton > menubutton > button {
-    background-color: #2c2f38;
+headerbar splitbutton > menubutton > button,
+headerbar .linked > button {
+    background: none;
     border: none;
     box-shadow: none;
+    outline: none;
     border-radius: 8px;
     min-width: 30px;
     min-height: 30px;
+    color: rgba(255, 255, 255, 0.70);
 }
 
-headerbar button.image-button:not(.titlebutton):hover,
+headerbar button:hover,
 headerbar menubutton > button:hover,
 headerbar splitbutton > button:hover,
 headerbar splitbutton > menubutton > button:hover {
-    background-color: #363a45;
+    background-color: rgba(255, 255, 255, 0.07);
+    color: #ffffff;
 }
 
-headerbar button.image-button:not(.titlebutton):active,
-headerbar button.image-button:not(.titlebutton):checked,
+headerbar button:active,
+headerbar button:checked,
 headerbar menubutton > button:checked {
-    background-color: #40444f;
+    background-color: rgba(255, 255, 255, 0.11);
+    color: #ffffff;
 }
 
-/* The '...' main menu stays round */
-headerbar menubutton > button.image-button {
-    border-radius: 999px;
+headerbar button:disabled {
+    background: none;
+    color: rgba(255, 255, 255, 0.25);
+}
+
+headerbar splitbutton > separator {
+    background: none;
+    min-width: 0;
+}
+
+/* No app name above the sidebar: the window already says which app it is */
+.sidebar-pane headerbar .title,
+.sidebar-pane headerbar windowtitle {
+    opacity: 0;
+}
+
+/* Files path bar: plain text, no box */
+.nautilus-path-bar,
+.nautilus-path-bar > box,
+.nautilus-path-bar button {
+    background: none;
+    border: none;
+    box-shadow: none;
 }
 
 .nautilus-path-bar {
-    background-color: #2c2f38;
-    border: none;
-    border-radius: 8px;
-    padding: 2px 6px;
+    padding: 0 4px;
+}
+
+.nautilus-path-bar button:hover {
+    background-color: rgba(255, 255, 255, 0.07);
 }
 
 /* Search: gray pill */
 entry.search,
 searchentry,
 searchbar > revealer > box entry {
-    background-color: #2c2f38;
+    background-color: rgba(255, 255, 255, 0.06);
     border: none;
     border-radius: 999px;
     min-height: 32px;
@@ -241,30 +269,42 @@ placessidebar row:selected label {
     color: #ffffff;
 }
 
-/* Grouped lists: separate flat gray cards */
+/* Grouped lists: one quiet group with hairline separators, not separate boxes */
 list.boxed-list,
 list.boxed-list-separate {
-    background-color: transparent;
+    background-color: #262830;
     border: none;
     box-shadow: none;
+    border-radius: 10px;
 }
 
 list.boxed-list > row,
-list.boxed-list > row:first-child,
-list.boxed-list > row:last-child,
-list.boxed-list > row:only-child,
 list.boxed-list-separate > row {
-    background-color: #2c2f38;
+    background-color: transparent;
     border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     box-shadow: none;
-    border-radius: 9px;
-    margin-bottom: 6px;
+    border-radius: 0;
+    margin: 0;
     min-height: 44px;
+}
+
+list.boxed-list > row:first-child,
+list.boxed-list-separate > row:first-child {
+    border-top-left-radius: 10px;
+    border-top-right-radius: 10px;
+}
+
+list.boxed-list > row:last-child,
+list.boxed-list-separate > row:last-child {
+    border-bottom: none;
+    border-bottom-left-radius: 10px;
+    border-bottom-right-radius: 10px;
 }
 
 list.boxed-list > row:hover,
 list.boxed-list-separate > row:hover {
-    background-color: #33363f;
+    background-color: rgba(255, 255, 255, 0.04);
 }
 
 list.boxed-list > row:selected {
@@ -279,7 +319,7 @@ row .dim-label {
 }
 
 .card {
-    background-color: #2c2f38;
+    background-color: #262830;
     border: none;
     border-radius: 10px;
     box-shadow: none;
