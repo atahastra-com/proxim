@@ -550,6 +550,11 @@ def call_llm(cfg, messages):
 # ---- GTK4 / Libadwaita Dark-Glass Chat UI ----------------------------------
 
 APP_CSS = """
+window.csd {
+    border-radius: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: -10px 0 36px rgba(0, 0, 0, 0.45);
+}
 .proxim-ai-user {
     background-color: #0081ff;
     color: #ffffff;
@@ -588,12 +593,19 @@ APP_CSS = """
 }
 .proxim-ai-input-bar {
     background-color: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 999px;
     padding: 4px 6px 4px 16px;
 }
-.proxim-ai-entry {
+.proxim-ai-input-bar:focus-within {
+    border-color: rgba(0, 129, 255, 0.65);
+}
+.proxim-ai-entry,
+.proxim-ai-entry:focus,
+.proxim-ai-entry:focus-within {
     background: none;
     border: none;
+    outline: none;
     box-shadow: none;
     color: #ffffff;
     min-height: 34px;

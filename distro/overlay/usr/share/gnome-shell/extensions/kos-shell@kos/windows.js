@@ -14,10 +14,10 @@ import {
     easeOutCubic, easeOutQuint, reduceMotion, tween,
 } from './anim.js';
 import {dockIconCenter} from './dock.js';
-import {PANEL_HEIGHT, POPUP_GAP, POPUP_INSET} from './panel.js';
+import {PANEL_HEIGHT} from './panel.js';
 
 const AI_APP_ID = 'org.proxim.AI';
-const AI_PANEL_WIDTH = 420;
+const AI_PANEL_WIDTH = 400;
 
 function isAiPanel(actor) {
     try {
@@ -31,10 +31,11 @@ function pinAiPanel(win) {
     const monitor = Main.layoutManager.primaryMonitor;
     if (!win || !monitor)
         return;
-    const w = Math.min(AI_PANEL_WIDTH, Math.max(320, monitor.width - POPUP_INSET * 2));
-    const h = Math.max(360, monitor.height - PANEL_HEIGHT - POPUP_INSET - POPUP_GAP);
-    const x = monitor.x + monitor.width - w - POPUP_INSET;
-    const y = monitor.y + POPUP_INSET;
+    // Flush right-edge side panel from top of screen down to the dock bar.
+    const w = Math.min(AI_PANEL_WIDTH, Math.max(320, Math.round(monitor.width * 0.24)));
+    const h = Math.max(360, monitor.height - PANEL_HEIGHT);
+    const x = monitor.x + monitor.width - w;
+    const y = monitor.y;
     try {
         win.make_above();
         const rect = win.get_frame_rect();

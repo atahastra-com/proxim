@@ -180,7 +180,10 @@ export class KosDock {
         // back to them with one click even without the Activities overview.
         const runningExtras = Shell.AppSystem.get_default()
             .get_running()
-            .filter(app => app && !pinnedIds.has(app.get_id()) && app.get_n_windows() > 0);
+            .filter(app => app &&
+                !pinnedIds.has(app.get_id()) &&
+                app.get_id() !== 'org.proxim.AI.desktop' &&
+                app.get_n_windows() > 0);
 
         if (runningExtras.length > 0 && pinnedIds.size > 0) {
             this._actor.add_child(new St.Widget({
