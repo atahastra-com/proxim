@@ -41,13 +41,19 @@ def generate_keypair(out_dir):
     print(f'Wrote public key:  {pub} (copy to distro/overlay/etc/kos/update-signing.pub)')
 
 
+def _tar_filter(tarinfo):
+    base = os.path.basename(tarinfo.name)
+    if base == 'ai.json' or base == '__pycache__' or base.endswith('.pyc'):
+        return None
+    return tarinfo
+
+
 def build_rootfs_tar(overlay_dir, out_tar_gz):
     with tarfile.open(out_tar_gz, 'w:gz') as tf:
         for entry in sorted(os.listdir(overlay_dir)):
-            # Skip per-user home configs if desired? Keep /etc/skel and system
-            # files; include overlay cleanly relative to /.
+            # Skip per-user API secrets (ai.json) and python bytecode.
             full = os.path.join(overlay_dir, entry)
-            tf.add(full, arcname=entry, recursive=True)
+            tf.add(full, arcname=entry, recursive=True, filter=_tar_filter)
 
 
 def sha256_file(path):
