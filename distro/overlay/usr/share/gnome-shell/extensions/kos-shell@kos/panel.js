@@ -4,8 +4,7 @@
 // Main.panel is the bar. It has three flex-like boxes:
 //   _leftBox, _centerBox, _rightBox  — think display:flex; justify-content:space-between
 // Stock GNOME 48: Activities on the left, clock in the center, Quick Settings on the right.
-// kos: clock on the left, dock in the center, and GNOME's stock system
-// status cluster (network/volume/power) left alone on the right.
+// kos: clock + system status controls on the left, dock in the center.
 
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -65,6 +64,7 @@ export class KosPanel {
         this._signals = [];
         this._statusIconSignals = [];
         this._movedDateMenu = false;
+        this._movedQuickSettings = false;
         this._blurEffect = null;
     }
 
@@ -77,6 +77,7 @@ export class KosPanel {
         this._hideActivities();
         this._disableHotCorners();
         this._moveDateMenuToLeft();
+        this._moveQuickSettingsToLeft();
         this._movePanelToBottom();
         this._applyStatusIcons();
         this._initAutoHide();
@@ -89,6 +90,8 @@ export class KosPanel {
         this._connect(Main.layoutManager, 'startup-complete', () => {
             this._hideActivities();
             this._disableHotCorners();
+            this._moveDateMenuToLeft();
+            this._moveQuickSettingsToLeft();
             this._movePanelToBottom();
         });
         this._connect(Main.layoutManager.panelBox, 'notify::allocation', () => this._movePanelToBottom());
@@ -100,6 +103,7 @@ export class KosPanel {
             this._hideActivities();
             this._disableHotCorners();
             this._moveDateMenuToLeft();
+            this._moveQuickSettingsToLeft();
             this._movePanelToBottom();
             this._applyStatusIcons();
         });
@@ -114,6 +118,7 @@ export class KosPanel {
         this._restoreStatusIcons();
         this._disableBlur();
         this._restorePopups();
+        this._restoreQuickSettings();
         this._restoreDateMenu();
         this._restorePanel();
         Main.panel.remove_style_class_name('kos-panel');
@@ -199,7 +204,7 @@ export class KosPanel {
     // so the box is exactly the visible panel.
     _placePopups() {
         this._placed = [];
-        for (const [area, side] of [['dateMenu', St.Side.LEFT], ['quickSettings', St.Side.RIGHT]]) {
+        for (const [area, side] of [['dateMenu', St.Side.LEFT], ['quickSettings', St.Side.LEFT]]) {
             const pointer = Main.panel.statusArea[area]?.menu?._boxPointer;
             if (!pointer)
                 continue;
@@ -272,6 +277,35 @@ export class KosPanel {
         // Stock GNOME 48 keeps the clock in the center box.
         Main.panel._centerBox.add_child(container);
         this._movedDateMenu = false;
+    }
+
+    // Move the system controls (network/volume/power) to the left beside date/time.
+    _moveQuickSettingsToLeft() {
+        const qs = Main.panel.statusArea.quickSettings;
+        if (!qs?.container)
+            return;
+        const container = qs.container;
+        const parent = container.get_parent();
+        if (parent === Main.panel._leftBox)
+            return;
+        if (parent)
+            parent.remove_child(container);
+        Main.panel._leftBox.add_child(container);
+        this._movedQuickSettings = true;
+    }
+
+    _restoreQuickSettings() {
+        if (!this._movedQuickSettings)
+            return;
+        const qs = Main.panel.statusArea.quickSettings;
+        if (!qs?.container)
+            return;
+        const container = qs.container;
+        const parent = container.get_parent();
+        if (parent)
+            parent.remove_child(container);
+        Main.panel._rightBox.add_child(container);
+        this._movedQuickSettings = false;
     }
 
     // Reposition panelBox — full-width 72px bottom bar, flush to the bottom edge.
