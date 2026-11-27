@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import urllib.error
+import urllib.parse
 import urllib.request
 
 import gi
@@ -21,17 +22,21 @@ from gi.repository import Adw, Gdk, Gio, GLib, Gtk
 CONFIG_PATH = os.path.expanduser('~/.config/kos/ai.json')
 
 DEFAULT_CONFIG = {
-    'provider': 'gemini',  # gemini | openai | claude | ollama
+    'provider': 'gemini',  # gemini | openai | claude | bedrock | custom | ollama
     'api_key': '',
     'model': 'gemini-2.5-flash',
     'ollama_url': 'http://127.0.0.1:11434',
     'openai_url': 'https://api.openai.com/v1/chat/completions',
+    'custom_url': 'https://openrouter.ai/api/v1/chat/completions',
+    'bedrock_region': 'us-east-1',
 }
 
 PROVIDER_DEFAULTS = {
     'gemini': 'gemini-2.5-flash',
     'openai': 'gpt-4o-mini',
     'claude': 'claude-sonnet-4-20250514',
+    'bedrock': 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+    'custom': 'openai/gpt-4o-mini',
     'ollama': 'llama3.2',
 }
 
@@ -421,12 +426,20 @@ def call_gemini(cfg, messages):
     return '\n'.join(text_parts).strip(), tool_calls
 
 
-def call_openai_compat(cfg, messages, is_ollama=False):
-    model = cfg.get('model') or PROVIDER_DEFAULTS['ollama' if is_ollama else 'openai']
-    if is_ollama:
+def call_openai_compat(cfg, messages, mode='openai'):
+    model = cfg.get('model') or PROVIDER_DEFAULTS.get(mode, 'gpt-4o-mini')
+    if mode == 'ollama':
         base = (cfg.get('ollama_url') or 'http://127.0.0.1:11434').rstrip('/')
-        url = f'{base}/v1/chat/completions'
+        url = base if base.endswith('/chat/completions') else f'{base}/v1/chat/completions'
         headers = {}
+    elif mode == 'custom':
+        url = (cfg.get('custom_url') or '').strip()
+        if not url:
+            raise RuntimeError('Missing Custom Endpoint URL. Click the gear icon above to add it.')
+        if not url.endswith('/chat/completions') and '/chat/completions' not in url:
+            url = url.rstrip('/') + '/chat/completions'
+        api_key = cfg.get('api_key', '').strip()
+        headers = {'Authorization': f'Bearer {api_key}'} if api_key else {}
     else:
         api_key = cfg.get('api_key', '').strip()
         if not api_key:
@@ -536,15 +549,90 @@ def call_claude(cfg, messages):
     return '\n'.join(text_parts).strip(), tool_calls
 
 
+def call_bedrock(cfg, messages):
+    api_key = cfg.get('api_key', '').strip()
+    if not api_key:
+        raise RuntimeError('Missing AWS Bedrock API key. Click the gear icon above to add it.')
+    region = (cfg.get('bedrock_region') or 'us-east-1').strip()
+    model = (cfg.get('model') or PROVIDER_DEFAULTS['bedrock']).strip()
+    encoded_model = urllib.parse.quote(model, safe='')
+    url = f'https://bedrock-runtime.{region}.amazonaws.com/model/{encoded_model}/converse'
+    headers = {'Authorization': f'Bearer {api_key}'}
+
+    br_msgs = []
+    for m in messages:
+        if m['role'] == 'tool':
+            br_msgs.append({
+                'role': 'user',
+                'content': [{
+                    'toolResult': {
+                        'toolUseId': m.get('tool_call_id', 'call_0'),
+                        'content': [{'text': m['content']}],
+                    }
+                }],
+            })
+        elif m['role'] == 'assistant' and m.get('tool_calls'):
+            blocks = []
+            if m.get('content'):
+                blocks.append({'text': m['content']})
+            for tc in m['tool_calls']:
+                blocks.append({
+                    'toolUse': {
+                        'toolUseId': tc['id'],
+                        'name': tc['name'],
+                        'input': tc['args'],
+                    }
+                })
+            br_msgs.append({'role': 'assistant', 'content': blocks})
+        else:
+            role = 'user' if m['role'] == 'user' else 'assistant'
+            br_msgs.append({'role': role, 'content': [{'text': m.get('content', '')}]})
+
+    br_tools = [
+        {
+            'toolSpec': {
+                'name': t['name'],
+                'description': t['description'],
+                'inputSchema': {'json': t['parameters']},
+            }
+        }
+        for t in TOOLS_SPEC
+    ]
+    payload = {
+        'system': [{'text': SYSTEM_PROMPT}],
+        'messages': br_msgs,
+        'toolConfig': {'tools': br_tools},
+    }
+    data = http_post_json(url, payload, headers=headers)
+    msg = ((data.get('output') or {}).get('message')) or {}
+    text_parts = []
+    tool_calls = []
+    for blk in msg.get('content') or []:
+        if 'text' in blk:
+            text_parts.append(blk['text'])
+        elif 'toolUse' in blk:
+            tu = blk['toolUse']
+            tool_calls.append({
+                'id': tu.get('toolUseId', 'call_0'),
+                'name': tu.get('name', ''),
+                'args': tu.get('input') or {},
+            })
+    return '\n'.join(text_parts).strip(), tool_calls
+
+
 def call_llm(cfg, messages):
     prov = (cfg.get('provider') or 'gemini').lower()
     if prov == 'gemini':
         return call_gemini(cfg, messages)
     if prov == 'claude':
         return call_claude(cfg, messages)
+    if prov == 'bedrock':
+        return call_bedrock(cfg, messages)
+    if prov == 'custom':
+        return call_openai_compat(cfg, messages, mode='custom')
     if prov == 'ollama':
-        return call_openai_compat(cfg, messages, is_ollama=True)
-    return call_openai_compat(cfg, messages, is_ollama=False)
+        return call_openai_compat(cfg, messages, mode='ollama')
+    return call_openai_compat(cfg, messages, mode='openai')
 
 
 # ---- GTK4 / Libadwaita Dark-Glass Chat UI ----------------------------------
@@ -919,12 +1007,15 @@ class ProximAIWindow(Adw.ApplicationWindow):
 
     def _open_settings(self):
         dlg = Adw.Dialog(title='Proxim AI Settings')
-        dlg.set_content_width(400)
-        dlg.set_content_height(360)
+        dlg.set_content_width(420)
+        dlg.set_content_height(430)
 
         tv = Adw.ToolbarView()
         hb = Adw.HeaderBar()
         tv.add_top_bar(hb)
+
+        scroll = Gtk.ScrolledWindow(vexpand=True)
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
         box.set_margin_top(16)
@@ -932,8 +1023,15 @@ class ProximAIWindow(Adw.ApplicationWindow):
         box.set_margin_start(18)
         box.set_margin_end(18)
 
-        providers = ['gemini', 'openai', 'claude', 'ollama']
-        labels = ['Google Gemini', 'OpenAI (ChatGPT)', 'Anthropic Claude', 'Local Ollama (Offline)']
+        providers = ['gemini', 'openai', 'claude', 'bedrock', 'custom', 'ollama']
+        labels = [
+            'Google Gemini',
+            'OpenAI (ChatGPT)',
+            'Anthropic Claude',
+            'AWS Bedrock (API Key)',
+            'Custom OpenAI-Compatible (OpenRouter, Groq, etc.)',
+            'Local Ollama (Offline)',
+        ]
 
         prov_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         prov_row.append(Gtk.Label(label='Provider', xalign=0))
@@ -944,30 +1042,48 @@ class ProximAIWindow(Adw.ApplicationWindow):
         box.append(prov_row)
 
         model_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        model_row.append(Gtk.Label(label='Model', xalign=0))
+        model_row.append(Gtk.Label(label='Model ID', xalign=0))
         model_entry = Gtk.Entry(text=self.cfg.get('model', ''))
         model_row.append(model_entry)
         box.append(model_row)
 
         key_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        key_row.append(Gtk.Label(label='API Key (not needed for Ollama)', xalign=0))
+        key_row.append(Gtk.Label(label='API Key / Bearer Token', xalign=0))
         key_entry = Gtk.PasswordEntry()
         key_entry.set_show_peek_icon(True)
         key_entry.set_text(self.cfg.get('api_key', ''))
         key_row.append(key_entry)
         box.append(key_row)
 
-        url_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
-        url_row.append(Gtk.Label(label='Ollama URL (only for Local Ollama)', xalign=0))
-        url_entry = Gtk.Entry(text=self.cfg.get('ollama_url', 'http://127.0.0.1:11434'))
-        url_row.append(url_entry)
-        box.append(url_row)
+        region_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        region_row.append(Gtk.Label(label='AWS Region (e.g. us-east-1, us-west-2)', xalign=0))
+        region_entry = Gtk.Entry(text=self.cfg.get('bedrock_region', 'us-east-1'))
+        region_row.append(region_entry)
+        box.append(region_row)
 
-        def on_prov_changed(_dd, _pspec):
+        custom_url_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        custom_url_row.append(Gtk.Label(label='Endpoint URL (OpenAI-compatible /chat/completions)', xalign=0))
+        custom_url_entry = Gtk.Entry(text=self.cfg.get('custom_url', 'https://openrouter.ai/api/v1/chat/completions'))
+        custom_url_row.append(custom_url_entry)
+        box.append(custom_url_row)
+
+        ollama_url_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        ollama_url_row.append(Gtk.Label(label='Ollama URL', xalign=0))
+        ollama_url_entry = Gtk.Entry(text=self.cfg.get('ollama_url', 'http://127.0.0.1:11434'))
+        ollama_url_row.append(ollama_url_entry)
+        box.append(ollama_url_row)
+
+        def sync_fields(reset_model=False):
             p = providers[dropdown.get_selected()]
-            model_entry.set_text(PROVIDER_DEFAULTS[p])
+            if reset_model:
+                model_entry.set_text(PROVIDER_DEFAULTS[p])
+            key_row.set_visible(p != 'ollama')
+            region_row.set_visible(p == 'bedrock')
+            custom_url_row.set_visible(p == 'custom')
+            ollama_url_row.set_visible(p == 'ollama')
 
-        dropdown.connect('notify::selected', on_prov_changed)
+        dropdown.connect('notify::selected', lambda _dd, _ps: sync_fields(reset_model=True))
+        sync_fields(reset_model=False)
 
         save_btn = Gtk.Button(label='Save')
         save_btn.add_css_class('suggested-action')
@@ -975,17 +1091,21 @@ class ProximAIWindow(Adw.ApplicationWindow):
         save_btn.set_halign(Gtk.Align.END)
 
         def on_save(_b):
-            self.cfg['provider'] = providers[dropdown.get_selected()]
-            self.cfg['model'] = model_entry.get_text().strip() or PROVIDER_DEFAULTS[self.cfg['provider']]
+            p = providers[dropdown.get_selected()]
+            self.cfg['provider'] = p
+            self.cfg['model'] = model_entry.get_text().strip() or PROVIDER_DEFAULTS[p]
             self.cfg['api_key'] = key_entry.get_text().strip()
-            self.cfg['ollama_url'] = url_entry.get_text().strip() or 'http://127.0.0.1:11434'
+            self.cfg['bedrock_region'] = region_entry.get_text().strip() or 'us-east-1'
+            self.cfg['custom_url'] = custom_url_entry.get_text().strip() or DEFAULT_CONFIG['custom_url']
+            self.cfg['ollama_url'] = ollama_url_entry.get_text().strip() or 'http://127.0.0.1:11434'
             save_config(self.cfg)
             dlg.close()
 
         save_btn.connect('clicked', on_save)
         box.append(save_btn)
 
-        tv.set_content(box)
+        scroll.set_child(box)
+        tv.set_content(scroll)
         dlg.set_child(tv)
         dlg.present(self)
 
