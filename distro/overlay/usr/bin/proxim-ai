@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Proxim AI — Native GTK4/Libadwaita dark-glass AI assistant & OS agent."""
 
+import base64
 import json
 import os
 import re
@@ -549,11 +550,27 @@ def call_claude(cfg, messages):
     return '\n'.join(text_parts).strip(), tool_calls
 
 
+def detect_bedrock_region(api_key):
+    """Extract AWS region from a short-term bedrock-api-key-... token if present."""
+    if not api_key or not api_key.startswith('bedrock-api-key-'):
+        return None
+    try:
+        b64 = api_key[len('bedrock-api-key-'):]
+        pad = '=' * (-len(b64) % 4)
+        decoded = urllib.parse.unquote(base64.b64decode(b64 + pad).decode('utf-8', errors='ignore'))
+        m = re.search(r'X-Amz-Credential=[^&/]+/\d{8}/([a-z]{2}-[a-z]+-\d+)/bedrock', decoded)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return None
+
+
 def call_bedrock(cfg, messages):
     api_key = cfg.get('api_key', '').strip()
     if not api_key:
         raise RuntimeError('Missing AWS Bedrock API key. Click the gear icon above to add it.')
-    region = (cfg.get('bedrock_region') or 'us-east-1').strip()
+    region = detect_bedrock_region(api_key) or (cfg.get('bedrock_region') or 'us-east-1').strip()
     model = (cfg.get('model') or PROVIDER_DEFAULTS['bedrock']).strip()
     encoded_model = urllib.parse.quote(model, safe='')
     url = f'https://bedrock-runtime.{region}.amazonaws.com/model/{encoded_model}/converse'

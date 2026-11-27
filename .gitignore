@@ -42,3 +42,6 @@ distro/overlay/usr/share/icons/Deepin2022/
 # Private OTA update signing keys and generated update artifacts
 .keys/
 updates-out/
+
+# Local AI API keys (never commit secrets)
+distro/overlay/home/*/.config/kos/ai.json
