@@ -10,7 +10,11 @@
     --accent-bg-color: #0081ff;
     --accent-fg-color: #ffffff;
     --accent-color: #4aa3ff;
-    --window-bg-color: rgba(22, 24, 30, 0.76);
+    /* Keep --window-bg-color transparent so inner libadwaita containers
+     * (navigation-view-page, statuspage, preferencespage, etc.) do not
+     * double-paint a dark translucent box on top of the window surface.
+     * The tint is applied once on top-level window.background / window.csd. */
+    --window-bg-color: transparent;
     --window-fg-color: rgba(255, 255, 255, 0.92);
     --view-bg-color: transparent;
     --view-fg-color: rgba(255, 255, 255, 0.92);
@@ -36,19 +40,37 @@
     --popover-bg-color: rgba(22, 24, 30, 0.92);
     --popover-fg-color: rgba(255, 255, 255, 0.92);
     --popover-shade-color: transparent;
-    --dialog-bg-color: rgba(22, 24, 30, 0.76);
+    --dialog-bg-color: rgba(22, 24, 30, 0.92);
     --dialog-fg-color: rgba(255, 255, 255, 0.92);
     --thumbnail-bg-color: rgba(255, 255, 255, 0.06);
     --shade-color: transparent;
     --window-radius: 14px;
 }
 
-/* Window: rounded dark glass, soft shadow, no colored rim */
+/* Window: rounded dark glass, painted once on the top-level window only */
+window.background,
 window.csd {
-    background-color: var(--window-bg-color);
+    background-color: rgba(22, 24, 30, 0.76);
+}
+
+window.csd {
     border-radius: 14px;
     box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45),
                 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+
+/* Never let inner pages/containers stack a second dark background box */
+navigation-view-page,
+statuspage,
+preferencespage,
+preferencesgroup,
+toolbarview,
+scrolledwindow,
+viewport,
+.content-pane {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
 }
 
 window.csd.maximized,
