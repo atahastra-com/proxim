@@ -376,36 +376,19 @@ export class KosPanel {
         this._movedQuickSettings = false;
     }
 
-    // Proxim AI button on the right side of the bottom bar.
+    // Proxim AI button on the right side of the bottom bar (clean text pill, no icon).
     _addAiButton() {
         if (this._aiButton)
             return;
-        const box = new St.BoxLayout({
-            style_class: 'kos-ai-btn-box',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-        const iconPath = this._extensionPath
-            ? `${this._extensionPath}/icons/status/proxim-ai-symbolic.svg`
-            : null;
-        const icon = new St.Icon({
-            style_class: 'kos-ai-btn-icon',
-            icon_size: 18,
-            y_align: Clutter.ActorAlign.CENTER,
-            ...(iconPath && GLib.file_test(iconPath, GLib.FileTest.EXISTS)
-                ? {gicon: new Gio.FileIcon({file: Gio.File.new_for_path(iconPath)})}
-                : {icon_name: 'starred-symbolic'}),
-        });
         const label = new St.Label({
             text: 'Proxim AI',
             style_class: 'kos-ai-btn-label',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        box.add_child(icon);
-        box.add_child(label);
 
         const btn = new St.Button({
             style_class: 'panel-button kos-ai-button',
-            child: box,
+            child: label,
             reactive: true,
             can_focus: true,
             track_hover: true,

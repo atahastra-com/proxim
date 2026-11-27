@@ -14,6 +14,48 @@ import {
     easeOutCubic, easeOutQuint, reduceMotion, tween,
 } from './anim.js';
 import {dockIconCenter} from './dock.js';
+import {PANEL_HEIGHT, POPUP_GAP, POPUP_INSET} from './panel.js';
+
+const AI_APP_ID = 'org.proxim.AI';
+const AI_PANEL_WIDTH = 420;
+
+function isAiPanel(actor) {
+    try {
+        return actor?.meta_window?.get_gtk_application_id?.() === AI_APP_ID;
+    } catch (_e) {
+        return false;
+    }
+}
+
+function pinAiPanel(win) {
+    const monitor = Main.layoutManager.primaryMonitor;
+    if (!win || !monitor)
+        return;
+    const w = Math.min(AI_PANEL_WIDTH, Math.max(320, monitor.width - POPUP_INSET * 2));
+    const h = Math.max(360, monitor.height - PANEL_HEIGHT - POPUP_INSET - POPUP_GAP);
+    const x = monitor.x + monitor.width - w - POPUP_INSET;
+    const y = monitor.y + POPUP_INSET;
+    try {
+        win.make_above();
+        const rect = win.get_frame_rect();
+        if (rect.x !== x || rect.y !== y || rect.width !== w || rect.height !== h)
+            win.move_resize_frame(true, x, y, w, h);
+    } catch (_e) {
+        // window gone
+    }
+    if (!win._kosAiPinned) {
+        win._kosAiPinned = true;
+        const posId = win.connect('position-changed', () => pinAiPanel(win));
+        const sizeId = win.connect('size-changed', () => pinAiPanel(win));
+        const unmanId = win.connect('unmanaged', () => {
+            try {
+                win.disconnect(posId);
+                win.disconnect(sizeId);
+                win.disconnect(unmanId);
+            } catch (_e) {}
+        });
+    }
+}
 
 const ANIMATED_TYPES = new Set([
     Meta.WindowType.NORMAL,
@@ -97,11 +139,30 @@ export class KosWindows {
     }
 
     _mapWindow(shellwm, actor) {
+        const aiPanel = isAiPanel(actor);
+        if (aiPanel)
+            pinAiPanel(actor.meta_window);
         if (!shouldAnimate(actor)) {
             this._fallback('_mapWindow', [shellwm, actor]);
             return;
         }
         try {
+            if (aiPanel) {
+                actor.translation_x = 36;
+                actor.opacity = 0;
+                tween(actor, {
+                    translationX: 0,
+                    opacity: 255,
+                    duration: OPEN_MS,
+                    easing: easeOutQuint,
+                    onComplete: () => {
+                        resetActor(actor);
+                        pinAiPanel(actor.meta_window);
+                        shellwm.completed_map(actor);
+                    },
+                });
+                return;
+            }
             actor.set_pivot_point(0.5, 0.5);
             actor.set_scale(0.92, 0.92);
             actor.opacity = 0;
@@ -128,6 +189,22 @@ export class KosWindows {
         }
         try {
             actor._kosDestroying = true;
+            if (isAiPanel(actor)) {
+                tween(actor, {
+                    translationX: 36,
+                    opacity: 0,
+                    duration: CLOSE_MS,
+                    easing: easeOutQuint,
+                    onComplete: () => {
+                        try {
+                            shellwm.completed_destroy(actor);
+                        } catch (_e) {
+                            this._fallback('_destroyWindow', [shellwm, actor]);
+                        }
+                    },
+                });
+                return;
+            }
             actor.set_pivot_point(0.5, 0.5);
             tween(actor, {
                 scale: 0.92,

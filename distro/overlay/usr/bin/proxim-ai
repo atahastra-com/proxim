@@ -615,7 +615,7 @@ APP_CSS = """
 class ProximAIWindow(Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title='Proxim AI')
-        self.set_default_size(460, 640)
+        self.set_default_size(420, 720)
         self.cfg = load_config()
         self.messages = []
         self._busy = False
@@ -629,6 +629,7 @@ class ProximAIWindow(Adw.ApplicationWindow):
 
         toolbar = Adw.ToolbarView()
         header = Adw.HeaderBar()
+        header.set_decoration_layout(':close')
 
         new_btn = Gtk.Button(icon_name='document-new-symbolic')
         new_btn.set_tooltip_text('New Chat')
