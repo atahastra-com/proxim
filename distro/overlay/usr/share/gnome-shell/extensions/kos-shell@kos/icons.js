@@ -299,11 +299,13 @@ function applySquircleMask(pb, addGlass = false) {
         const vy = py5[y];
         const row = y * stride;
         if (addGlass) {
-            const gr0 = 42 - 18 * yt;
-            const gg0 = 48 - 20 * yt;
-            const gb0 = 66 - 24 * yt;
-            const ga0 = (232 + 14 * yt) / 255;
-            const rimAlpha = 0.24 * (1 - 0.70 * yt);
+            // Translucent dark frosted glass matching the window & dock palette
+            // (rgba(22, 24, 30, ~0.64-0.72)) with a subtle top glass rim.
+            const gr0 = 26 - 8 * yt;
+            const gg0 = 28 - 8 * yt;
+            const gb0 = 36 - 10 * yt;
+            const ga0 = (160 + 24 * yt) / 255;
+            const rimAlpha = 0.16 * (1 - 0.55 * yt);
             for (let x = 0; x < w; x++) {
                 const v = vy + px5[x];
                 const m = v <= 1 ? 1 : (v >= aa ? 0 : 1 - (v - 1) * invAa);
@@ -435,8 +437,8 @@ export function squircleGIcon(gicon, iconName, size) {
     let out = null;
     try {
         if (path) {
-            const cacheKey = fnv1a(`v10|${path}|${fileMtime(path)}|${rSize}`);
-            const diskPath = GLib.build_filenamev([cacheDir(), `v10-${cacheKey}.png`]);
+            const cacheKey = fnv1a(`v11|${path}|${fileMtime(path)}|${rSize}`);
+            const diskPath = GLib.build_filenamev([cacheDir(), `v11-${cacheKey}.png`]);
             if (!validCachedPng(diskPath)) {
                 const src = loadPixbuf(path, Math.max(256, rSize * 2));
                 if (src && src.get_width() > 0 && src.get_height() > 0) {
