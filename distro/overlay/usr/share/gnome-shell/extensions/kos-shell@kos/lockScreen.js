@@ -61,6 +61,27 @@ function liftClock(dialog) {
     clock.translation_y -= lift;
 }
 
+function centerPrompt(dialog) {
+    const prompt = dialog._authPrompt;
+    if (!prompt)
+        return;
+    prompt.x_align = Clutter.ActorAlign.CENTER;
+    if (prompt._userWell)
+        prompt._userWell.x_align = Clutter.ActorAlign.CENTER;
+    const entry = prompt._entry;
+    const row = entry?.get_parent?.();
+    if (!row)
+        return;
+    row.x_align = Clutter.ActorAlign.CENTER;
+    entry.x_align = Clutter.ActorAlign.CENTER;
+    // AuthPrompt keeps an invisible (opacity 0) button/spacer beside the entry,
+    // which pushes the password pill off-center relative to the avatar.
+    for (const child of row.get_children()) {
+        if (child !== entry && child.opacity === 0)
+            child.visible = false;
+    }
+}
+
 export class KosLockScreen {
     enable() {
         const proto = UnlockDialog.prototype;
@@ -112,6 +133,7 @@ export class KosLockScreen {
             this._kosProgress = progress;
             lockEffect(this);
             liftClock(this);
+            centerPrompt(this);
         };
     }
 
