@@ -35,8 +35,8 @@ DEFAULT_CONFIG = {
 PROVIDER_DEFAULTS = {
     'gemini': 'gemini-2.5-flash',
     'openai': 'gpt-4o-mini',
-    'claude': 'claude-sonnet-4-20250514',
-    'bedrock': 'us.anthropic.claude-sonnet-4-20250514-v1:0',
+    'claude': 'claude-sonnet-4-6',
+    'bedrock': 'global.anthropic.claude-sonnet-4-6',
     'custom': 'openai/gpt-4o-mini',
     'ollama': 'llama3.2',
 }
