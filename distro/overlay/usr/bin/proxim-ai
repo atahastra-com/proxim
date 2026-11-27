@@ -42,20 +42,24 @@ PROVIDER_DEFAULTS = {
 }
 
 SYSTEM_PROMPT = """You are Proxim AI, the autonomous OS agent built into Proxim OS (by Atahastra).
-You have direct control over this computer through your tools:
-- open_app: launch apps (firefox, files, settings, terminal, calculator, calendar, weather, software, text editor, system monitor, etc.) or open URLs/files.
+You have FULL control over this computer — terminal, files, settings, windows, screen vision, mouse, and keyboard:
+- open_app: launch any app (firefox, files, settings, terminal, calculator, calendar, weather, software, text editor, system monitor, etc.) or open URLs/files.
 - system_control: control volume (0-100, mute, unmute), wifi (on, off, status, list), dnd (on, off), lock, screenshot, or reboot/shutdown.
 - read_file / write_file / list_dir: read, create, edit, organize, or inspect files and folders.
 - run_shell: run any bash command to inspect the system, automate tasks, install/configure things, write & run scripts, search files, etc.
+- list_windows / window_control: see every open window (with id, title, app, coordinates) and focus, minimize, maximize, or close any window.
+- see_screen: capture a live screenshot of the desktop so you can visually see what is on screen and read coordinates to click.
+- gui_action: click(x, y), double_click(x, y), right_click(x, y), move(x, y), type(text), or press key combos (e.g. "Return", "ctrl+l", "ctrl+t", "ctrl+w", "Escape") inside any open app!
 - system_info: get CPU, memory, disk, battery, and network info.
 
 Core Operating Behavior (Decisive & Autonomous):
 1. Understand the user's true objective—even if their request is short, casual, or slightly ambiguous.
 2. Make the smartest, most practical assumption and IMMEDIATELY proceed with the best action using your tools. Do NOT ask follow-up questions, do NOT present "Option 1 / Option 2" menus, and do NOT ask "Would you like me to...?" when you can just do it.
-3. If an attempt fails or something isn't where you expected, automatically investigate with your other tools (e.g. run_shell, list_dir), adapt, and finish the goal yourself instead of giving up.
-4. Only pause if the system itself blocks a destructive action for user confirmation.
-5. Never mention Debian, GNOME, or Linux branding unless the user explicitly asks about technical internals; always refer to the system as Proxim OS.
-6. After completing the objective, reply concisely (1-3 short sentences) stating what you did and any assumption you made.
+3. Prefer fast direct tools (open_app, run_shell, system_control, window_control) when possible; use see_screen + gui_action whenever you need to interact inside a GUI app (like clicking a button, searching in Firefox, or filling a form).
+4. If an attempt fails or something isn't where you expected, automatically investigate with your other tools, adapt, and finish the goal yourself instead of giving up.
+5. Only pause if the system itself blocks a destructive action for user confirmation.
+6. Never mention Debian, GNOME, or Linux branding unless the user explicitly asks about technical internals; always refer to the system as Proxim OS.
+7. After completing the objective, reply concisely (1-3 short sentences) stating what you did and any assumption you made.
 """
 
 TOOLS_SPEC = [
@@ -140,6 +144,53 @@ TOOLS_SPEC = [
         'parameters': {
             'type': 'object',
             'properties': {},
+        },
+    },
+    {
+        'name': 'list_windows',
+        'description': 'List all open desktop windows with their id, title, app id, focused state, and (x, y, width, height) coordinates.',
+        'parameters': {
+            'type': 'object',
+            'properties': {},
+        },
+    },
+    {
+        'name': 'window_control',
+        'description': 'Focus, close, minimize, or maximize an open window by its numeric id from list_windows.',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'action': {'type': 'string', 'enum': ['focus', 'close', 'minimize', 'maximize']},
+                'window_id': {'type': 'integer', 'description': 'Numeric window id from list_windows.'},
+            },
+            'required': ['action', 'window_id'],
+        },
+    },
+    {
+        'name': 'see_screen',
+        'description': 'Capture a live screenshot of the desktop so you can visually see what is on screen (also returns screen width and height in pixels).',
+        'parameters': {
+            'type': 'object',
+            'properties': {},
+        },
+    },
+    {
+        'name': 'gui_action',
+        'description': 'Control the mouse and keyboard directly inside any open app on screen.',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'action': {
+                    'type': 'string',
+                    'enum': ['click', 'double_click', 'right_click', 'move', 'type', 'key'],
+                    'description': 'GUI input action.',
+                },
+                'x': {'type': 'integer', 'description': 'Screen X coordinate in pixels (for click/double_click/right_click/move).'},
+                'y': {'type': 'integer', 'description': 'Screen Y coordinate in pixels (for click/double_click/right_click/move).'},
+                'text': {'type': 'string', 'description': 'Text to type (for action="type").'},
+                'key': {'type': 'string', 'description': 'Key or shortcut combo like "Return", "Escape", "ctrl+l", "ctrl+t" (for action="key").'},
+            },
+            'required': ['action'],
         },
     },
 ]
@@ -233,6 +284,39 @@ def _launch_desktop(desktop_id):
         info.launch([], None)
         return True
     return False
+
+
+def call_shell_bridge(method, sig=None, args=None):
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    params = GLib.Variant(sig, args) if sig else None
+    res = bus.call_sync(
+        'org.proxim.ShellAI',
+        '/org/proxim/ShellAI',
+        'org.proxim.ShellAI',
+        method,
+        params,
+        None,
+        Gio.DBusCallFlags.NONE,
+        10000,
+        None,
+    )
+    return res.unpack()[0] if res else None
+
+
+def encode_screenshot_png(path, max_w=1280):
+    """Downscale screenshot via GdkPixbuf (always installed) and return PNG bytes."""
+    gi.require_version('GdkPixbuf', '2.0')
+    from gi.repository import GdkPixbuf
+    pb = GdkPixbuf.Pixbuf.new_from_file(path)
+    w, h = pb.get_width(), pb.get_height()
+    if w > max_w:
+        nh = max(1, int(h * max_w / w))
+        pb = pb.scale_simple(max_w, nh, GdkPixbuf.InterpType.BILINEAR)
+    ok, buf = pb.save_to_bufferv('png', [], [])
+    if not ok:
+        with open(path, 'rb') as fh:
+            return fh.read()
+    return bytes(buf)
 
 
 def execute_tool(name, args):
@@ -355,6 +439,48 @@ def execute_tool(name, args):
                     parts.append(f'{label}:\n{r.stdout.strip()}')
             return '\n\n'.join(parts)
 
+        if name == 'list_windows':
+            return str(call_shell_bridge('ListWindows'))
+
+        if name == 'window_control':
+            act = str(args.get('action', '')).lower()
+            wid = int(args.get('window_id', 0))
+            ok = call_shell_bridge('WindowAction', '(su)', (act, wid))
+            return f'Window {wid}: {act} {"succeeded" if ok else "failed"}.'
+
+        if name == 'see_screen':
+            raw = call_shell_bridge('Screenshot', '(s)', ('/tmp/proxim-ai-screen.png',))
+            info = json.loads(raw)
+            if not info.get('ok'):
+                return f"Screenshot failed: {info.get('error', 'unknown')}"
+            png_bytes = encode_screenshot_png(info['path'])
+            return {
+                'text': f"Captured screen ({info['width']}x{info['height']} px).",
+                'image_png': png_bytes,
+            }
+
+        if name == 'gui_action':
+            act = str(args.get('action', '')).lower()
+            if act in ('click', 'double_click', 'right_click'):
+                x, y = int(args.get('x', 0)), int(args.get('y', 0))
+                btn = 3 if act == 'right_click' else 1
+                dbl = act == 'double_click'
+                ok = call_shell_bridge('Click', '(iiub)', (x, y, btn, dbl))
+                return f'{act} at ({x}, {y}) {"ok" if ok else "failed"}.'
+            if act == 'move':
+                x, y = int(args.get('x', 0)), int(args.get('y', 0))
+                ok = call_shell_bridge('MoveMouse', '(ii)', (x, y))
+                return f'Moved mouse to ({x}, {y}) {"ok" if ok else "failed"}.'
+            if act == 'type':
+                txt = str(args.get('text', ''))
+                ok = call_shell_bridge('TypeText', '(s)', (txt,))
+                return f'Typed text {"ok" if ok else "failed"}.'
+            if act == 'key':
+                combo = str(args.get('key', ''))
+                ok = call_shell_bridge('PressKey', '(s)', (combo,))
+                return f'Pressed {combo} {"ok" if ok else "failed"}.'
+            return f'Unknown gui_action: {act}'
+
         if name == 'run_shell':
             cmd = str(args.get('command', '')).strip()
             if not cmd:
@@ -363,7 +489,7 @@ def execute_tool(name, args):
                 ['bash', '-lc', cmd],
                 capture_output=True,
                 text=True,
-                timeout=30,
+                timeout=120,
                 cwd=os.path.expanduser('~'),
             )
             out = (r.stdout or '') + (('\n' + r.stderr) if r.stderr else '')
@@ -415,6 +541,10 @@ def call_gemini(cfg, messages):
                     'response': {'result': m['content']},
                 }
             })
+            if m.get('image_b64'):
+                parts.append({
+                    'inlineData': {'mimeType': 'image/png', 'data': m['image_b64']}
+                })
         else:
             if m.get('content'):
                 parts.append({'text': m['content']})
@@ -475,6 +605,14 @@ def call_openai_compat(cfg, messages, mode='openai'):
                 'tool_call_id': m.get('tool_call_id', 'call_0'),
                 'content': m['content'],
             })
+            if m.get('image_b64'):
+                oai_msgs.append({
+                    'role': 'user',
+                    'content': [
+                        {'type': 'text', 'text': 'Here is the screenshot captured by see_screen:'},
+                        {'type': 'image_url', 'image_url': {'url': f"data:image/png;base64,{m['image_b64']}"}},
+                    ],
+                })
         elif m['role'] == 'assistant' and m.get('tool_calls'):
             oai_msgs.append({
                 'role': 'assistant',
@@ -525,12 +663,18 @@ def call_claude(cfg, messages):
     anth_msgs = []
     for m in messages:
         if m['role'] == 'tool':
+            tr_content = [{'type': 'text', 'text': m['content']}]
+            if m.get('image_b64'):
+                tr_content.append({
+                    'type': 'image',
+                    'source': {'type': 'base64', 'media_type': 'image/png', 'data': m['image_b64']},
+                })
             anth_msgs.append({
                 'role': 'user',
                 'content': [{
                     'type': 'tool_result',
                     'tool_use_id': m.get('tool_call_id', 'call_0'),
-                    'content': m['content'],
+                    'content': tr_content,
                 }],
             })
         elif m['role'] == 'assistant' and m.get('tool_calls'):
@@ -598,12 +742,20 @@ def call_bedrock(cfg, messages):
     br_msgs = []
     for m in messages:
         if m['role'] == 'tool':
+            br_res = [{'text': m['content']}]
+            if m.get('image_b64'):
+                br_res.append({
+                    'image': {
+                        'format': 'png',
+                        'source': {'bytes': m['image_b64']},
+                    }
+                })
             br_msgs.append({
                 'role': 'user',
                 'content': [{
                     'toolResult': {
                         'toolUseId': m.get('tool_call_id', 'call_0'),
-                        'content': [{'text': m['content']}],
+                        'content': br_res,
                     }
                 }],
             })
@@ -1042,12 +1194,22 @@ class ProximAIWindow(Adw.ApplicationWindow):
 
                     GLib.idle_add(self._add_tool_pill, f'⚡ {desc}')
                     out = execute_tool(tname, targs)
-                    self.messages.append({
-                        'role': 'tool',
-                        'tool_call_id': tc['id'],
-                        'name': tname,
-                        'content': out,
-                    })
+                    if isinstance(out, dict) and 'image_png' in out:
+                        msg_item = {
+                            'role': 'tool',
+                            'tool_call_id': tc['id'],
+                            'name': tname,
+                            'content': out.get('text', 'Screenshot captured.'),
+                            'image_b64': base64.b64encode(out['image_png']).decode('ascii'),
+                        }
+                    else:
+                        msg_item = {
+                            'role': 'tool',
+                            'tool_call_id': tc['id'],
+                            'name': tname,
+                            'content': str(out),
+                        }
+                    self.messages.append(msg_item)
         except Exception as exc:
             GLib.idle_add(self._add_bubble, f'Error: {exc}', False)
         finally:
