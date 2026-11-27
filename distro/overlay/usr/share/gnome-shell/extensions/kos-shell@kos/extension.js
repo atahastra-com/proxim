@@ -18,6 +18,7 @@ import {KosDock} from './dock.js';
 import {KosDesktopGrid, KosAllAppsOverlay} from './desktopGrid.js';
 import {KosHomeBlur, KosLockScreen} from './lockScreen.js';
 import {KosWindows} from './windows.js';
+import {KosWindowBlur} from './windowBlur.js';
 
 export default class KosShellExtension extends Extension {
     enable() {
@@ -72,6 +73,8 @@ export default class KosShellExtension extends Extension {
         this._lockScreen.enable();
         this._windows = new KosWindows();
         this._windows.enable();
+        this._windowBlur = new KosWindowBlur();
+        this._windowBlur.enable();
 
         // metadata.json keeps us enabled on the lock screen (so the lock
         // screen gets the kos look). Hide what must not show or be usable
@@ -123,6 +126,8 @@ export default class KosShellExtension extends Extension {
             this._grid._actor.visible = true;
         if (this._grid?._backdrop)
             this._grid._backdrop.visible = true;
+        this._windowBlur?.disable();
+        this._windowBlur = null;
         this._windows?.disable();
         this._windows = null;
         this._lockScreen?.disable();

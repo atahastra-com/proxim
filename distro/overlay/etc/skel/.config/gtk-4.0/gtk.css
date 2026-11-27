@@ -1,6 +1,7 @@
-/* Proxim OS window style for GTK4 / libadwaita apps: simple, flat, neutral dark.
- * One charcoal surface (#1f2128) for titlebar and content, a slightly darker
- * sidebar (#1a1c22). Header buttons are bare icons (no boxes), the path bar
+/* Proxim OS window style for GTK4 / libadwaita apps: simple, flat, dark glass.
+ * The window is one translucent dark tint (rgba(22, 24, 30, 0.76)) for titlebar and
+ * content; the shell (kos-shell windowBlur.js) blurs the desktop behind it.
+ * The sidebar is the same glass a little darker (rgba(0, 0, 0, 0.18) on top). Header buttons are bare icons (no boxes), the path bar
  * is plain text, grouped lists are one quiet group; no borders or glows,
  * solid #0081ff selection, thin plain min/max/close glyphs.
  * Kept identical in /etc/skel/.config/gtk-4.0/gtk.css. */
@@ -9,24 +10,24 @@
     --accent-bg-color: #0081ff;
     --accent-fg-color: #ffffff;
     --accent-color: #4aa3ff;
-    --window-bg-color: #1f2128;
+    --window-bg-color: rgba(22, 24, 30, 0.76);
     --window-fg-color: rgba(255, 255, 255, 0.92);
-    --view-bg-color: #1f2128;
+    --view-bg-color: transparent;
     --view-fg-color: rgba(255, 255, 255, 0.92);
-    --headerbar-bg-color: #1f2128;
+    --headerbar-bg-color: transparent;
     --headerbar-fg-color: rgba(255, 255, 255, 0.92);
-    --headerbar-backdrop-color: #1f2128;
+    --headerbar-backdrop-color: transparent;
     --headerbar-border-color: transparent;
     --headerbar-shade-color: transparent;
     --headerbar-darker-shade-color: transparent;
-    --sidebar-bg-color: #1a1c22;
+    --sidebar-bg-color: rgba(0, 0, 0, 0.18);
     --sidebar-fg-color: rgba(255, 255, 255, 0.88);
-    --sidebar-backdrop-color: #1a1c22;
+    --sidebar-backdrop-color: rgba(0, 0, 0, 0.18);
     --sidebar-border-color: transparent;
     --sidebar-shade-color: transparent;
-    --secondary-sidebar-bg-color: #1a1c22;
+    --secondary-sidebar-bg-color: rgba(0, 0, 0, 0.18);
     --secondary-sidebar-fg-color: rgba(255, 255, 255, 0.88);
-    --secondary-sidebar-backdrop-color: #1a1c22;
+    --secondary-sidebar-backdrop-color: rgba(0, 0, 0, 0.18);
     --secondary-sidebar-border-color: transparent;
     --secondary-sidebar-shade-color: transparent;
     --card-bg-color: #262830;
@@ -35,15 +36,16 @@
     --popover-bg-color: #2a2c34;
     --popover-fg-color: rgba(255, 255, 255, 0.92);
     --popover-shade-color: transparent;
-    --dialog-bg-color: #1f2128;
+    --dialog-bg-color: rgba(22, 24, 30, 0.76);
     --dialog-fg-color: rgba(255, 255, 255, 0.92);
     --thumbnail-bg-color: #2c2f38;
     --shade-color: transparent;
     --window-radius: 14px;
 }
 
-/* Window: rounded, soft shadow, no colored rim */
+/* Window: rounded dark glass, soft shadow, no colored rim */
 window.csd {
+    background-color: var(--window-bg-color);
     border-radius: 14px;
     box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45),
                 0 0 0 1px rgba(0, 0, 0, 0.35);
@@ -65,7 +67,7 @@ headerbar,
 toolbarview > .top-bar headerbar,
 toolbarview > .top-bar.raised,
 headerbar:backdrop {
-    background-color: #1f2128;
+    background-color: transparent;
     background-image: none;
     border: none;
     box-shadow: none;
@@ -75,7 +77,7 @@ headerbar:backdrop {
 .sidebar-pane headerbar,
 .sidebar-pane .top-bar,
 .sidebar-pane toolbarview > .top-bar headerbar {
-    background-color: #1a1c22;
+    background-color: transparent;
 }
 
 /* Header buttons: icon only, no box. A faint square shows on hover. */
@@ -211,12 +213,18 @@ windowcontrols > button.close:active {
     background-color: #c93a3f;
 }
 
-/* Sidebar: darker shade, no divider line */
-.sidebar-pane,
+/* Sidebar: a slightly darker shade of the same glass, no divider line.
+ * Only the pane is shaded; inner lists stay clear so the tint never stacks. */
+.sidebar-pane {
+    background-color: rgba(0, 0, 0, 0.18);
+    border: none;
+    box-shadow: none;
+}
+
 .navigation-sidebar,
 placessidebar,
 .sidebar {
-    background-color: #1a1c22;
+    background-color: transparent;
     border: none;
     box-shadow: none;
 }
