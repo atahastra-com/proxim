@@ -746,8 +746,9 @@
     color: #ffffff;
 }
 
-/* ---- Lock screen (iPhone style): sharp wallpaper, date above a big thin
-   time near the top; the password page is dark frosted (lockScreen.js). */
+/* ---- Lock screen: sharp wallpaper with logo, date & big thin time;
+   password page is minimal macOS-style frosted dark glass over blurred
+   wallpaper (avatar + name + sleek glass pill entry, no heavy card). */
 .kos-lock .unlock-dialog-clock {
     spacing: 0;
 }
@@ -775,21 +776,99 @@
     color: rgba(255, 255, 255, 0.70);
     padding-top: 12px;
 }
+
+/* Password prompt layout: floating minimal frosted glass, no box/card */
+.kos-lock .login-dialog-prompt-layout {
+    spacing: 14px;
+    padding: 24px 0;
+}
+.kos-lock .user-widget.vertical {
+    spacing: 12px;
+}
+.kos-lock .user-icon {
+    background-color: rgba(22, 24, 30, 0.56);
+    border: 2px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+    color: rgba(255, 255, 255, 0.90);
+}
+.kos-lock .user-widget-label {
+    font-size: 20px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.96);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+.kos-lock .login-dialog-prompt-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.65);
+}
 .kos-lock .login-dialog-prompt-entry {
-    background-color: rgba(255, 255, 255, 0.12);
+    width: 260px;
+    min-height: 40px;
+    padding: 8px 16px;
+    background-color: rgba(22, 24, 30, 0.56);
     color: #ffffff;
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: none;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.30);
     caret-color: #ffffff;
+    font-size: 14px;
+    selection-background-color: #0081ff;
+    selected-color: #ffffff;
+}
+.kos-lock .login-dialog-prompt-entry:hover {
+    background-color: rgba(22, 24, 30, 0.66);
+    border-color: rgba(255, 255, 255, 0.24);
 }
 .kos-lock .login-dialog-prompt-entry:focus {
-    border-color: rgba(0, 129, 255, 0.85);
+    background-color: rgba(22, 24, 30, 0.72);
+    border: 1.5px solid rgba(0, 129, 255, 0.90);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.38);
+}
+.kos-lock .login-dialog-prompt-entry:insensitive {
+    opacity: 0.6;
+}
+.kos-lock .login-dialog-prompt-entry StLabel.hint-text {
+    color: rgba(255, 255, 255, 0.52);
+}
+.kos-lock .login-dialog-prompt-entry .peek-password-icon {
+    color: rgba(255, 255, 255, 0.74);
 }
 .kos-lock .login-dialog-button.cancel-button,
 .kos-lock .login-dialog-button.switch-user-button {
-    background-color: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    background-color: rgba(22, 24, 30, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+    color: rgba(255, 255, 255, 0.88);
+}
+.kos-lock .login-dialog-button.cancel-button:hover,
+.kos-lock .login-dialog-button.switch-user-button:hover {
+    background-color: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.24);
     color: #ffffff;
+}
+.kos-lock .login-dialog-button.cancel-button:active,
+.kos-lock .login-dialog-button.switch-user-button:active {
+    background-color: rgba(255, 255, 255, 0.24);
+}
+.kos-lock .caps-lock-warning-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 214, 102, 0.95);
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+.kos-lock .login-dialog-message-warning,
+.kos-lock .login-dialog-message {
+    font-size: 13px;
+    color: rgba(255, 130, 130, 0.96);
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+.kos-lock .unlock-dialog-notifications-container .notification {
+    background-color: rgba(22, 24, 30, 0.68);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
 }

@@ -26,8 +26,8 @@ import {LOCK_MS, easeOutQuint, tween} from './anim.js';
 import {UnlockDialog} from 'resource:///org/gnome/shell/ui/unlockDialog.js';
 
 const LOCK_BRIGHTNESS = 0.85;      // clock page: sharp, slightly dimmed
-const PROMPT_RADIUS = 40;          // password page: frosted
-const PROMPT_BRIGHTNESS = 0.55;
+const PROMPT_RADIUS = 44;          // password page: dark frosted blur
+const PROMPT_BRIGHTNESS = 0.60;
 const CLOCK_TOP = 0.10;            // clock top at 10% of the screen height
 
 const HOME_RADIUS = 4;
