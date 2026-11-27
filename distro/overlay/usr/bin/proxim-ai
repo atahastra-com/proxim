@@ -43,24 +43,26 @@ PROVIDER_DEFAULTS = {
 }
 
 SYSTEM_PROMPT = """You are Proxim AI, the autonomous OS agent built into Proxim OS (by Atahastra).
-You have FULL control over this computer — terminal, files, settings, windows, screen vision, mouse, and keyboard:
-- open_app: launch any app (firefox, files, settings, terminal, calculator, calendar, weather, software, text editor, system monitor, etc.) or open URLs/files.
+You have FULL control over this computer — visible Terminal, background shell, files, settings, windows, screen vision, mouse, and keyboard:
+- open_app: launch any app (firefox, files, settings, terminal, calculator, calendar, weather, software, text editor, system monitor, etc.) or open URLs/files directly.
+- run_in_terminal: open/focus a REAL visible Terminal window and visibly type and execute a command in it so the user can watch it run live!
+- run_shell: run a silent background bash command when you just need quick internal output.
 - system_control: control volume (0-100, mute, unmute), wifi (on, off, status, list), dnd (on, off), lock, screenshot, or reboot/shutdown.
 - read_file / write_file / list_dir: read, create, edit, organize, or inspect files and folders.
-- run_shell: run any bash command to inspect the system, automate tasks, install/configure things, write & run scripts, search files, etc.
 - list_windows / window_control: see every open window (with id, title, app, coordinates) and focus, minimize, maximize, or close any window.
-- see_screen: capture a live screenshot of the desktop so you can visually see what is on screen and read coordinates to click.
+- see_screen: capture a live screenshot of the desktop so you can visually see what is on screen and read exact coordinates to click.
 - gui_action: click(x, y), double_click(x, y), right_click(x, y), move(x, y), type(text), or press key combos (e.g. "Return", "ctrl+l", "ctrl+t", "ctrl+w", "Escape") inside any open app!
 - system_info: get CPU, memory, disk, battery, and network info.
 
 Core Operating Behavior (Decisive & Autonomous):
 1. Understand the user's true objective—even if their request is short, casual, or slightly ambiguous.
-2. Make the smartest, most practical assumption and IMMEDIATELY proceed with the best action using your tools. Do NOT ask follow-up questions, do NOT present "Option 1 / Option 2" menus, and do NOT ask "Would you like me to...?" when you can just do it.
-3. Prefer fast direct tools (open_app, run_shell, system_control, window_control) when possible; use see_screen + gui_action whenever you need to interact inside a GUI app (like clicking a button, searching in Firefox, or filling a form).
-4. If an attempt fails or something isn't where you expected, automatically investigate with your other tools, adapt, and finish the goal yourself instead of giving up.
-5. Only pause if the system itself blocks a destructive action for user confirmation.
-6. Never mention Debian, GNOME, or Linux branding unless the user explicitly asks about technical internals; always refer to the system as Proxim OS.
-7. After completing the objective, reply concisely (1-3 short sentences) stating what you did and any assumption you made.
+2. Make the smartest, most practical assumption and IMMEDIATELY proceed with the best action using your tools. Do NOT ask follow-up questions or present "Option 1 / Option 2" menus.
+3. For YouTube or web searches (e.g. "search lofi song on youtube", "play lofi music"), open the direct search URL with open_app (e.g. "https://www.youtube.com/results?search_query=lofi+song"). If they want you to play/click a video, wait briefly, call list_windows -> window_control(focus) on Firefox -> see_screen() -> gui_action(click, x, y) on the video thumbnail!
+4. Whenever the user asks to use the terminal or run commands they want to see, use run_in_terminal so they can watch you visibly type and run the command in Terminal.
+5. ALWAYS call window_control(focus, window_id) on the target window BEFORE calling gui_action(type) or gui_action(key), otherwise keystrokes will go to the wrong window!
+6. If an attempt fails, automatically investigate and adapt using your other tools.
+7. Never mention Debian, GNOME, or Linux branding unless asked; refer to the system as Proxim OS.
+8. After completing the objective, reply concisely (1-2 short sentences) stating what you did.
 """
 
 TOOLS_SPEC = [
@@ -92,6 +94,17 @@ TOOLS_SPEC = [
                 },
             },
             'required': ['action'],
+        },
+    },
+    {
+        'name': 'run_in_terminal',
+        'description': 'Open or focus a visible Terminal window and visibly type and execute a bash command in it so the user can watch it run live.',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'command': {'type': 'string', 'description': 'The bash command to type and run in the visible Terminal window.'},
+            },
+            'required': ['command'],
         },
     },
     {
@@ -216,7 +229,7 @@ DANGEROUS_PATTERNS = [
 def is_destructive(tool_name, args):
     if tool_name == 'system_control' and args.get('action') in ('reboot', 'shutdown'):
         return True
-    if tool_name == 'run_shell':
+    if tool_name in ('run_shell', 'run_in_terminal'):
         cmd = str(args.get('command', ''))
         for pat in DANGEROUS_PATTERNS:
             if re.search(pat, cmd):
@@ -498,6 +511,37 @@ def execute_tool(name, args):
                 ok = call_shell_bridge('PressKey', '(s)', (combo,))
                 return f'Pressed {combo} {"ok" if ok else "failed"}.'
             return f'Unknown gui_action: {act}'
+
+        if name == 'run_in_terminal':
+            cmd = str(args.get('command', '')).strip()
+            if not cmd:
+                return 'Error: empty command.'
+            # Reuse an existing Terminal window if open, otherwise launch one.
+            term_id = None
+            try:
+                wins = json.loads(str(call_shell_bridge('ListWindows')))
+                for w in wins:
+                    if 'terminal' in (w.get('app') or '').lower() or 'terminal' in (w.get('title') or '').lower():
+                        term_id = w.get('id')
+                        break
+            except Exception:
+                pass
+            if term_id is None:
+                _launch_desktop('org.gnome.Terminal.desktop')
+                time.sleep(0.9)
+                try:
+                    wins = json.loads(str(call_shell_bridge('ListWindows')))
+                    for w in wins:
+                        if 'terminal' in (w.get('app') or '').lower() or 'terminal' in (w.get('title') or '').lower():
+                            term_id = w.get('id')
+                            break
+                except Exception:
+                    pass
+            if term_id is not None:
+                call_shell_bridge('WindowAction', '(su)', ('focus', int(term_id)))
+                time.sleep(0.25)
+            call_shell_bridge('TypeText', '(s)', (cmd + '\n',))
+            return f'Typed and executed in visible Terminal: {cmd}'
 
         if name == 'run_shell':
             cmd = str(args.get('command', '')).strip()

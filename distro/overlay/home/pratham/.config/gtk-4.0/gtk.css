@@ -157,7 +157,7 @@ window.csd.tiled-right {
     box-shadow: none;
 }
 
-/* Titlebar: same color as the content, no divider line */
+/* Titlebar: same color as the content, no divider line, even edge spacing */
 headerbar,
 .titlebar,
 .top-bar,
@@ -169,6 +169,7 @@ headerbar:backdrop {
     border: none;
     box-shadow: none;
     min-height: 44px;
+    padding: 4px 10px;
 }
 
 .sidebar-pane headerbar,
@@ -178,6 +179,7 @@ headerbar:backdrop {
 }
 
 /* Header buttons: icon only, no box. A faint square shows on hover. */
+headerbar splitbutton,
 headerbar button,
 headerbar button.flat,
 headerbar button.toggle,
@@ -195,7 +197,7 @@ headerbar .linked > button {
     border-radius: 8px;
     min-width: 30px;
     min-height: 30px;
-    color: rgba(255, 255, 255, 0.70);
+    color: rgba(255, 255, 255, 0.78);
 }
 
 headerbar button:hover,

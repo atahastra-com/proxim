@@ -217,27 +217,42 @@ export class KosAiBridge {
         }
     }
 
-    TypeText(text) {
+    TypeTextAsync(params, invocation) {
+        const [text] = params;
+        const chars = [...String(text || '')];
+        let idx = 0;
+        let kb;
         try {
-            const kb = this._getKeyboard();
-            for (const ch of text) {
+            kb = this._getKeyboard();
+        } catch (e) {
+            logError(e, 'kos-shell: TypeText');
+            invocation.return_value(new GLib.Variant('(b)', [false]));
+            return;
+        }
+        const step = () => {
+            if (idx >= chars.length) {
+                invocation.return_value(new GLib.Variant('(b)', [true]));
+                return GLib.SOURCE_REMOVE;
+            }
+            const ch = chars[idx++];
+            try {
                 const cp = ch.codePointAt(0);
                 const keyval = ch === '\n'
                     ? Clutter.KEY_Return
                     : ch === '\t'
                         ? Clutter.KEY_Tab
                         : Clutter.unicode_to_keysym(cp);
-                if (!keyval)
-                    continue;
-                const t = GLib.get_monotonic_time();
-                kb.notify_keyval(t, keyval, Clutter.KeyState.PRESSED);
-                kb.notify_keyval(t + 5000, keyval, Clutter.KeyState.RELEASED);
+                if (keyval) {
+                    const t = GLib.get_monotonic_time();
+                    kb.notify_keyval(t, keyval, Clutter.KeyState.PRESSED);
+                    kb.notify_keyval(t + 5000, keyval, Clutter.KeyState.RELEASED);
+                }
+            } catch (e) {
+                logError(e, 'kos-shell: TypeText char');
             }
-            return true;
-        } catch (e) {
-            logError(e, 'kos-shell: TypeText');
-            return false;
-        }
+            return GLib.SOURCE_CONTINUE;
+        };
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, step);
     }
 
     PressKey(combo) {
