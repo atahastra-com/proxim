@@ -289,7 +289,7 @@
 }
 
 .popup-menu-content {
-    background-color: rgba(26, 29, 38, 0.84);
+    background-color: rgba(22, 24, 30, 0.76);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 18px;
     box-shadow: none;
@@ -339,10 +339,10 @@
     border-radius: 18px;
 }
 
-/* One Liquid Glass fill for both popups (no outer shadow). */
+/* One dark blurred glass fill for both popups, matching app windows & dock. */
 .datemenu-popover,
 .quick-settings.kos-cc {
-    background-color: rgba(26, 29, 38, 0.84);
+    background-color: rgba(22, 24, 30, 0.76);
     border: 1px solid rgba(255, 255, 255, 0.07);
     box-shadow: none;
 }
@@ -559,7 +559,7 @@
  * GNOME 48 uses :ltr/:rtl corner rules, so match them where needed.
  * ============================================================================ */
 .quick-settings.kos-cc {
-    background-color: rgba(26, 29, 38, 0.84);
+    background-color: rgba(22, 24, 30, 0.76);
     color: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 18px;

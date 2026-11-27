@@ -160,21 +160,87 @@ export class KosPanel {
             if (pair)
                 this._blurEffect = pair[1];
         }
+        // Calendar and Quick Settings popups: use three non-overlapping
+        // Shell.BlurEffect bands in a sibling container directly below each
+        // BoxPointer (same technique as windowBlur.js), matching the 18px
+        // rounded corners with no square blur bleed.
+        const POPUP_CORNER = 18;
+        const makeBand = () => {
+            const band = new Clutter.Actor({name: 'kos-popup-blur', reactive: false});
+            const effect = new Shell.BlurEffect({
+                mode: Shell.BlurMode.BACKGROUND,
+                brightness: 0.72,
+            });
+            if ('radius' in effect)
+                effect.radius = 36;
+            else if ('sigma' in effect)
+                effect.sigma = 36;
+            band.add_effect_with_name('blur', effect);
+            return band;
+        };
         for (const area of ['dateMenu', 'quickSettings']) {
-            const menu = Main.panel.statusArea[area]?.menu;
-            const box = menu?.box;
-            const pointer = menu?._boxPointer;
-            const pair = addBlur(box, 44, 0.78);
-            if (pair) {
-                const [, effect] = pair;
-                if (pointer) {
-                    effect.enabled = Boolean(pointer.visible);
-                    this._connect(pointer, 'notify::visible', () => {
-                        effect.enabled = Boolean(pointer.visible);
-                    });
+            const pointer = Main.panel.statusArea[area]?.menu?._boxPointer;
+            const parent = pointer?.get_parent?.();
+            if (!pointer || !parent)
+                continue;
+            const group = new Clutter.Actor({
+                name: `kos-popup-blur-${area}`,
+                reactive: false,
+                visible: Boolean(pointer.visible),
+            });
+            const bands = [makeBand(), makeBand(), makeBand()];
+            for (const b of bands)
+                group.add_child(b);
+            parent.insert_child_below(group, pointer);
+
+            const syncLayout = () => {
+                const alloc = pointer.allocation;
+                const x = Math.round(alloc.x1);
+                const y = Math.round(alloc.y1);
+                const w = Math.round(alloc.get_width());
+                const h = Math.round(alloc.get_height());
+                if (w <= 0 || h <= 0)
+                    return;
+                group.set_position(x, y);
+                group.set_size(w, h);
+                const {scaleFactor} = St.ThemeContext.get_for_stage(global.stage);
+                const r = Math.min(Math.round(POPUP_CORNER * scaleFactor),
+                    Math.floor(w / 2), Math.floor(h / 2));
+                const [top, mid, bottom] = bands;
+                const place = (band, bx, by, bw, bh) => {
+                    if (bw <= 0 || bh <= 0) {
+                        band.hide();
+                        return;
+                    }
+                    band.set_position(bx, by);
+                    band.set_size(bw, bh);
+                    band.show();
+                };
+                place(top, r, 0, w - 2 * r, r);
+                place(mid, 0, r, w, h - 2 * r);
+                place(bottom, r, h - r, w - 2 * r, r);
+            };
+            const syncState = () => {
+                group.visible = Boolean(pointer.visible);
+                group.opacity = pointer.opacity;
+                group.translation_y = pointer.translation_y;
+                if (pointer.visible) {
+                    const p = pointer.get_parent();
+                    if (p && group.get_parent() === p)
+                        p.set_child_below_sibling(group, pointer);
+                    syncLayout();
                 }
-                this._menuBlurs.push(pair);
-            }
+            };
+            this._connect(pointer, 'notify::allocation', syncLayout);
+            this._connect(pointer, 'notify::visible', syncState);
+            this._connect(pointer, 'notify::opacity', () => {
+                group.opacity = pointer.opacity;
+            });
+            this._connect(pointer, 'notify::translation-y', () => {
+                group.translation_y = pointer.translation_y;
+            });
+            syncState();
+            this._menuBlurs.push(group);
         }
     }
 
@@ -187,9 +253,9 @@ export class KosPanel {
             }
             this._blurEffect = null;
         }
-        for (const [actor, effect] of this._menuBlurs || []) {
+        for (const group of this._menuBlurs || []) {
             try {
-                actor.remove_effect(effect);
+                group.destroy();
             } catch (_e) {
                 // ignore
             }
