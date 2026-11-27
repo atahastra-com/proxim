@@ -254,7 +254,7 @@ class DebInstallerWindow(Adw.ApplicationWindow):
         # Collapsible package details dropdown (collapsed by default for quick install)
         meta_group = Adw.PreferencesGroup()
         desc_lines = [l for l in self.info.get('Description', '').splitlines() if l.strip()]
-        summary = desc_lines[0] if desc_lines else 'Debian software package'
+        summary = desc_lines[0] if desc_lines else 'Proxim OS app package'
 
         expander = Adw.ExpanderRow(title='Package Details', subtitle=summary)
         expander.set_expanded(False)
@@ -514,7 +514,7 @@ class DebInstallerApp(Adw.Application):
     def do_activate(self):
         dialog = Gtk.FileDialog(title='Select a .deb package to install')
         f = Gtk.FileFilter()
-        f.set_name('Debian Packages (*.deb)')
+        f.set_name('App Packages (*.deb)')
         f.add_pattern('*.deb')
         filters = Gio.ListStore.new(Gtk.FileFilter)
         filters.append(f)

@@ -233,6 +233,59 @@ os.replace(tmp, dest)
 PY
 }
 
+patch_about_ui() {
+  python3 - "$1" "$2" << 'PY'
+import os, sys
+import xml.etree.ElementTree as ET
+
+src, dest = sys.argv[1], sys.argv[2]
+raw = open(src, encoding="utf-8").read()
+root = ET.fromstring(raw)
+
+HIDE_TITLES = {"GNOME Version", "Kernel Version", "Windowing System"}
+HIDE_IDS = {"gnome_version_row", "kernel_version_row", "windowing_system_row"}
+
+def set_prop(obj_el, prop_name, prop_val):
+    for p in obj_el.findall("property"):
+        if p.get("name") == prop_name:
+            p.text = prop_val
+            p.attrib.pop("translatable", None)
+            return
+    p = ET.Element("property", {"name": prop_name})
+    p.text = prop_val
+    obj_el.insert(0, p)
+
+changed = 0
+for obj in root.iter("object"):
+    oid = (obj.get("id") or "").lower()
+    hit = oid in HIDE_IDS
+    if not hit:
+        for p in obj.findall("property"):
+            if p.get("name") == "title" and p.text:
+                clean = p.text.replace("_", "").strip()
+                if clean in HIDE_TITLES:
+                    hit = True
+                    break
+    if hit:
+        set_prop(obj, "visible", "False")
+        set_prop(obj, "name", "kos-hide-me")
+        changed += 1
+
+if changed == 0:
+    sys.exit(0)
+
+ET.indent(root, space="  ")
+xml_out = '<?xml version="1.0" encoding="UTF-8"?>\n<!-- kos: White-labeled About/System Details (no GNOME/Linux marketing). -->\n' + ET.tostring(root, encoding="unicode") + "\n"
+ET.fromstring(xml_out)
+
+tmp = dest + ".tmp"
+os.makedirs(os.path.dirname(dest), exist_ok=True)
+with open(tmp, "w", encoding="utf-8") as fh:
+    fh.write(xml_out)
+os.replace(tmp, dest)
+PY
+}
+
 write_env_files() {
   local spec="$1" f
   for f in /etc/environment.d/90-kos-appearance.conf /usr/lib/environment.d/90-kos-appearance.conf; do
@@ -356,6 +409,22 @@ if src="$(find_source)"; then
       fi
     fi
   fi
+
+  # Hide GNOME Version, Kernel Version (Linux ...), and Windowing System from
+  # Settings -> System -> About / System Details so the UI reads purely as Proxim OS.
+  for pat in "*/cc-about-page.ui" "*/cc-system-details-window.ui"; do
+    if ui_res="$(find_ui_resource "$src" "$pat")"; then
+      rel="${ui_res#/org/gnome/control-center/}"
+      ui_dest="${OVERLAY_ROOT}/${rel}"
+      ui_dir="$(dirname "$ui_dest")"
+      if gresource extract "$src" "$ui_res" > "$about_tmp" && [[ -s "$about_tmp" ]]; then
+        if patch_about_ui "$about_tmp" "$ui_dest" && [[ -s "$ui_dest" ]]; then
+          add_spec "${ui_res%/*}=${ui_dir}"
+          log "white-labeled ${ui_res} (hid GNOME/Kernel/Windowing rows)"
+        fi
+      fi
+    fi
+  done
 else
   log "WARN: gnome-control-center appearance UI not found"
 fi
