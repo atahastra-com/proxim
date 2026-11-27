@@ -149,10 +149,9 @@ export class KosPanel {
             }
         };
 
-        // Liquid Glass bar & popovers: strong blur with high luminosity so
-        // wallpaper light and color refract through the glass cleanly.
+        // Match app window dark blurred glass (same radius & brightness as windowBlur.js).
         if (!this._blurEffect) {
-            const pair = addBlur(Main.panel, 48, 0.84);
+            const pair = addBlur(Main.panel, 36, 0.72);
             if (pair)
                 this._blurEffect = pair[1];
         }

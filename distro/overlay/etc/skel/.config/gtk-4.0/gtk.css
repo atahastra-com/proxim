@@ -30,15 +30,15 @@
     --secondary-sidebar-backdrop-color: rgba(0, 0, 0, 0.18);
     --secondary-sidebar-border-color: transparent;
     --secondary-sidebar-shade-color: transparent;
-    --card-bg-color: #262830;
+    --card-bg-color: rgba(255, 255, 255, 0.05);
     --card-fg-color: rgba(255, 255, 255, 0.92);
     --card-shade-color: transparent;
-    --popover-bg-color: #2a2c34;
+    --popover-bg-color: rgba(22, 24, 30, 0.92);
     --popover-fg-color: rgba(255, 255, 255, 0.92);
     --popover-shade-color: transparent;
     --dialog-bg-color: rgba(22, 24, 30, 0.76);
     --dialog-fg-color: rgba(255, 255, 255, 0.92);
-    --thumbnail-bg-color: #2c2f38;
+    --thumbnail-bg-color: rgba(255, 255, 255, 0.06);
     --shade-color: transparent;
     --window-radius: 14px;
 }
@@ -82,12 +82,16 @@ headerbar:backdrop {
 
 /* Header buttons: icon only, no box. A faint square shows on hover. */
 headerbar button,
+headerbar button.flat,
+headerbar button.toggle,
 headerbar button.image-button,
+headerbar button.image-button.toggle,
 headerbar menubutton > button,
 headerbar splitbutton > button,
 headerbar splitbutton > menubutton > button,
 headerbar .linked > button {
-    background: none;
+    background-color: transparent;
+    background-image: none;
     border: none;
     box-shadow: none;
     outline: none;
@@ -277,10 +281,10 @@ placessidebar row:selected label {
     color: #ffffff;
 }
 
-/* Grouped lists: one quiet group with hairline separators, not separate boxes */
+/* Grouped lists: translucent frosted glass so the blurred window background shows through */
 list.boxed-list,
 list.boxed-list-separate {
-    background-color: #262830;
+    background-color: rgba(255, 255, 255, 0.05);
     border: none;
     box-shadow: none;
     border-radius: 10px;
@@ -290,7 +294,7 @@ list.boxed-list > row,
 list.boxed-list-separate > row {
     background-color: transparent;
     border: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     box-shadow: none;
     border-radius: 0;
     margin: 0;
@@ -312,7 +316,7 @@ list.boxed-list-separate > row:last-child {
 
 list.boxed-list > row:hover,
 list.boxed-list-separate > row:hover {
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: rgba(255, 255, 255, 0.06);
 }
 
 list.boxed-list > row:selected {
@@ -327,7 +331,7 @@ row .dim-label {
 }
 
 .card {
-    background-color: #262830;
+    background-color: rgba(255, 255, 255, 0.05);
     border: none;
     border-radius: 10px;
     box-shadow: none;
@@ -356,15 +360,15 @@ switch > slider {
     box-shadow: none;
 }
 
-/* Menus and popovers: flat, no border */
+/* Menus and popovers: dark glass, no border */
 popover > contents {
-    background-color: #2a2c34;
+    background-color: rgba(22, 24, 30, 0.92);
     border-radius: 12px;
     border: none;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.40);
 }
 
 popover > arrow {
-    background-color: #2a2c34;
+    background-color: rgba(22, 24, 30, 0.92);
     border: none;
 }

@@ -3,10 +3,10 @@
  * popup are dark frosted glass. The launchpad grid sits on the wallpaper, so its labels
  * stay white. */
 
-/* Full-width bottom bar, flush to the bottom edge, iOS 26 Liquid Glass
- * (panel.js adds the background blur). */
+/* Full-width bottom bar, flush to the bottom edge, matching app window dark
+ * blurred glass (panel.js adds the same background blur as windowBlur.js). */
 #panel.kos-panel {
-    background-color: rgba(24, 28, 40, 0.48);
+    background-color: rgba(22, 24, 30, 0.76);
     border: none;
     border-radius: 0;
     box-shadow: none;
