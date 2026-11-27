@@ -49,16 +49,14 @@ function pinAiPanel(win) {
     const y = monitor.y;
     win._kosPinning = true;
     try {
-        if (win.get_maximized?.())
-            win.unmaximize(Meta.MaximizeFlags.BOTH);
         win.make_above();
         const rect = win.get_frame_rect();
         if (rect.x !== x || rect.y !== y || rect.width !== w || rect.height !== h) {
             win.move_resize_frame(false, x, y, w, h);
             win.move_frame(false, x, y);
         }
-    } catch (_e) {
-        // window gone
+    } catch (e) {
+        logError(e, 'kos-shell: pinAiPanel');
     } finally {
         win._kosPinning = false;
     }
@@ -155,6 +153,14 @@ export class KosWindows {
             this._saved[name] = wm[name];
             wm[name] = this[name].bind(this);
         }
+        this._mapId = global.window_manager.connect('map', (_wm, actor) => {
+            if (isAiPanel(actor))
+                pinAiPanel(actor.meta_window);
+        });
+        for (const actor of global.get_window_actors()) {
+            if (isAiPanel(actor))
+                pinAiPanel(actor.meta_window);
+        }
         this._winCreatedId = global.display.connect('window-created', (_d, win) => {
             if (isAiWindow(win)) {
                 GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
@@ -166,6 +172,10 @@ export class KosWindows {
     }
 
     disable() {
+        if (this._mapId) {
+            global.window_manager.disconnect(this._mapId);
+            this._mapId = 0;
+        }
         if (this._winCreatedId) {
             global.display.disconnect(this._winCreatedId);
             this._winCreatedId = 0;
