@@ -60,8 +60,8 @@ function fnv1a(str) {
     return (h >>> 0).toString(16);
 }
 
-// ~15% padding on each side of artwork that sits on the shared tile.
-const INSET = 0.70;
+// ~11% padding on each side of artwork that sits on the shared tile.
+const INSET = 0.78;
 const SQUIRCLE_N = 5;
 const MIN_EDGE_FILL = 0.55;
 const EDGE_SAMPLE_INSET = 0.03;
@@ -299,13 +299,13 @@ function applySquircleMask(pb, addGlass = false) {
         const vy = py5[y];
         const row = y * stride;
         if (addGlass) {
-            // Translucent dark frosted glass matching the window & dock palette
-            // (rgba(22, 24, 30, ~0.64-0.72)) with a subtle top glass rim.
-            const gr0 = 26 - 8 * yt;
-            const gg0 = 28 - 8 * yt;
-            const gb0 = 36 - 10 * yt;
-            const ga0 = (160 + 24 * yt) / 255;
-            const rimAlpha = 0.16 * (1 - 0.55 * yt);
+            // Frosted dark glass tile: slightly lifted above the dark dock bar
+            // so the squircle reads crisply on both the dock and wallpaper.
+            const gr0 = 42 - 18 * yt;
+            const gg0 = 46 - 19 * yt;
+            const gb0 = 58 - 23 * yt;
+            const ga0 = (184 + 20 * yt) / 255;
+            const rimAlpha = 0.24 * (1 - 0.55 * yt);
             for (let x = 0; x < w; x++) {
                 const v = vy + px5[x];
                 const m = v <= 1 ? 1 : (v >= aa ? 0 : 1 - (v - 1) * invAa);
@@ -437,8 +437,8 @@ export function squircleGIcon(gicon, iconName, size) {
     let out = null;
     try {
         if (path) {
-            const cacheKey = fnv1a(`v11|${path}|${fileMtime(path)}|${rSize}`);
-            const diskPath = GLib.build_filenamev([cacheDir(), `v11-${cacheKey}.png`]);
+            const cacheKey = fnv1a(`v12|${path}|${fileMtime(path)}|${rSize}`);
+            const diskPath = GLib.build_filenamev([cacheDir(), `v12-${cacheKey}.png`]);
             if (!validCachedPng(diskPath)) {
                 const src = loadPixbuf(path, Math.max(256, rSize * 2));
                 if (src && src.get_width() > 0 && src.get_height() > 0) {

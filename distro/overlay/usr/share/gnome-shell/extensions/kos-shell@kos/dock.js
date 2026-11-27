@@ -22,7 +22,7 @@ import {BOUNCE_MS, DOT_FADE_MS, easeOutCubic, stop, tween} from './anim.js';
 // bar width never jumps. Only the hovered icon scales up; we load the
 // texture at HOVER_PX and scale down to ICON_SIZE at rest so enlarging
 // to hover is 1:1 native resolution (never blurry).
-const ICON_SIZE = 52;
+const ICON_SIZE = 58;
 const HOVER_SCALE = 1.25;
 const HOVER_PX = Math.round(ICON_SIZE * HOVER_SCALE);
 const REST_SCALE = ICON_SIZE / HOVER_PX;
