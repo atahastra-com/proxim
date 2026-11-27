@@ -55,6 +55,36 @@
     margin: 0 3px;
 }
 
+/* Proxim AI button on the right side of the dock bar. */
+#panel.kos-panel .kos-ai-button {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 999px;
+    margin: 16px 4px;
+    padding: 0 14px;
+    min-height: 40px;
+    transition-duration: 140ms;
+}
+
+#panel.kos-panel .kos-ai-button:hover {
+    background-color: rgba(0, 129, 255, 0.28);
+    border-color: rgba(74, 163, 255, 0.45);
+}
+
+#panel.kos-panel .kos-ai-button:active {
+    background-color: rgba(0, 129, 255, 0.45);
+}
+
+.kos-ai-btn-box {
+    spacing: 8px;
+}
+
+.kos-ai-btn-label {
+    color: rgba(255, 255, 255, 0.94);
+    font-size: 13px;
+    font-weight: 600;
+}
+
 /* Strip GNOME 48's built-in inner clock pill so hovering the date/time
  * shows a single clean highlight instead of a pill nested inside a box. */
 #panel.kos-panel .panel-button.clock-display .clock,

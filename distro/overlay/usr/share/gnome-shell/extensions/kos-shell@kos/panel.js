@@ -78,6 +78,7 @@ export class KosPanel {
         this._disableHotCorners();
         this._moveDateMenuToLeft();
         this._moveQuickSettingsToLeft();
+        this._addAiButton();
         this._movePanelToBottom();
         this._applyStatusIcons();
         this._initAutoHide();
@@ -118,6 +119,7 @@ export class KosPanel {
         this._restoreStatusIcons();
         this._disableBlur();
         this._restorePopups();
+        this._removeAiButton();
         this._restoreQuickSettings();
         this._restoreDateMenu();
         this._restorePanel();
@@ -372,6 +374,66 @@ export class KosPanel {
             parent.remove_child(container);
         Main.panel._rightBox.add_child(container);
         this._movedQuickSettings = false;
+    }
+
+    // Proxim AI button on the right side of the bottom bar.
+    _addAiButton() {
+        if (this._aiButton)
+            return;
+        const box = new St.BoxLayout({
+            style_class: 'kos-ai-btn-box',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        const iconPath = this._extensionPath
+            ? `${this._extensionPath}/icons/status/proxim-ai-symbolic.svg`
+            : null;
+        const icon = new St.Icon({
+            style_class: 'kos-ai-btn-icon',
+            icon_size: 18,
+            y_align: Clutter.ActorAlign.CENTER,
+            ...(iconPath && GLib.file_test(iconPath, GLib.FileTest.EXISTS)
+                ? {gicon: new Gio.FileIcon({file: Gio.File.new_for_path(iconPath)})}
+                : {icon_name: 'starred-symbolic'}),
+        });
+        const label = new St.Label({
+            text: 'Proxim AI',
+            style_class: 'kos-ai-btn-label',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        box.add_child(icon);
+        box.add_child(label);
+
+        const btn = new St.Button({
+            style_class: 'panel-button kos-ai-button',
+            child: box,
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        btn.connect('clicked', () => {
+            try {
+                Gio.Subprocess.new(
+                    ['/usr/bin/proxim-ai', '--toggle'],
+                    Gio.SubprocessFlags.NONE
+                );
+            } catch (e) {
+                logError(e, 'kos-shell: failed to launch proxim-ai');
+            }
+        });
+        Main.panel._rightBox.add_child(btn);
+        this._aiButton = btn;
+    }
+
+    _removeAiButton() {
+        if (!this._aiButton)
+            return;
+        try {
+            this._aiButton.destroy();
+        } catch (_e) {
+            // ignore
+        }
+        this._aiButton = null;
     }
 
     // Reposition panelBox — full-width 72px bottom bar, flush to the bottom edge.

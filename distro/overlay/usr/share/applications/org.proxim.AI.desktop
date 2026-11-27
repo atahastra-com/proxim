@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Proxim AI
+Comment=AI Assistant for Proxim OS
+Exec=/usr/bin/proxim-ai
+Icon=proxim-logo
+Terminal=false
+Categories=Utility;System;
+NoDisplay=true
+StartupWMClass=org.proxim.AI

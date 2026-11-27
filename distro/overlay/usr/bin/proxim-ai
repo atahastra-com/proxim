@@ -1,0 +1,1001 @@
+#!/usr/bin/env python3
+"""Proxim AI — Native GTK4/Libadwaita dark-glass AI assistant & OS agent."""
+
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import threading
+import urllib.error
+import urllib.request
+
+import gi
+
+gi.require_version('Gtk', '4.0')
+gi.require_version('Adw', '1')
+from gi.repository import Adw, Gdk, Gio, GLib, Gtk
+
+CONFIG_PATH = os.path.expanduser('~/.config/kos/ai.json')
+
+DEFAULT_CONFIG = {
+    'provider': 'gemini',  # gemini | openai | claude | ollama
+    'api_key': '',
+    'model': 'gemini-2.5-flash',
+    'ollama_url': 'http://127.0.0.1:11434',
+    'openai_url': 'https://api.openai.com/v1/chat/completions',
+}
+
+PROVIDER_DEFAULTS = {
+    'gemini': 'gemini-2.5-flash',
+    'openai': 'gpt-4o-mini',
+    'claude': 'claude-sonnet-4-20250514',
+    'ollama': 'llama3.2',
+}
+
+SYSTEM_PROMPT = """You are Proxim AI, the built-in OS assistant for Proxim OS (by Atahastra).
+You can do almost anything the user asks on this computer using your tools:
+- open_app: launch apps (e.g. firefox, files, settings, terminal, calculator, calendar, weather, software, text editor, system monitor) or open URLs/files.
+- system_control: control volume (0-100, mute, unmute), wifi (on, off, status, list), dnd (on, off), lock, screenshot, or reboot/shutdown.
+- read_file / write_file / list_dir: read, create, edit, or inspect files and folders.
+- run_shell: run any bash command to automate tasks, inspect the system, write/run scripts, manage files, etc.
+- system_info: get CPU, memory, disk, battery, and network info.
+
+Rules:
+- Be concise, friendly, and action-oriented. When the user asks you to do something, DO IT with tools instead of only explaining how.
+- Never mention Debian, GNOME, or Linux branding unless the user specifically asks about technical internals; refer to the system as Proxim OS.
+- After running tools, briefly confirm what you did in plain language.
+"""
+
+TOOLS_SPEC = [
+    {
+        'name': 'open_app',
+        'description': 'Launch an installed application by name (e.g. firefox, files, settings, terminal, calculator, software, calendar, weather, text editor) or open a URL or file path.',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'target': {'type': 'string', 'description': 'App name, URL (https://...), or file path.'},
+            },
+            'required': ['target'],
+        },
+    },
+    {
+        'name': 'system_control',
+        'description': 'Control Proxim OS system settings.',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'action': {
+                    'type': 'string',
+                    'enum': ['volume', 'wifi', 'dnd', 'lock', 'screenshot', 'reboot', 'shutdown'],
+                    'description': 'System action to perform.',
+                },
+                'value': {
+                    'type': 'string',
+                    'description': 'Optional value: for volume (0-100, mute, unmute), for wifi (on, off, status, list), for dnd (on, off).',
+                },
+            },
+            'required': ['action'],
+        },
+    },
+    {
+        'name': 'run_shell',
+        'description': 'Execute a bash shell command on the user machine and return stdout/stderr.',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'command': {'type': 'string', 'description': 'The bash command to run.'},
+            },
+            'required': ['command'],
+        },
+    },
+    {
+        'name': 'read_file',
+        'description': 'Read text contents of a file (up to 16 KB).',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'path': {'type': 'string', 'description': 'Path to file (supports ~).'},
+            },
+            'required': ['path'],
+        },
+    },
+    {
+        'name': 'write_file',
+        'description': 'Create or overwrite a text file with content.',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'path': {'type': 'string', 'description': 'Path to file (supports ~).'},
+                'content': {'type': 'string', 'description': 'Full text content to write.'},
+            },
+            'required': ['path', 'content'],
+        },
+    },
+    {
+        'name': 'list_dir',
+        'description': 'List files and folders inside a directory.',
+        'parameters': {
+            'type': 'object',
+            'properties': {
+                'path': {'type': 'string', 'description': 'Directory path (supports ~, defaults to ~).'},
+            },
+            'required': ['path'],
+        },
+    },
+    {
+        'name': 'system_info',
+        'description': 'Return a summary of CPU, memory, disk usage, battery, and IP address.',
+        'parameters': {
+            'type': 'object',
+            'properties': {},
+        },
+    },
+]
+
+DANGEROUS_PATTERNS = [
+    r'\brm\s+-[a-zA-Z]*r[a-zA-Z]*f',
+    r'\brm\s+-[a-zA-Z]*f[a-zA-Z]*r',
+    r'\bsudo\b',
+    r'\bpkexec\b',
+    r'\bshutdown\b',
+    r'\breboot\b',
+    r'\bpoweroff\b',
+    r'\bmkfs\b',
+    r'\bdd\s+',
+    r'>\s*/dev/',
+    r'\bchmod\s+-R\b',
+    r'\bchown\s+-R\b',
+    r'\bsystemctl\s+(reboot|poweroff|halt|stop|disable)\b',
+]
+
+
+def is_destructive(tool_name, args):
+    if tool_name == 'system_control' and args.get('action') in ('reboot', 'shutdown'):
+        return True
+    if tool_name == 'run_shell':
+        cmd = str(args.get('command', ''))
+        for pat in DANGEROUS_PATTERNS:
+            if re.search(pat, cmd):
+                return True
+    return False
+
+
+def load_config():
+    cfg = dict(DEFAULT_CONFIG)
+    try:
+        if os.path.isfile(CONFIG_PATH):
+            with open(CONFIG_PATH, encoding='utf-8') as fh:
+                data = json.load(fh)
+            if isinstance(data, dict):
+                cfg.update(data)
+    except Exception:
+        pass
+    return cfg
+
+
+def save_config(cfg):
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+    with open(CONFIG_PATH, 'w', encoding='utf-8') as fh:
+        json.dump(cfg, fh, indent=2)
+    try:
+        os.chmod(CONFIG_PATH, 0o600)
+    except OSError:
+        pass
+
+
+APP_ALIASES = {
+    'firefox': 'firefox-esr.desktop',
+    'browser': 'firefox-esr.desktop',
+    'web': 'firefox-esr.desktop',
+    'files': 'org.gnome.Nautilus.desktop',
+    'file manager': 'org.gnome.Nautilus.desktop',
+    'nautilus': 'org.gnome.Nautilus.desktop',
+    'settings': 'org.gnome.Settings.desktop',
+    'terminal': 'org.gnome.Terminal.desktop',
+    'console': 'org.gnome.Terminal.desktop',
+    'calculator': 'org.gnome.Calculator.desktop',
+    'calendar': 'org.gnome.Calendar.desktop',
+    'clock': 'org.gnome.clocks.desktop',
+    'clocks': 'org.gnome.clocks.desktop',
+    'weather': 'org.gnome.Weather.desktop',
+    'camera': 'org.gnome.Snapshot.desktop',
+    'photos': 'org.gnome.Loupe.desktop',
+    'image viewer': 'org.gnome.Loupe.desktop',
+    'software': 'org.gnome.Software.desktop',
+    'store': 'org.gnome.Software.desktop',
+    'app store': 'org.gnome.Software.desktop',
+    'text editor': 'org.gnome.TextEditor.desktop',
+    'editor': 'org.gnome.TextEditor.desktop',
+    'notes': 'org.gnome.TextEditor.desktop',
+    'system monitor': 'org.gnome.SystemMonitor.desktop',
+    'monitor': 'org.gnome.SystemMonitor.desktop',
+    'videos': 'org.gnome.Totem.desktop',
+    'contacts': 'org.gnome.Contacts.desktop',
+    'disks': 'org.gnome.DiskUtility.desktop',
+}
+
+
+def execute_tool(name, args):
+    try:
+        if name == 'open_app':
+            target = str(args.get('target', '')).strip()
+            if not target:
+                return 'Error: missing target.'
+            if target.startswith(('http://', 'https://', 'mailto:')) or os.path.exists(os.path.expanduser(target)):
+                path = os.path.expanduser(target) if not target.startswith(('http://', 'https://', 'mailto:')) else target
+                subprocess.Popen(['xdg-open', path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return f'Opened {target}.'
+            low = target.lower()
+            desktop = APP_ALIASES.get(low)
+            if desktop:
+                subprocess.Popen(['gtk-launch', desktop], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return f'Launched {target} ({desktop}).'
+            # Search desktop files by name
+            for d in ('/usr/share/applications', os.path.expanduser('~/.local/share/applications')):
+                if not os.path.isdir(d):
+                    continue
+                for fn in os.listdir(d):
+                    if fn.endswith('.desktop') and low in fn.lower():
+                        subprocess.Popen(['gtk-launch', fn], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        return f'Launched {fn}.'
+            if shutil.which(low):
+                subprocess.Popen([low], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return f'Launched {low}.'
+            return f'Could not find app "{target}".'
+
+        if name == 'system_control':
+            action = str(args.get('action', '')).lower()
+            val = str(args.get('value', '')).strip().lower()
+            if action == 'volume':
+                if val in ('mute', 'off'):
+                    subprocess.run(['wpctl', 'set-mute', '@DEFAULT_AUDIO_SINK@', '1'], check=False)
+                    return 'Muted audio.'
+                if val in ('unmute', 'on'):
+                    subprocess.run(['wpctl', 'set-mute', '@DEFAULT_AUDIO_SINK@', '0'], check=False)
+                    return 'Unmuted audio.'
+                m = re.search(r'\d+', val)
+                if m:
+                    pct = max(0, min(100, int(m.group(0))))
+                    subprocess.run(['wpctl', 'set-mute', '@DEFAULT_AUDIO_SINK@', '0'], check=False)
+                    subprocess.run(['wpctl', 'set-volume', '@DEFAULT_AUDIO_SINK@', f'{pct}%'], check=False)
+                    return f'Set volume to {pct}%.'
+                out = subprocess.run(['wpctl', 'get-volume', '@DEFAULT_AUDIO_SINK@'], capture_output=True, text=True)
+                return out.stdout.strip() or 'Could not read volume.'
+            if action == 'wifi':
+                if val in ('on', 'off'):
+                    r = subprocess.run(['nmcli', 'radio', 'wifi', val], capture_output=True, text=True)
+                    return f'Wi-Fi turned {val}.' if r.returncode == 0 else (r.stderr.strip() or 'Failed.')
+                if val == 'list':
+                    r = subprocess.run(['nmcli', '-t', '-f', 'SSID,SIGNAL,SECURITY', 'dev', 'wifi', 'list'], capture_output=True, text=True)
+                    return r.stdout.strip() or 'No Wi-Fi networks found.'
+                r = subprocess.run(['nmcli', '-t', '-f', 'DEVICE,TYPE,STATE,CONNECTION', 'dev'], capture_output=True, text=True)
+                return r.stdout.strip() or 'No network status available.'
+            if action == 'dnd':
+                show = 'false' if val in ('on', 'true', 'enable', '1') else 'true'
+                subprocess.run(['gsettings', 'set', 'org.gnome.desktop.notifications', 'show-banners', show], check=False)
+                return f"Do Not Disturb {'enabled' if show == 'false' else 'disabled'}."
+            if action == 'lock':
+                subprocess.Popen(['loginctl', 'lock-session'])
+                return 'Locked the screen.'
+            if action == 'screenshot':
+                out_path = os.path.expanduser('~/Pictures/proxim-screenshot.png')
+                os.makedirs(os.path.dirname(out_path), exist_ok=True)
+                if shutil.which('gnome-screenshot'):
+                    subprocess.Popen(['gnome-screenshot', '-f', out_path])
+                    return f'Screenshot saved to {out_path}.'
+                return 'Screenshot tool not available.'
+            if action == 'reboot':
+                subprocess.Popen(['systemctl', 'reboot'])
+                return 'Rebooting Proxim OS…'
+            if action == 'shutdown':
+                subprocess.Popen(['systemctl', 'poweroff'])
+                return 'Shutting down Proxim OS…'
+            return f'Unknown system action: {action}'
+
+        if name == 'read_file':
+            p = os.path.expanduser(str(args.get('path', '')))
+            with open(p, encoding='utf-8', errors='replace') as fh:
+                data = fh.read(16384)
+            return data if data else '(empty file)'
+
+        if name == 'write_file':
+            p = os.path.expanduser(str(args.get('path', '')))
+            os.makedirs(os.path.dirname(os.path.abspath(p)), exist_ok=True)
+            with open(p, 'w', encoding='utf-8') as fh:
+                fh.write(str(args.get('content', '')))
+            return f'Wrote {p}.'
+
+        if name == 'list_dir':
+            p = os.path.expanduser(str(args.get('path', '~')) or '~')
+            entries = sorted(os.listdir(p))
+            out = []
+            for e in entries[:120]:
+                full = os.path.join(p, e)
+                out.append(e + ('/' if os.path.isdir(full) else ''))
+            return '\n'.join(out) or '(empty directory)'
+
+        if name == 'system_info':
+            parts = []
+            for label, cmd in (
+                ('Uptime', ['uptime', '-p']),
+                ('Memory', ['free', '-h']),
+                ('Disk', ['df', '-h', '/']),
+                ('IP', ['hostname', '-I']),
+            ):
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                if r.stdout.strip():
+                    parts.append(f'{label}:\n{r.stdout.strip()}')
+            return '\n\n'.join(parts)
+
+        if name == 'run_shell':
+            cmd = str(args.get('command', '')).strip()
+            if not cmd:
+                return 'Error: empty command.'
+            r = subprocess.run(
+                ['bash', '-lc', cmd],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=os.path.expanduser('~'),
+            )
+            out = (r.stdout or '') + (('\n' + r.stderr) if r.stderr else '')
+            out = out.strip()
+            if len(out) > 8000:
+                out = out[:8000] + '\n…(truncated)'
+            return f'(exit {r.returncode})\n{out}' if out else f'(exit {r.returncode})'
+
+        return f'Unknown tool: {name}'
+    except Exception as exc:
+        return f'Tool error ({name}): {exc}'
+
+
+# ---- LLM Provider Clients (stdlib urllib only) -----------------------------
+
+def http_post_json(url, payload, headers=None, timeout=60):
+    hdrs = {'Content-Type': 'application/json', 'User-Agent': 'ProximAI/1.0'}
+    if headers:
+        hdrs.update(headers)
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode('utf-8'),
+        headers=hdrs,
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as err:
+        body = err.read().decode('utf-8', errors='replace')
+        raise RuntimeError(f'HTTP {err.code}: {body[:300]}')
+
+
+def call_gemini(cfg, messages):
+    api_key = cfg.get('api_key', '').strip()
+    if not api_key:
+        raise RuntimeError('Missing Gemini API key. Click the gear icon above to add it.')
+    model = cfg.get('model') or PROVIDER_DEFAULTS['gemini']
+    url = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}'
+
+    contents = []
+    for m in messages:
+        role = 'user' if m['role'] in ('user', 'tool') else 'model'
+        parts = []
+        if m['role'] == 'tool':
+            parts.append({
+                'functionResponse': {
+                    'name': m['name'],
+                    'response': {'result': m['content']},
+                }
+            })
+        else:
+            if m.get('content'):
+                parts.append({'text': m['content']})
+            for tc in m.get('tool_calls') or []:
+                parts.append({'functionCall': {'name': tc['name'], 'args': tc['args']}})
+        if parts:
+            contents.append({'role': role, 'parts': parts})
+
+    payload = {
+        'systemInstruction': {'parts': [{'text': SYSTEM_PROMPT}]},
+        'contents': contents,
+        'tools': [{'functionDeclarations': TOOLS_SPEC}],
+    }
+    data = http_post_json(url, payload)
+    cand = (data.get('candidates') or [{}])[0]
+    parts = (cand.get('content') or {}).get('parts') or []
+    text_parts = []
+    tool_calls = []
+    for idx, p in enumerate(parts):
+        if 'text' in p:
+            text_parts.append(p['text'])
+        if 'functionCall' in p:
+            fc = p['functionCall']
+            tool_calls.append({
+                'id': f'call_{idx}',
+                'name': fc.get('name', ''),
+                'args': fc.get('args') or {},
+            })
+    return '\n'.join(text_parts).strip(), tool_calls
+
+
+def call_openai_compat(cfg, messages, is_ollama=False):
+    model = cfg.get('model') or PROVIDER_DEFAULTS['ollama' if is_ollama else 'openai']
+    if is_ollama:
+        base = (cfg.get('ollama_url') or 'http://127.0.0.1:11434').rstrip('/')
+        url = f'{base}/v1/chat/completions'
+        headers = {}
+    else:
+        api_key = cfg.get('api_key', '').strip()
+        if not api_key:
+            raise RuntimeError('Missing OpenAI API key. Click the gear icon above to add it.')
+        url = cfg.get('openai_url') or DEFAULT_CONFIG['openai_url']
+        headers = {'Authorization': f'Bearer {api_key}'}
+
+    oai_msgs = [{'role': 'system', 'content': SYSTEM_PROMPT}]
+    for m in messages:
+        if m['role'] == 'tool':
+            oai_msgs.append({
+                'role': 'tool',
+                'tool_call_id': m.get('tool_call_id', 'call_0'),
+                'content': m['content'],
+            })
+        elif m['role'] == 'assistant' and m.get('tool_calls'):
+            oai_msgs.append({
+                'role': 'assistant',
+                'content': m.get('content') or '',
+                'tool_calls': [
+                    {
+                        'id': tc['id'],
+                        'type': 'function',
+                        'function': {'name': tc['name'], 'arguments': json.dumps(tc['args'])},
+                    }
+                    for tc in m['tool_calls']
+                ],
+            })
+        else:
+            oai_msgs.append({'role': m['role'], 'content': m.get('content', '')})
+
+    tools = [{'type': 'function', 'function': t} for t in TOOLS_SPEC]
+    payload = {'model': model, 'messages': oai_msgs, 'tools': tools}
+    data = http_post_json(url, payload, headers=headers)
+    msg = ((data.get('choices') or [{}])[0]).get('message') or {}
+    text = (msg.get('content') or '').strip()
+    tool_calls = []
+    for idx, tc in enumerate(msg.get('tool_calls') or []):
+        fn = tc.get('function') or {}
+        raw_args = fn.get('arguments') or '{}'
+        try:
+            parsed = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+        except Exception:
+            parsed = {}
+        tool_calls.append({
+            'id': tc.get('id') or f'call_{idx}',
+            'name': fn.get('name', ''),
+            'args': parsed,
+        })
+    return text, tool_calls
+
+
+def call_claude(cfg, messages):
+    api_key = cfg.get('api_key', '').strip()
+    if not api_key:
+        raise RuntimeError('Missing Claude API key. Click the gear icon above to add it.')
+    model = cfg.get('model') or PROVIDER_DEFAULTS['claude']
+    url = 'https://api.anthropic.com/v1/messages'
+    headers = {
+        'x-api-key': api_key,
+        'anthropic-version': '2023-06-01',
+    }
+    anth_msgs = []
+    for m in messages:
+        if m['role'] == 'tool':
+            anth_msgs.append({
+                'role': 'user',
+                'content': [{
+                    'type': 'tool_result',
+                    'tool_use_id': m.get('tool_call_id', 'call_0'),
+                    'content': m['content'],
+                }],
+            })
+        elif m['role'] == 'assistant' and m.get('tool_calls'):
+            blocks = []
+            if m.get('content'):
+                blocks.append({'type': 'text', 'text': m['content']})
+            for tc in m['tool_calls']:
+                blocks.append({'type': 'tool_use', 'id': tc['id'], 'name': tc['name'], 'input': tc['args']})
+            anth_msgs.append({'role': 'assistant', 'content': blocks})
+        else:
+            anth_msgs.append({'role': m['role'], 'content': m.get('content', '')})
+
+    tools = [
+        {'name': t['name'], 'description': t['description'], 'input_schema': t['parameters']}
+        for t in TOOLS_SPEC
+    ]
+    payload = {
+        'model': model,
+        'max_tokens': 2048,
+        'system': SYSTEM_PROMPT,
+        'messages': anth_msgs,
+        'tools': tools,
+    }
+    data = http_post_json(url, payload, headers=headers)
+    text_parts = []
+    tool_calls = []
+    for blk in data.get('content') or []:
+        if blk.get('type') == 'text':
+            text_parts.append(blk.get('text', ''))
+        elif blk.get('type') == 'tool_use':
+            tool_calls.append({
+                'id': blk.get('id', 'call_0'),
+                'name': blk.get('name', ''),
+                'args': blk.get('input') or {},
+            })
+    return '\n'.join(text_parts).strip(), tool_calls
+
+
+def call_llm(cfg, messages):
+    prov = (cfg.get('provider') or 'gemini').lower()
+    if prov == 'gemini':
+        return call_gemini(cfg, messages)
+    if prov == 'claude':
+        return call_claude(cfg, messages)
+    if prov == 'ollama':
+        return call_openai_compat(cfg, messages, is_ollama=True)
+    return call_openai_compat(cfg, messages, is_ollama=False)
+
+
+# ---- GTK4 / Libadwaita Dark-Glass Chat UI ----------------------------------
+
+APP_CSS = """
+.proxim-ai-user {
+    background-color: #0081ff;
+    color: #ffffff;
+    border-radius: 16px 16px 4px 16px;
+    padding: 10px 14px;
+}
+.proxim-ai-bot {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.94);
+    border-radius: 16px 16px 16px 4px;
+    padding: 10px 14px;
+}
+.proxim-ai-tool {
+    background-color: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.72);
+    border-radius: 10px;
+    padding: 6px 12px;
+    font-size: 12px;
+}
+.proxim-ai-confirm {
+    background-color: rgba(255, 180, 60, 0.14);
+    border: 1px solid rgba(255, 180, 60, 0.32);
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+.proxim-ai-chip {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.86);
+}
+.proxim-ai-chip:hover {
+    background-color: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+}
+.proxim-ai-input-bar {
+    background-color: rgba(255, 255, 255, 0.07);
+    border-radius: 999px;
+    padding: 4px 6px 4px 16px;
+}
+.proxim-ai-entry {
+    background: none;
+    border: none;
+    box-shadow: none;
+    color: #ffffff;
+    min-height: 34px;
+}
+.proxim-ai-send {
+    background-color: #0081ff;
+    color: #ffffff;
+    border-radius: 999px;
+    min-width: 34px;
+    min-height: 34px;
+    padding: 0;
+}
+.proxim-ai-send:hover {
+    background-color: #1a8fff;
+}
+"""
+
+
+class ProximAIWindow(Adw.ApplicationWindow):
+    def __init__(self, app):
+        super().__init__(application=app, title='Proxim AI')
+        self.set_default_size(460, 640)
+        self.cfg = load_config()
+        self.messages = []
+        self._busy = False
+        self._cancel_flag = False
+
+        provider = Gtk.CssProvider()
+        provider.load_from_string(APP_CSS)
+        Gtk.StyleContext.add_provider_for_display(
+            Gdk.Display.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        )
+
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+
+        new_btn = Gtk.Button(icon_name='document-new-symbolic')
+        new_btn.set_tooltip_text('New Chat')
+        new_btn.connect('clicked', lambda _b: self._clear_chat())
+        header.pack_start(new_btn)
+
+        settings_btn = Gtk.Button(icon_name='emblem-system-symbolic')
+        settings_btn.set_tooltip_text('AI Model & API Key')
+        settings_btn.connect('clicked', lambda _b: self._open_settings())
+        header.pack_end(settings_btn)
+
+        toolbar.add_top_bar(header)
+
+        root_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+
+        self.scroll = Gtk.ScrolledWindow(vexpand=True)
+        self.scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+
+        self.chat_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        self.chat_box.set_margin_top(12)
+        self.chat_box.set_margin_bottom(12)
+        self.chat_box.set_margin_start(16)
+        self.chat_box.set_margin_end(16)
+        self.scroll.set_child(self.chat_box)
+        root_box.append(self.scroll)
+
+        # Bottom input bar
+        bottom = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        bottom.set_margin_top(6)
+        bottom.set_margin_bottom(14)
+        bottom.set_margin_start(14)
+        bottom.set_margin_end(14)
+        bottom.add_css_class('proxim-ai-input-bar')
+
+        self.entry = Gtk.Entry(hexpand=True)
+        self.entry.set_placeholder_text('Ask Proxim AI anything…')
+        self.entry.add_css_class('proxim-ai-entry')
+        self.entry.connect('activate', lambda _e: self._on_send())
+        bottom.append(self.entry)
+
+        self.spinner = Gtk.Spinner()
+        self.spinner.set_visible(False)
+        bottom.append(self.spinner)
+
+        self.send_btn = Gtk.Button(icon_name='go-up-symbolic')
+        self.send_btn.add_css_class('proxim-ai-send')
+        self.send_btn.set_tooltip_text('Send')
+        self.send_btn.connect('clicked', lambda _b: self._on_send())
+        bottom.append(self.send_btn)
+
+        root_box.append(bottom)
+        toolbar.set_content(root_box)
+        self.set_content(toolbar)
+
+        self._show_welcome()
+        self.entry.grab_focus()
+
+    def _scroll_bottom(self):
+        def _do():
+            adj = self.scroll.get_vadjustment()
+            adj.set_value(adj.get_upper())
+            return False
+        GLib.idle_add(_do)
+
+    def _clear_chat(self):
+        self._cancel_flag = True
+        self.messages.clear()
+        child = self.chat_box.get_first_child()
+        while child:
+            nxt = child.get_next_sibling()
+            self.chat_box.remove(child)
+            child = nxt
+        self._show_welcome()
+        self.entry.grab_focus()
+
+    def _show_welcome(self):
+        self.welcome_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
+        self.welcome_box.set_valign(Gtk.Align.CENTER)
+        self.welcome_box.set_vexpand(True)
+        self.welcome_box.set_margin_top(48)
+
+        logo = Gtk.Image.new_from_icon_name('proxim-logo')
+        logo.set_pixel_size(52)
+        self.welcome_box.append(logo)
+
+        title = Gtk.Label(label='Proxim AI')
+        title.add_css_class('title-2')
+        self.welcome_box.append(title)
+
+        sub = Gtk.Label(
+            label='Ask anything or tell me to do it on your OS.',
+            wrap=True,
+            justify=Gtk.Justification.CENTER,
+        )
+        sub.add_css_class('dim-label')
+        self.welcome_box.append(sub)
+
+        chips = Gtk.FlowBox()
+        chips.set_selection_mode(Gtk.SelectionMode.NONE)
+        chips.set_halign(Gtk.Align.CENTER)
+        chips.set_max_children_per_line(2)
+        chips.set_row_spacing(8)
+        chips.set_column_spacing(8)
+        chips.set_margin_top(10)
+
+        for prompt in (
+            'Open Firefox',
+            'Check disk & RAM',
+            'Set volume to 50%',
+            'List my Desktop files',
+        ):
+            btn = Gtk.Button(label=prompt)
+            btn.add_css_class('proxim-ai-chip')
+            btn.add_css_class('flat')
+            btn.connect('clicked', lambda _b, p=prompt: self._send_text(p))
+            chips.append(btn)
+
+        self.welcome_box.append(chips)
+
+        if self.cfg.get('provider') != 'ollama' and not self.cfg.get('api_key'):
+            setup_btn = Gtk.Button(label='Set up API Key or Ollama')
+            setup_btn.add_css_class('pill')
+            setup_btn.add_css_class('suggested-action')
+            setup_btn.set_halign(Gtk.Align.CENTER)
+            setup_btn.set_margin_top(12)
+            setup_btn.connect('clicked', lambda _b: self._open_settings())
+            self.welcome_box.append(setup_btn)
+
+        self.chat_box.append(self.welcome_box)
+
+    def _hide_welcome(self):
+        if getattr(self, 'welcome_box', None) and self.welcome_box.get_parent() == self.chat_box:
+            self.chat_box.remove(self.welcome_box)
+            self.welcome_box = None
+
+    def _add_bubble(self, text, is_user=False):
+        self._hide_welcome()
+        lbl = Gtk.Label(label=text, xalign=0, wrap=True, selectable=True)
+        lbl.set_max_width_chars(46)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        box.set_halign(Gtk.Align.END if is_user else Gtk.Align.START)
+        box.add_css_class('proxim-ai-user' if is_user else 'proxim-ai-bot')
+        box.append(lbl)
+        self.chat_box.append(box)
+        self._scroll_bottom()
+        return lbl
+
+    def _add_tool_pill(self, text):
+        self._hide_welcome()
+        lbl = Gtk.Label(label=text, xalign=0, wrap=True)
+        lbl.set_max_width_chars(52)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        box.set_halign(Gtk.Align.START)
+        box.add_css_class('proxim-ai-tool')
+        box.append(lbl)
+        self.chat_box.append(box)
+        self._scroll_bottom()
+        return lbl
+
+    def _ask_confirmation(self, summary):
+        ev = threading.Event()
+        result = {'allow': False}
+
+        def _show():
+            card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+            card.add_css_class('proxim-ai-confirm')
+
+            lbl = Gtk.Label(label=f'Confirm action:\n{summary}', xalign=0, wrap=True)
+            card.append(lbl)
+
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+            row.set_halign(Gtk.Align.END)
+
+            deny_btn = Gtk.Button(label='Deny')
+            deny_btn.add_css_class('pill')
+            allow_btn = Gtk.Button(label='Allow')
+            allow_btn.add_css_class('pill')
+            allow_btn.add_css_class('suggested-action')
+
+            def decide(ok):
+                result['allow'] = ok
+                deny_btn.set_sensitive(False)
+                allow_btn.set_sensitive(False)
+                lbl.set_text(f"{'Allowed' if ok else 'Denied'}: {summary}")
+                ev.set()
+
+            deny_btn.connect('clicked', lambda _b: decide(False))
+            allow_btn.connect('clicked', lambda _b: decide(True))
+            row.append(deny_btn)
+            row.append(allow_btn)
+            card.append(row)
+            self.chat_box.append(card)
+            self._scroll_bottom()
+            return False
+
+        GLib.idle_add(_show)
+        ev.wait()
+        return result['allow']
+
+    def _set_busy(self, busy):
+        self._busy = busy
+        self.spinner.set_visible(busy)
+        if busy:
+            self.spinner.start()
+        else:
+            self.spinner.stop()
+        self.send_btn.set_sensitive(not busy)
+        self.entry.set_sensitive(not busy)
+        if not busy:
+            self.entry.grab_focus()
+
+    def _on_send(self):
+        text = self.entry.get_text().strip()
+        if not text or self._busy:
+            return
+        self.entry.set_text('')
+        self._send_text(text)
+
+    def _send_text(self, text):
+        if self._busy:
+            return
+        self._cancel_flag = False
+        self._add_bubble(text, is_user=True)
+        self.messages.append({'role': 'user', 'content': text})
+        self._set_busy(True)
+        threading.Thread(target=self._agent_loop, daemon=True).start()
+
+    def _agent_loop(self):
+        try:
+            for _step in range(8):
+                if self._cancel_flag:
+                    break
+                text, tool_calls = call_llm(self.cfg, self.messages)
+                self.messages.append({
+                    'role': 'assistant',
+                    'content': text,
+                    'tool_calls': tool_calls,
+                })
+                if text:
+                    GLib.idle_add(self._add_bubble, text, False)
+                if not tool_calls:
+                    break
+                for tc in tool_calls:
+                    if self._cancel_flag:
+                        break
+                    tname = tc['name']
+                    targs = tc['args']
+                    desc = f"{tname}({', '.join(f'{k}={v}' for k, v in targs.items())})"
+                    if len(desc) > 120:
+                        desc = desc[:117] + '…'
+
+                    if is_destructive(tname, targs):
+                        allowed = self._ask_confirmation(desc)
+                        if not allowed:
+                            self.messages.append({
+                                'role': 'tool',
+                                'tool_call_id': tc['id'],
+                                'name': tname,
+                                'content': 'User denied this action.',
+                            })
+                            continue
+
+                    GLib.idle_add(self._add_tool_pill, f'⚡ {desc}')
+                    out = execute_tool(tname, targs)
+                    self.messages.append({
+                        'role': 'tool',
+                        'tool_call_id': tc['id'],
+                        'name': tname,
+                        'content': out,
+                    })
+        except Exception as exc:
+            GLib.idle_add(self._add_bubble, f'Error: {exc}', False)
+        finally:
+            GLib.idle_add(self._set_busy, False)
+
+    def _open_settings(self):
+        dlg = Adw.Dialog(title='Proxim AI Settings')
+        dlg.set_content_width(400)
+        dlg.set_content_height(360)
+
+        tv = Adw.ToolbarView()
+        hb = Adw.HeaderBar()
+        tv.add_top_bar(hb)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        box.set_margin_top(16)
+        box.set_margin_bottom(20)
+        box.set_margin_start(18)
+        box.set_margin_end(18)
+
+        providers = ['gemini', 'openai', 'claude', 'ollama']
+        labels = ['Google Gemini', 'OpenAI (ChatGPT)', 'Anthropic Claude', 'Local Ollama (Offline)']
+
+        prov_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        prov_row.append(Gtk.Label(label='Provider', xalign=0))
+        dropdown = Gtk.DropDown.new_from_strings(labels)
+        cur_idx = providers.index(self.cfg.get('provider', 'gemini')) if self.cfg.get('provider') in providers else 0
+        dropdown.set_selected(cur_idx)
+        prov_row.append(dropdown)
+        box.append(prov_row)
+
+        model_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        model_row.append(Gtk.Label(label='Model', xalign=0))
+        model_entry = Gtk.Entry(text=self.cfg.get('model', ''))
+        model_row.append(model_entry)
+        box.append(model_row)
+
+        key_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        key_row.append(Gtk.Label(label='API Key (not needed for Ollama)', xalign=0))
+        key_entry = Gtk.PasswordEntry()
+        key_entry.set_show_peek_icon(True)
+        key_entry.set_text(self.cfg.get('api_key', ''))
+        key_row.append(key_entry)
+        box.append(key_row)
+
+        url_row = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        url_row.append(Gtk.Label(label='Ollama URL (only for Local Ollama)', xalign=0))
+        url_entry = Gtk.Entry(text=self.cfg.get('ollama_url', 'http://127.0.0.1:11434'))
+        url_row.append(url_entry)
+        box.append(url_row)
+
+        def on_prov_changed(_dd, _pspec):
+            p = providers[dropdown.get_selected()]
+            model_entry.set_text(PROVIDER_DEFAULTS[p])
+
+        dropdown.connect('notify::selected', on_prov_changed)
+
+        save_btn = Gtk.Button(label='Save')
+        save_btn.add_css_class('suggested-action')
+        save_btn.add_css_class('pill')
+        save_btn.set_halign(Gtk.Align.END)
+
+        def on_save(_b):
+            self.cfg['provider'] = providers[dropdown.get_selected()]
+            self.cfg['model'] = model_entry.get_text().strip() or PROVIDER_DEFAULTS[self.cfg['provider']]
+            self.cfg['api_key'] = key_entry.get_text().strip()
+            self.cfg['ollama_url'] = url_entry.get_text().strip() or 'http://127.0.0.1:11434'
+            save_config(self.cfg)
+            dlg.close()
+
+        save_btn.connect('clicked', on_save)
+        box.append(save_btn)
+
+        tv.set_content(box)
+        dlg.set_child(tv)
+        dlg.present(self)
+
+
+class ProximAIApp(Adw.Application):
+    def __init__(self):
+        super().__init__(application_id='org.proxim.AI', flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
+        self.win = None
+
+    def do_activate(self):
+        if not self.win:
+            self.win = ProximAIWindow(self)
+        self.win.present()
+
+    def do_command_line(self, command_line):
+        args = command_line.get_arguments()[1:]
+        if '--toggle' in args and self.win and self.win.is_visible() and self.win.is_active():
+            self.win.close()
+            return 0
+        self.activate()
+        return 0
+
+
+if __name__ == '__main__':
+    app = ProximAIApp()
+    sys.exit(app.run(sys.argv))
