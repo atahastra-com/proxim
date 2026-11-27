@@ -224,6 +224,14 @@ APP_ALIASES = {
 }
 
 
+def _launch_desktop(desktop_id):
+    info = Gio.DesktopAppInfo.new(desktop_id)
+    if info:
+        info.launch([], None)
+        return True
+    return False
+
+
 def execute_tool(name, args):
     try:
         if name == 'open_app':
@@ -232,24 +240,32 @@ def execute_tool(name, args):
                 return 'Error: missing target.'
             if target.startswith(('http://', 'https://', 'mailto:')) or os.path.exists(os.path.expanduser(target)):
                 path = os.path.expanduser(target) if not target.startswith(('http://', 'https://', 'mailto:')) else target
-                subprocess.Popen(['xdg-open', path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                Gio.AppInfo.launch_default_for_uri(
+                    path if '://' in path else GLib.filename_to_uri(os.path.abspath(path), None),
+                    None,
+                )
                 return f'Opened {target}.'
             low = target.lower()
             desktop = APP_ALIASES.get(low)
-            if desktop:
-                subprocess.Popen(['gtk-launch', desktop], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return f'Launched {target} ({desktop}).'
-            # Search desktop files by name
-            for d in ('/usr/share/applications', os.path.expanduser('~/.local/share/applications')):
-                if not os.path.isdir(d):
+            if desktop and _launch_desktop(desktop):
+                return f'Launched {target}.'
+            # Search all installed desktop apps by display name, executable, or id
+            for info in Gio.AppInfo.get_all():
+                if not info.should_show():
                     continue
-                for fn in os.listdir(d):
-                    if fn.endswith('.desktop') and low in fn.lower():
-                        subprocess.Popen(['gtk-launch', fn], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                        return f'Launched {fn}.'
-            if shutil.which(low):
-                subprocess.Popen([low], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                return f'Launched {low}.'
+                hay = ' '.join(filter(None, [
+                    info.get_name(),
+                    info.get_display_name(),
+                    info.get_id(),
+                    info.get_executable(),
+                ])).lower()
+                if low in hay:
+                    info.launch([], None)
+                    return f'Launched {info.get_display_name() or target}.'
+            for bin_name in (low, f'{low}-esr'):
+                if shutil.which(bin_name):
+                    subprocess.Popen([bin_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return f'Launched {bin_name}.'
             return f'Could not find app "{target}".'
 
         if name == 'system_control':
@@ -884,15 +900,26 @@ class ProximAIWindow(Adw.ApplicationWindow):
 
     def _add_bubble(self, text, is_user=False):
         self._hide_welcome()
-        lbl = Gtk.Label(label=text, xalign=0, wrap=True, selectable=True)
+        lbl = Gtk.Label(xalign=0, wrap=True, selectable=True)
         lbl.set_max_width_chars(46)
+        if is_user:
+            lbl.set_text(text)
+        else:
+            # Render simple **bold** and `code` via safe escaped Pango markup.
+            esc = GLib.markup_escape_text(text)
+            esc = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', esc)
+            esc = re.sub(r'`([^`]+)`', r'<tt>\1</tt>', esc)
+            try:
+                lbl.set_markup(esc)
+            except Exception:
+                lbl.set_text(text)
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         box.set_halign(Gtk.Align.END if is_user else Gtk.Align.START)
         box.add_css_class('proxim-ai-user' if is_user else 'proxim-ai-bot')
         box.append(lbl)
         self.chat_box.append(box)
         self._scroll_bottom()
-        return lbl
+        return False
 
     def _add_tool_pill(self, text):
         self._hide_welcome()
@@ -904,7 +931,7 @@ class ProximAIWindow(Adw.ApplicationWindow):
         box.append(lbl)
         self.chat_box.append(box)
         self._scroll_bottom()
-        return lbl
+        return False
 
     def _ask_confirmation(self, summary):
         ev = threading.Event()
@@ -957,6 +984,7 @@ class ProximAIWindow(Adw.ApplicationWindow):
         self.entry.set_sensitive(not busy)
         if not busy:
             self.entry.grab_focus()
+        return False
 
     def _on_send(self):
         text = self.entry.get_text().strip()
