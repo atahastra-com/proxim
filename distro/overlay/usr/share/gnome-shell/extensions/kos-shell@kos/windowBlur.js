@@ -157,7 +157,8 @@ export class KosWindowBlur {
 
         const {scaleFactor} = St.ThemeContext.get_for_stage(global.stage);
         const square = Boolean(win.get_maximized()) ||
-            win.get_gtk_application_id?.() === 'org.proxim.AI';
+            win.get_gtk_application_id?.() === 'org.proxim.AI' ||
+            win.get_wm_class?.() === 'org.proxim.AI';
         const r = square ? 0 : Math.min(Math.round(CORNER * scaleFactor),
             Math.floor(w / 2), Math.floor(h / 2));
 

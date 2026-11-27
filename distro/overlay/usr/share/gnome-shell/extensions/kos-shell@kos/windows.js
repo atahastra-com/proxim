@@ -4,6 +4,7 @@
 // Main.wm and tween opacity/scale/translation ourselves. Only NORMAL
 // and dialog windows are animated; menus and override-redirect stay snap.
 
+import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 
@@ -19,41 +20,76 @@ import {PANEL_HEIGHT} from './panel.js';
 const AI_APP_ID = 'org.proxim.AI';
 const AI_PANEL_WIDTH = 400;
 
-function isAiPanel(actor) {
-    try {
-        return actor?.meta_window?.get_gtk_application_id?.() === AI_APP_ID;
-    } catch (_e) {
+function isAiWindow(win) {
+    if (!win)
         return false;
-    }
+    try {
+        if (win.get_gtk_application_id?.() === AI_APP_ID)
+            return true;
+        if (win.get_wm_class?.() === AI_APP_ID)
+            return true;
+        if (win.get_title?.() === 'Proxim AI')
+            return true;
+    } catch (_e) {}
+    return false;
+}
+
+function isAiPanel(actor) {
+    return isAiWindow(actor?.meta_window);
 }
 
 function pinAiPanel(win) {
     const monitor = Main.layoutManager.primaryMonitor;
-    if (!win || !monitor)
+    if (!win || !monitor || win._kosPinning)
         return;
     // Flush right-edge side panel from top of screen down to the dock bar.
     const w = Math.min(AI_PANEL_WIDTH, Math.max(320, Math.round(monitor.width * 0.24)));
     const h = Math.max(360, monitor.height - PANEL_HEIGHT);
     const x = monitor.x + monitor.width - w;
     const y = monitor.y;
+    win._kosPinning = true;
     try {
+        if (win.get_maximized?.())
+            win.unmaximize(Meta.MaximizeFlags.BOTH);
         win.make_above();
         const rect = win.get_frame_rect();
-        if (rect.x !== x || rect.y !== y || rect.width !== w || rect.height !== h)
-            win.move_resize_frame(true, x, y, w, h);
+        if (rect.x !== x || rect.y !== y || rect.width !== w || rect.height !== h) {
+            win.move_resize_frame(false, x, y, w, h);
+            win.move_frame(false, x, y);
+        }
     } catch (_e) {
         // window gone
+    } finally {
+        win._kosPinning = false;
     }
     if (!win._kosAiPinned) {
         win._kosAiPinned = true;
-        const posId = win.connect('position-changed', () => pinAiPanel(win));
-        const sizeId = win.connect('size-changed', () => pinAiPanel(win));
+        const schedulePin = () => {
+            if (win._kosPinIdle)
+                return;
+            win._kosPinIdle = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                win._kosPinIdle = 0;
+                pinAiPanel(win);
+                return GLib.SOURCE_REMOVE;
+            });
+        };
+        const posId = win.connect('position-changed', schedulePin);
+        const sizeId = win.connect('size-changed', schedulePin);
         const unmanId = win.connect('unmanaged', () => {
+            if (win._kosPinIdle) {
+                GLib.source_remove(win._kosPinIdle);
+                win._kosPinIdle = 0;
+            }
             try {
                 win.disconnect(posId);
                 win.disconnect(sizeId);
                 win.disconnect(unmanId);
             } catch (_e) {}
+        });
+        // Re-apply once after Wayland's initial configure commit settles.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
+            pinAiPanel(win);
+            return GLib.SOURCE_REMOVE;
         });
     }
 }
@@ -119,9 +155,21 @@ export class KosWindows {
             this._saved[name] = wm[name];
             wm[name] = this[name].bind(this);
         }
+        this._winCreatedId = global.display.connect('window-created', (_d, win) => {
+            if (isAiWindow(win)) {
+                GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                    pinAiPanel(win);
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
+        });
     }
 
     disable() {
+        if (this._winCreatedId) {
+            global.display.disconnect(this._winCreatedId);
+            this._winCreatedId = 0;
+        }
         const wm = this._wm;
         if (wm && this._saved) {
             for (const [name, fn] of Object.entries(this._saved)) {
