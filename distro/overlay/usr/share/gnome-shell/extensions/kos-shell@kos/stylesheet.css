@@ -343,7 +343,7 @@
 .datemenu-popover,
 .quick-settings.kos-cc {
     background-color: rgba(22, 24, 30, 0.76);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     box-shadow: none;
 }
 
@@ -561,21 +561,20 @@
 .quick-settings.kos-cc {
     background-color: rgba(22, 24, 30, 0.76);
     color: rgba(255, 255, 255, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 18px;
     box-shadow: none;
-    padding: 16px;
+    padding: 14px;
 }
 
-/* Strict grid, 372px: 4 x 84px or 3 x 116px columns, 12px gaps both ways;
-   tiles, slider cards and the bottom row all share the same outer edges. */
+/* Clean compact grid, 348px: 4 x 79.5px or 3 x 109px columns, 10px gaps. */
 .kos-cc .quick-settings-grid {
-    width: 372px;
-    spacing-rows: 12px;
-    spacing-columns: 12px;
+    width: 348px;
+    spacing-rows: 10px;
+    spacing-columns: 10px;
 }
 
-/* Base for every tile: translucent gray rounded rect, white text. */
+/* Base for every tile: soft translucent glass, no borders. */
 .kos-cc .quick-toggle,
 .kos-cc .quick-toggle:ltr,
 .kos-cc .quick-toggle:rtl,
@@ -585,16 +584,17 @@
 .kos-cc .quick-toggle-menu-button:rtl {
     min-width: 0;
     max-width: none;
-    background-color: rgba(255, 255, 255, 0.07);
-    color: rgba(255, 255, 255, 0.92);
+    background-color: rgba(255, 255, 255, 0.055);
+    color: rgba(255, 255, 255, 0.86);
     border: none;
     box-shadow: none;
-    border-radius: 12px;
+    border-radius: 14px;
 }
 
 .kos-cc .quick-toggle:hover,
 .kos-cc .quick-toggle-menu-button:hover {
-    background-color: rgba(255, 255, 255, 0.13);
+    background-color: rgba(255, 255, 255, 0.11);
+    color: #ffffff;
 }
 
 .kos-cc .quick-toggle-has-menu {
@@ -606,33 +606,39 @@
     background-color: transparent;
 }
 
-/* Tiles: all identical, 72px tall, Liquid Glass specular rim. */
+/* Tiles: compact 64px frosted glass tiles. */
 .kos-cc .kos-cc-small.quick-toggle,
 .kos-cc .kos-cc-small.quick-toggle:ltr,
 .kos-cc .kos-cc-small.quick-toggle:rtl,
 .kos-cc .kos-cc-small .quick-toggle,
 .kos-cc .kos-cc-small .quick-toggle:ltr,
 .kos-cc .kos-cc-small .quick-toggle:rtl {
-    min-height: 72px;
+    min-height: 64px;
     padding: 0;
-    border-radius: 12px;
-    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    background-color: rgba(255, 255, 255, 0.055);
     border: none;
     box-shadow: none;
-    color: rgba(255, 255, 255, 0.92);
+    color: rgba(255, 255, 255, 0.86);
 }
 
 .kos-cc .kos-cc-small.quick-toggle:hover,
 .kos-cc .kos-cc-small .quick-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.14);
+    background-color: rgba(255, 255, 255, 0.11);
+    color: #ffffff;
 }
 
 .kos-cc .kos-cc-small.quick-toggle:checked,
 .kos-cc .kos-cc-small .quick-toggle:checked {
-    background-color: #0081ff;
+    background-color: rgba(0, 129, 255, 0.88);
     border: none;
     box-shadow: none;
     color: #ffffff;
+}
+
+.kos-cc .kos-cc-small.quick-toggle:checked:hover,
+.kos-cc .kos-cc-small .quick-toggle:checked:hover {
+    background-color: rgba(0, 129, 255, 0.96);
 }
 
 .kos-cc .kos-cc-small.quick-toggle > StBoxLayout,
@@ -642,28 +648,28 @@
 .kos-cc .kos-cc-small .quick-toggle:ltr > StBoxLayout,
 .kos-cc .kos-cc-small .quick-toggle:rtl > StBoxLayout {
     /* icon + label block centered both ways (quickPanel.js y_align) */
-    padding: 0 8px;
-    spacing: 8px;
+    padding: 0 6px;
+    spacing: 6px;
 }
 
 .kos-cc .kos-cc-small .quick-toggle-icon {
-    icon-size: 20px;
+    icon-size: 18px;
     padding: 0;
     margin: 0;
 }
 
 .kos-cc .kos-cc-small .quick-toggle-title {
     font-size: 11px;
-    font-weight: normal;
+    font-weight: 500;
 }
 
-/* Sliders: one translucent dark card each, light filled track, white round knob. */
+/* Sliders: slim frosted glass card, clean blue track, small white knob, boxless icons. */
 .kos-cc .kos-cc-card {
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(255, 255, 255, 0.055);
     border: none;
     box-shadow: none;
-    border-radius: 12px;
-    padding: 8px 12px;
+    border-radius: 14px;
+    padding: 6px 12px;
 }
 
 .kos-cc .kos-cc-card > StBoxLayout {
@@ -680,58 +686,55 @@
 .kos-cc .kos-cc-card .slider,
 .kos-cc .kos-cc-card .slider:hover {
     color: #ffffff;
-    -barlevel-height: 6px;
-    -barlevel-background-color: rgba(255, 255, 255, 0.17);
-    -barlevel-active-background-color: rgba(255, 255, 255, 0.85);
-    -slider-handle-radius: 10px;
-    -slider-handle-border-width: 1px;
-    -slider-handle-border-color: rgba(0, 0, 0, 0.35);
+    -barlevel-height: 4px;
+    -barlevel-background-color: rgba(255, 255, 255, 0.14);
+    -barlevel-active-background-color: #0081ff;
+    -slider-handle-radius: 7px;
+    -slider-handle-border-width: 0;
+    -slider-handle-border-color: transparent;
 }
 
-.kos-cc .kos-cc-card .icon-button {
+.kos-cc .kos-cc-card .icon-button,
+.kos-cc .kos-cc-card .kos-cc-card-button {
     background-color: transparent;
-    color: rgba(255, 255, 255, 0.88);
+    color: rgba(255, 255, 255, 0.78);
     border-radius: 8px;
     padding: 6px;
 }
 
-.kos-cc .kos-cc-card .kos-cc-card-button {
-    background-color: rgba(255, 255, 255, 0.08);
+.kos-cc .kos-cc-card .icon-button:hover,
+.kos-cc .kos-cc-card .kos-cc-card-button:hover {
+    background-color: rgba(255, 255, 255, 0.10);
+    color: #ffffff;
 }
 
-.kos-cc .kos-cc-card .icon-button:hover {
-    background-color: rgba(255, 255, 255, 0.14);
-}
-
-/* Bottom row: plain icons, gear left, lock + power right. */
+/* Bottom row: plain minimal icons, gear left, lock + power right. */
 .kos-cc .kos-cc-system {
-    /* 10px + the buttons' 8px = icons 18px in from the grid edge, the same
-       column as the slider-card icons (card 12px + button 6px). 4px on top
-       = glyphs 24px below the card and 24px above the popup edge. */
-    padding: 4px 10px 0 10px;
+    padding: 2px 6px 0 6px;
     margin: 0;
 }
 
 .kos-cc .kos-cc-system .icon-button,
 .kos-cc .kos-cc-system .button {
     background-color: transparent;
-    color: rgba(255, 255, 255, 0.88);
+    color: rgba(255, 255, 255, 0.78);
     border: none;
     box-shadow: none;
     border-radius: 10px;
-    padding: 8px;
+    padding: 7px;
 }
 
 .kos-cc .kos-cc-system .icon-button:hover,
 .kos-cc .kos-cc-system .button:hover {
-    background-color: rgba(255, 255, 255, 0.11);
+    background-color: rgba(255, 255, 255, 0.10);
+    color: #ffffff;
 }
 
-/* Submenus that open from a tile chevron (Wi-Fi list, outputs, ...). */
+/* Submenus that open from a tile (Wi-Fi list, outputs, ...). */
 .quick-toggle-menu {
-    background-color: rgba(34, 38, 52, 0.78);
+    background-color: rgba(22, 24, 30, 0.88);
     color: rgba(255, 255, 255, 0.94);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 14px;
     box-shadow: none;
 }
