@@ -563,6 +563,9 @@ def call_gemini(cfg, messages):
                 parts.append({
                     'inlineData': {'mimeType': 'image/png', 'data': m['image_b64']}
                 })
+            if contents and contents[-1]['role'] == 'user' and 'functionResponse' in (contents[-1]['parts'][0] if contents[-1]['parts'] else {}):
+                contents[-1]['parts'].extend(parts)
+                continue
         else:
             if m.get('content'):
                 parts.append({'text': m['content']})
@@ -687,14 +690,15 @@ def call_claude(cfg, messages):
                     'type': 'image',
                     'source': {'type': 'base64', 'media_type': 'image/png', 'data': m['image_b64']},
                 })
-            anth_msgs.append({
-                'role': 'user',
-                'content': [{
-                    'type': 'tool_result',
-                    'tool_use_id': m.get('tool_call_id', 'call_0'),
-                    'content': tr_content,
-                }],
-            })
+            tr_block = {
+                'type': 'tool_result',
+                'tool_use_id': m.get('tool_call_id', 'call_0'),
+                'content': tr_content,
+            }
+            if anth_msgs and anth_msgs[-1]['role'] == 'user' and isinstance(anth_msgs[-1]['content'], list) and anth_msgs[-1]['content'] and anth_msgs[-1]['content'][0].get('type') == 'tool_result':
+                anth_msgs[-1]['content'].append(tr_block)
+            else:
+                anth_msgs.append({'role': 'user', 'content': [tr_block]})
         elif m['role'] == 'assistant' and m.get('tool_calls'):
             blocks = []
             if m.get('content'):
@@ -768,15 +772,16 @@ def call_bedrock(cfg, messages):
                         'source': {'bytes': m['image_b64']},
                     }
                 })
-            br_msgs.append({
-                'role': 'user',
-                'content': [{
-                    'toolResult': {
-                        'toolUseId': m.get('tool_call_id', 'call_0'),
-                        'content': br_res,
-                    }
-                }],
-            })
+            tr_block = {
+                'toolResult': {
+                    'toolUseId': m.get('tool_call_id', 'call_0'),
+                    'content': br_res,
+                }
+            }
+            if br_msgs and br_msgs[-1]['role'] == 'user' and isinstance(br_msgs[-1]['content'], list) and br_msgs[-1]['content'] and 'toolResult' in br_msgs[-1]['content'][0]:
+                br_msgs[-1]['content'].append(tr_block)
+            else:
+                br_msgs.append({'role': 'user', 'content': [tr_block]})
         elif m['role'] == 'assistant' and m.get('tool_calls'):
             blocks = []
             if m.get('content'):
