@@ -73,6 +73,7 @@ static struct {
 
     gpointer (*gtk_box_new)(int, int);
     void (*gtk_box_append)(gpointer, gpointer);
+    void (*gtk_box_remove)(gpointer, gpointer);
     gpointer (*gtk_image_new_from_icon_name)(const char *);
     void (*gtk_image_set_pixel_size)(gpointer, int);
     gpointer (*gtk_label_new)(const char *);
@@ -157,6 +158,7 @@ static gboolean load_symbols(void) {
 
     LOAD_SYM(gtk_box_new);
     LOAD_SYM(gtk_box_append);
+    LOAD_SYM(gtk_box_remove);
     LOAD_SYM(gtk_image_new_from_icon_name);
     LOAD_SYM(gtk_image_set_pixel_size);
     LOAD_SYM(gtk_label_new);
@@ -216,8 +218,10 @@ typedef struct {
     gpointer update_group;
     gpointer update_row;
     gpointer notes_group;
+    gpointer notes_box;
     gpointer note_rows[MAX_NOTES];
     int n_notes;
+    gpointer act_group;
     gpointer progress_bar;
     gpointer refresh_btn;
     gpointer open_btn;
@@ -227,7 +231,7 @@ typedef struct {
 
 static void clear_notes(UpdateView *v) {
     for (int i = 0; i < v->n_notes; i++) {
-        api.adw_preferences_group_remove(v->notes_group, v->note_rows[i]);
+        api.gtk_box_remove(v->notes_box, v->note_rows[i]);
         v->note_rows[i] = NULL;
     }
     v->n_notes = 0;
@@ -288,17 +292,26 @@ static gboolean on_backend_io(gpointer ch, int cond, gpointer user_data) {
                         api.gtk_button_set_label(v->primary_btn, "Download & Install");
                         api.gtk_widget_set_visible(v->primary_btn, TRUE);
                         api.gtk_widget_set_visible(v->cancel_btn, FALSE);
-                    } else if (strcmp(v->state, "local_ready") == 0) {
-                        api.gtk_button_set_label(v->primary_btn, "Install & Restart");
+                        api.gtk_widget_set_visible(v->act_group, TRUE);
+                    } else if (strcmp(v->state, "downloaded") == 0 || strcmp(v->state, "local_ready") == 0) {
+                        api.gtk_button_set_label(v->primary_btn, "Install Now");
                         api.gtk_widget_set_visible(v->primary_btn, TRUE);
                         api.gtk_widget_set_visible(v->cancel_btn, FALSE);
+                        api.gtk_widget_set_visible(v->act_group, TRUE);
                     } else if (strcmp(v->state, "staged") == 0) {
                         api.gtk_button_set_label(v->primary_btn, "Restart Now");
                         api.gtk_widget_set_visible(v->primary_btn, TRUE);
                         api.gtk_widget_set_visible(v->cancel_btn, TRUE);
+                        api.gtk_widget_set_visible(v->act_group, TRUE);
+                    } else if (strcmp(v->state, "offline") == 0) {
+                        api.gtk_button_set_label(v->primary_btn, "Check Again");
+                        api.gtk_widget_set_visible(v->primary_btn, TRUE);
+                        api.gtk_widget_set_visible(v->cancel_btn, FALSE);
+                        api.gtk_widget_set_visible(v->act_group, TRUE);
                     } else {
                         api.gtk_widget_set_visible(v->primary_btn, FALSE);
                         api.gtk_widget_set_visible(v->cancel_btn, FALSE);
+                        api.gtk_widget_set_visible(v->act_group, FALSE);
                     }
                 } else if (strcmp(cols[0], "LAST") == 0 && n >= 3) {
                     api.adw_preferences_row_set_title(v->last_row, cols[1]);
@@ -309,16 +322,18 @@ static gboolean on_backend_io(gpointer ch, int cond, gpointer user_data) {
                     api.adw_action_row_set_subtitle(v->update_row, cols[2]);
                     api.gtk_widget_set_visible(v->update_group, TRUE);
                 } else if (strcmp(cols[0], "NOTE") == 0 && n >= 2 && v->n_notes < MAX_NOTES) {
-                    gpointer r = api.adw_action_row_new();
-                    api.adw_preferences_row_set_title(r, cols[1]);
-                    api.adw_preferences_group_add(v->notes_group, r);
-                    v->note_rows[v->n_notes++] = r;
+                    gpointer lbl = api.gtk_label_new(cols[1]);
+                    api.gtk_label_set_xalign(lbl, 0.0f);
+                    api.gtk_label_set_wrap(lbl, TRUE);
+                    api.gtk_box_append(v->notes_box, lbl);
+                    v->note_rows[v->n_notes++] = lbl;
                     api.gtk_widget_set_visible(v->notes_group, TRUE);
                 } else if (strcmp(cols[0], "PROGRESS") == 0 && n >= 3) {
                     double frac = atof(cols[1]);
                     api.gtk_progress_bar_set_fraction(v->progress_bar, frac);
                     api.gtk_progress_bar_set_text(v->progress_bar, cols[2]);
                     api.gtk_widget_set_visible(v->progress_bar, TRUE);
+                    api.gtk_widget_set_visible(v->act_group, TRUE);
                 } else if (strcmp(cols[0], "ERROR") == 0 && n >= 2) {
                     api.gtk_label_set_text(v->state_lbl, cols[1]);
                     api.gtk_widget_set_visible(v->progress_bar, FALSE);
@@ -403,6 +418,10 @@ static void on_cancel_clicked(gpointer _btn, gpointer data) {
 static void on_primary_clicked(gpointer _btn, gpointer data) {
     (void)_btn;
     UpdateView *v = (UpdateView *)data;
+    if (strcmp(v->state, "offline") == 0) {
+        run_backend(v, "check", "Checking for updates…");
+        return;
+    }
     if (strcmp(v->state, "staged") == 0) {
         char *argv[] = {"systemctl", "reboot", NULL};
         char **envp = api.g_get_environ();
@@ -411,7 +430,11 @@ static void on_primary_clicked(gpointer _btn, gpointer data) {
         api.g_strfreev(envp);
         return;
     }
-    run_backend(v, "install", "Preparing update…");
+    if (strcmp(v->state, "downloaded") == 0 || strcmp(v->state, "local_ready") == 0) {
+        run_backend(v, "install", "Preparing to install…");
+        return;
+    }
+    run_backend(v, "install", "Downloading update…");
 }
 
 static gpointer build_software_update_content(UpdateView **out_view) {
@@ -487,14 +510,8 @@ static gpointer build_software_update_content(UpdateView **out_view) {
     api.gtk_widget_set_visible(v->update_group, FALSE);
     api.adw_preferences_page_add(pref_page, v->update_group);
 
-    /* Release notes group */
-    v->notes_group = api.adw_preferences_group_new();
-    api.adw_preferences_group_set_title(v->notes_group, "What's New");
-    api.gtk_widget_set_visible(v->notes_group, FALSE);
-    api.adw_preferences_page_add(pref_page, v->notes_group);
-
-    /* Progress + primary action group */
-    gpointer act_group = api.adw_preferences_group_new();
+    /* Progress + primary action group (right above release notes so Install is immediate) */
+    v->act_group = api.adw_preferences_group_new();
     gpointer act_col = api.gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
 
     v->progress_bar = api.gtk_progress_bar_new();
@@ -503,22 +520,37 @@ static gpointer build_software_update_content(UpdateView **out_view) {
     api.gtk_box_append(act_col, v->progress_bar);
 
     gpointer btn_row = api.gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
-    api.gtk_widget_set_halign(btn_row, GTK_ALIGN_END);
-
-    v->cancel_btn = api.gtk_button_new_with_label("Cancel Staged Update");
-    api.gtk_widget_set_visible(v->cancel_btn, FALSE);
-    api.g_signal_connect_data(v->cancel_btn, "clicked", (void (*)(void))on_cancel_clicked, v, NULL, 0);
-    api.gtk_box_append(btn_row, v->cancel_btn);
+    api.gtk_widget_set_halign(btn_row, GTK_ALIGN_START);
 
     v->primary_btn = api.gtk_button_new_with_label("Download & Install");
     api.gtk_widget_add_css_class(v->primary_btn, "suggested-action");
+    api.gtk_widget_add_css_class(v->primary_btn, "pill");
     api.gtk_widget_set_visible(v->primary_btn, FALSE);
     api.g_signal_connect_data(v->primary_btn, "clicked", (void (*)(void))on_primary_clicked, v, NULL, 0);
     api.gtk_box_append(btn_row, v->primary_btn);
 
+    v->cancel_btn = api.gtk_button_new_with_label("Cancel");
+    api.gtk_widget_add_css_class(v->cancel_btn, "pill");
+    api.gtk_widget_set_visible(v->cancel_btn, FALSE);
+    api.g_signal_connect_data(v->cancel_btn, "clicked", (void (*)(void))on_cancel_clicked, v, NULL, 0);
+    api.gtk_box_append(btn_row, v->cancel_btn);
+
     api.gtk_box_append(act_col, btn_row);
-    api.adw_preferences_group_add(act_group, act_col);
-    api.adw_preferences_page_add(pref_page, act_group);
+    api.adw_preferences_group_add(v->act_group, act_col);
+    api.gtk_widget_set_visible(v->act_group, FALSE);
+    api.adw_preferences_page_add(pref_page, v->act_group);
+
+    /* Release notes: simple clean bullet list, not boxed rows */
+    v->notes_group = api.adw_preferences_group_new();
+    api.adw_preferences_group_set_title(v->notes_group, "What's New");
+    v->notes_box = api.gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
+    api.gtk_widget_set_margin_top(v->notes_box, 4);
+    api.gtk_widget_set_margin_bottom(v->notes_box, 8);
+    api.gtk_widget_set_margin_start(v->notes_box, 4);
+    api.gtk_widget_set_margin_end(v->notes_box, 4);
+    api.adw_preferences_group_add(v->notes_group, v->notes_box);
+    api.gtk_widget_set_visible(v->notes_group, FALSE);
+    api.adw_preferences_page_add(pref_page, v->notes_group);
 
     api.adw_toolbar_view_set_content(toolbar, pref_page);
     api.g_signal_connect_data(toolbar, "destroy", (void (*)(void))on_content_destroyed, v, NULL, 0);

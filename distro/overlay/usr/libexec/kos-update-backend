@@ -146,23 +146,68 @@ def make_summary(manifest):
     }
 
 
-def check_apt_updates():
-    """Fallback online check via apt when custom OTA server is not hosted."""
+def has_network():
+    """Return True if Wi-Fi/Ethernet has an active network connection (no pkexec)."""
     try:
-        ref = subprocess.run(
-            ['pkexec', '/usr/libexec/kos-update-helper', 'apt-refresh'],
+        out = subprocess.run(
+            ['nmcli', '-t', '-f', 'CONNECTIVITY', 'general'],
             capture_output=True,
             text=True,
-            timeout=35,
+            timeout=3,
         )
-        if ref.returncode != 0:
-            return None
+        if out.returncode == 0:
+            state = out.stdout.strip().lower()
+            if state in ('full', 'limited', 'portal'):
+                return True
+            if state == 'none':
+                return False
+    except Exception:
+        pass
+    try:
+        with open('/proc/net/route', encoding='utf-8') as fh:
+            for line in fh.readlines()[1:]:
+                parts = line.split()
+                if len(parts) >= 2 and parts[1] == '00000000':
+                    return True
+    except Exception:
+        pass
+    return False
+
+
+def cached_bundle_if_valid(manifest):
+    """Return path to already-downloaded .pxu if it matches expected sha256."""
+    ver = str(manifest.get('version', '')).strip()
+    if not ver:
+        return None
+    dest = os.path.join(os.path.expanduser('~/.cache/kos/updates'), f'proxim-os-{ver}.pxu')
+    if not os.path.isfile(dest):
+        return None
+    expected = str(manifest.get('sha256', '')).strip().lower()
+    if not expected:
+        return dest
+    try:
+        h = hashlib.sha256()
+        with open(dest, 'rb') as fh:
+            for chunk in iter(lambda: fh.read(65536), b''):
+                h.update(chunk)
+        if h.hexdigest().lower() == expected:
+            return dest
+    except OSError:
+        pass
+    return None
+
+
+def check_apt_updates():
+    """Read-only apt simulation fallback (never prompts for password on check)."""
+    try:
         sim = subprocess.run(
             ['apt-get', '-s', 'upgrade'],
             capture_output=True,
             text=True,
             timeout=15,
         )
+        if sim.returncode != 0:
+            return None
         pkgs = []
         for ln in sim.stdout.splitlines():
             if ln.startswith('Inst '):
@@ -192,8 +237,20 @@ def cmd_check():
             'state': 'staged',
             'os': os_info,
             'channel': cfg.get('CHANNEL', 'stable'),
-            'message': f"{os_info['name']} {ver} is verified and ready to install on restart." if ver else 'An update is ready to install on restart.',
+            'message': f"{os_info['name']} {ver} is ready to install. Restart to finish updating." if ver else 'An update is ready to install on restart.',
             'update': make_summary(meta) if meta else None,
+            'last': last,
+        })
+        return 0
+
+    if not has_network():
+        emit({
+            'event': 'status',
+            'state': 'offline',
+            'os': os_info,
+            'channel': cfg.get('CHANNEL', 'stable'),
+            'message': 'No internet connection. Connect to Wi-Fi to check for updates.',
+            'update': None,
             'last': last,
         })
         return 0
@@ -208,17 +265,6 @@ def cmd_check():
             manifest = json.loads(resp.read().decode('utf-8'))
     except Exception:
         pkgs = check_apt_updates()
-        if pkgs is None:
-            emit({
-                'event': 'status',
-                'state': 'up_to_date',
-                'os': os_info,
-                'channel': cfg.get('CHANNEL', 'stable'),
-                'message': f"{os_info['pretty']} is up to date (offline).",
-                'update': None,
-                'last': last,
-            })
-            return 0
         if not pkgs:
             emit({
                 'event': 'status',
@@ -270,12 +316,25 @@ def cmd_check():
     with open(os.path.join(cache_dir, 'latest-manifest.json'), 'w', encoding='utf-8') as fh:
         json.dump(manifest, fh)
 
+    already = cached_bundle_if_valid(manifest)
+    if already:
+        emit({
+            'event': 'status',
+            'state': 'downloaded',
+            'os': os_info,
+            'channel': cfg.get('CHANNEL', 'stable'),
+            'message': f"{os_info['name']} {remote_ver} is downloaded and ready to install.",
+            'update': make_summary(manifest),
+            'last': last,
+        })
+        return 0
+
     emit({
         'event': 'status',
         'state': 'available',
         'os': os_info,
         'channel': cfg.get('CHANNEL', 'stable'),
-        'message': f"A new {os_info['name']} update is available.",
+        'message': f"{os_info['name']} {remote_ver} is available to download.",
         'update': make_summary(manifest),
         'last': last,
     })
@@ -413,6 +472,21 @@ def cmd_install():
     if local_bundle and os.path.isfile(local_bundle):
         sig = local_bundle + '.sig' if os.path.isfile(local_bundle + '.sig') else ''
         return stage_bundle(local_bundle, sig)
+
+    already = cached_bundle_if_valid(manifest)
+    if already:
+        sig_path = already + '.sig'
+        sig_b64 = manifest.get('signature', '').strip()
+        written_sig = sig_path if os.path.isfile(sig_path) else ''
+        if sig_b64 and not written_sig:
+            with open(sig_path, 'wb') as sf:
+                sf.write(base64.b64decode(sig_b64))
+            written_sig = sig_path
+        return stage_bundle(already, written_sig)
+
+    if not has_network():
+        emit({'event': 'error', 'message': 'No internet connection. Connect to Wi-Fi and try again.'})
+        return 1
 
     raw_url = manifest.get('url', '').strip()
     if not raw_url:

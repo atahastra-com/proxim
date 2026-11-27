@@ -188,34 +188,42 @@ class SoftwareUpdateWindow(Adw.ApplicationWindow):
         self.update_group.add(self.update_header_row)
         main_box.append(self.update_group)
 
-        self.notes_group = Adw.PreferencesGroup(title="What's New")
-        self.notes_group.set_visible(False)
-        self._note_rows = []
-        main_box.append(self.notes_group)
-
-        # Download / staging progress area
+        # Download / staging progress & primary action (above release notes)
         self.progress_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.progress_box.set_visible(False)
         self.progress_bar = Gtk.ProgressBar(show_text=True)
         self.progress_box.append(self.progress_bar)
         main_box.append(self.progress_box)
 
-        # Action buttons
         btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        btn_row.set_halign(Gtk.Align.END)
-
-        self.cancel_staged_btn = Gtk.Button(label='Cancel Staged Update')
-        self.cancel_staged_btn.set_visible(False)
-        self.cancel_staged_btn.connect('clicked', self._on_cancel_staged)
-        btn_row.append(self.cancel_staged_btn)
+        btn_row.set_halign(Gtk.Align.START)
 
         self.action_btn = Gtk.Button(label='Download & Install')
         self.action_btn.add_css_class('suggested-action')
+        self.action_btn.add_css_class('pill')
         self.action_btn.set_visible(False)
         self.action_btn.connect('clicked', self._on_primary_action)
         btn_row.append(self.action_btn)
 
+        self.cancel_staged_btn = Gtk.Button(label='Cancel')
+        self.cancel_staged_btn.add_css_class('pill')
+        self.cancel_staged_btn.set_visible(False)
+        self.cancel_staged_btn.connect('clicked', self._on_cancel_staged)
+        btn_row.append(self.cancel_staged_btn)
+
         main_box.append(btn_row)
+
+        # Release notes as simple bullet list (no boxed rows)
+        self.notes_group = Adw.PreferencesGroup(title="What's New")
+        self.notes_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        self.notes_box.set_margin_top(4)
+        self.notes_box.set_margin_bottom(8)
+        self.notes_box.set_margin_start(4)
+        self.notes_box.set_margin_end(4)
+        self.notes_group.add(self.notes_box)
+        self.notes_group.set_visible(False)
+        self._note_rows = []
+        main_box.append(self.notes_group)
 
         clamp.set_child(main_box)
         scroll.set_child(clamp)
@@ -268,7 +276,7 @@ class SoftwareUpdateWindow(Adw.ApplicationWindow):
 
     def _clear_notes(self):
         for r in self._note_rows:
-            self.notes_group.remove(r)
+            self.notes_box.remove(r)
         self._note_rows.clear()
 
     def _populate_update_view(self, manifest):
@@ -288,9 +296,9 @@ class SoftwareUpdateWindow(Adw.ApplicationWindow):
             notes = [l.strip() for l in notes.splitlines() if l.strip()]
         if notes:
             for item in notes:
-                row = Adw.ActionRow(title=f'•  {item}')
-                self.notes_group.add(row)
-                self._note_rows.append(row)
+                lbl = Gtk.Label(label=f'•  {item}', xalign=0, wrap=True)
+                self.notes_box.append(lbl)
+                self._note_rows.append(lbl)
             self.notes_group.set_visible(True)
         else:
             self.notes_group.set_visible(False)
