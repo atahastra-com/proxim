@@ -1,98 +1,136 @@
-/* Proxim OS window style for GTK4 / libadwaita apps:
- * Clean midnight-navy glass (#121722) with crisp luminous rim,
- * darker Places/sidebar (#0f141e), soft blue-glass selection pill,
- * and circular top-right window controls.
+/* Proxim OS window style for GTK4 / libadwaita apps: simple, flat, neutral dark.
+ * One charcoal surface (#1f2128) for titlebar and content, a slightly darker
+ * sidebar (#1a1c22), gray (#2c2f38) controls and cards with no borders or
+ * glows, solid #0081ff selection, thin plain min/max/close glyphs.
  * Kept identical in /etc/skel/.config/gtk-4.0/gtk.css. */
 
 :root {
-    --accent-bg-color: #2f81f7;
+    --accent-bg-color: #0081ff;
     --accent-fg-color: #ffffff;
-    --accent-color: #58a6ff;
-    --window-bg-color: #121722;
-    --window-fg-color: rgba(255, 255, 255, 0.93);
-    --view-bg-color: #121722;
-    --view-fg-color: rgba(255, 255, 255, 0.93);
-    --headerbar-bg-color: #151b28;
-    --headerbar-fg-color: rgba(255, 255, 255, 0.93);
-    --headerbar-border-color: rgba(255, 255, 255, 0.07);
+    --accent-color: #4aa3ff;
+    --window-bg-color: #1f2128;
+    --window-fg-color: rgba(255, 255, 255, 0.92);
+    --view-bg-color: #1f2128;
+    --view-fg-color: rgba(255, 255, 255, 0.92);
+    --headerbar-bg-color: #1f2128;
+    --headerbar-fg-color: rgba(255, 255, 255, 0.92);
+    --headerbar-backdrop-color: #1f2128;
+    --headerbar-border-color: transparent;
     --headerbar-shade-color: transparent;
     --headerbar-darker-shade-color: transparent;
-    --sidebar-bg-color: #0f141e;
-    --sidebar-fg-color: rgba(255, 255, 255, 0.90);
-    --sidebar-border-color: rgba(255, 255, 255, 0.06);
+    --sidebar-bg-color: #1a1c22;
+    --sidebar-fg-color: rgba(255, 255, 255, 0.88);
+    --sidebar-backdrop-color: #1a1c22;
+    --sidebar-border-color: transparent;
     --sidebar-shade-color: transparent;
-    --secondary-sidebar-bg-color: #0f141e;
-    --secondary-sidebar-fg-color: rgba(255, 255, 255, 0.90);
-    --secondary-sidebar-border-color: rgba(255, 255, 255, 0.06);
-    --card-bg-color: rgba(255, 255, 255, 0.045);
-    --card-fg-color: rgba(255, 255, 255, 0.93);
-    --popover-bg-color: #182030;
-    --popover-fg-color: rgba(255, 255, 255, 0.93);
-    --dialog-bg-color: #151b28;
-    --dialog-fg-color: rgba(255, 255, 255, 0.93);
-    --window-radius: 12px;
+    --secondary-sidebar-bg-color: #1a1c22;
+    --secondary-sidebar-fg-color: rgba(255, 255, 255, 0.88);
+    --secondary-sidebar-backdrop-color: #1a1c22;
+    --secondary-sidebar-border-color: transparent;
+    --secondary-sidebar-shade-color: transparent;
+    --card-bg-color: #2c2f38;
+    --card-fg-color: rgba(255, 255, 255, 0.92);
+    --card-shade-color: transparent;
+    --popover-bg-color: #2a2c34;
+    --popover-fg-color: rgba(255, 255, 255, 0.92);
+    --popover-shade-color: transparent;
+    --dialog-bg-color: #1f2128;
+    --dialog-fg-color: rgba(255, 255, 255, 0.92);
+    --thumbnail-bg-color: #2c2f38;
+    --shade-color: transparent;
+    --window-radius: 14px;
 }
 
+/* Window: rounded, soft shadow, no colored rim */
 window.csd {
-    border-radius: 12px;
-    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.62),
-                0 0 0 1px rgba(135, 175, 255, 0.16);
+    border-radius: 14px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45),
+                0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 
 window.csd.maximized,
 window.csd.fullscreen,
-window.csd.tiled {
+window.csd.tiled,
+window.csd.tiled-left,
+window.csd.tiled-right {
     border-radius: 0;
     box-shadow: none;
 }
 
+/* Titlebar: same color as the content, no divider line */
 headerbar,
 .titlebar,
 .top-bar,
-toolbarview > .top-bar headerbar {
-    background-color: #151b28;
+toolbarview > .top-bar headerbar,
+toolbarview > .top-bar.raised,
+headerbar:backdrop {
+    background-color: #1f2128;
     background-image: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border: none;
     box-shadow: none;
     min-height: 44px;
 }
 
-headerbar button.image-button:not(.titlebutton),
-headerbar menubutton > button {
-    background-color: rgba(255, 255, 255, 0.055);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    box-shadow: none;
-    border-radius: 8px;
-    min-width: 28px;
-    min-height: 28px;
+.sidebar-pane headerbar,
+.sidebar-pane .top-bar,
+.sidebar-pane toolbarview > .top-bar headerbar {
+    background-color: #1a1c22;
 }
 
-.nautilus-path-bar {
-    background-color: rgba(255, 255, 255, 0.055);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+/* Header buttons: flat gray rounded squares, no outline */
+headerbar button.image-button:not(.titlebutton),
+headerbar menubutton > button,
+headerbar splitbutton > button,
+headerbar splitbutton > menubutton > button {
+    background-color: #2c2f38;
+    border: none;
+    box-shadow: none;
     border-radius: 8px;
-    padding: 2px 6px;
+    min-width: 30px;
+    min-height: 30px;
 }
 
 headerbar button.image-button:not(.titlebutton):hover,
-headerbar menubutton > button:hover {
-    background-color: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.14);
+headerbar menubutton > button:hover,
+headerbar splitbutton > button:hover,
+headerbar splitbutton > menubutton > button:hover {
+    background-color: #363a45;
 }
 
-headerbar menubutton > button,
+headerbar button.image-button:not(.titlebutton):active,
+headerbar button.image-button:not(.titlebutton):checked,
+headerbar menubutton > button:checked {
+    background-color: #40444f;
+}
+
+/* The '...' main menu stays round */
 headerbar menubutton > button.image-button {
     border-radius: 999px;
 }
 
+.nautilus-path-bar {
+    background-color: #2c2f38;
+    border: none;
+    border-radius: 8px;
+    padding: 2px 6px;
+}
+
+/* Search: gray pill */
 entry.search,
 searchentry,
 searchbar > revealer > box entry {
-    background-color: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 8px;
+    background-color: #2c2f38;
+    border: none;
+    border-radius: 999px;
     min-height: 32px;
     box-shadow: none;
+    padding: 0 12px;
+}
+
+entry.search:focus-within,
+searchentry:focus-within {
+    outline: 2px solid rgba(0, 129, 255, 0.55);
+    outline-offset: -2px;
 }
 
 searchbar > revealer > box {
@@ -101,63 +139,67 @@ searchbar > revealer > box {
     box-shadow: none;
 }
 
-/* Circular subtle-glass window buttons on the right */
+/* Window controls: thin plain glyphs, soft square on hover, red close */
 windowcontrols {
-    border-spacing: 6px;
-    margin: 0 4px;
+    border-spacing: 4px;
+    margin: 0 2px;
 }
 
 windowcontrols > button {
-    min-width: 24px;
-    min-height: 24px;
+    min-width: 28px;
+    min-height: 28px;
     padding: 0;
     margin: 0;
+    border-radius: 7px;
     background: none;
+    border: none;
     box-shadow: none;
+    color: rgba(255, 255, 255, 0.72);
 }
 
 windowcontrols > button > image {
-    background-color: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 999px;
+    background: none;
+    border: none;
     box-shadow: none;
-    padding: 5px;
-    -gtk-icon-size: 12px;
-    color: rgba(255, 255, 255, 0.82);
+    padding: 0;
+    -gtk-icon-size: 14px;
 }
 
-windowcontrols > button:hover > image {
-    background-color: rgba(255, 255, 255, 0.18);
+windowcontrols > button:hover {
+    background-color: rgba(255, 255, 255, 0.10);
     color: #ffffff;
 }
 
-windowcontrols > button.close:hover > image {
-    background-color: #e05260;
-    border-color: #e05260;
+windowcontrols > button:active {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+windowcontrols > button.close:hover {
+    background-color: #e5484d;
     color: #ffffff;
 }
 
-/* Sidebar / Places pane */
+windowcontrols > button.close:active {
+    background-color: #c93a3f;
+}
+
+/* Sidebar: darker shade, no divider line */
 .sidebar-pane,
 .navigation-sidebar,
 placessidebar,
 .sidebar {
-    background-color: #0f141e;
+    background-color: #1a1c22;
     border: none;
     box-shadow: none;
 }
 
-.sidebar-pane {
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
-}
-
 .navigation-sidebar > row,
 placessidebar row {
-    min-height: 30px;
-    border-radius: 7px;
+    min-height: 34px;
+    border-radius: 8px;
     margin: 1px 8px;
-    padding: 0 8px;
-    border: 1px solid transparent;
+    padding: 0 10px;
+    border: none;
 }
 
 placessidebar row.kos-hidden-home {
@@ -169,9 +211,9 @@ placessidebar row.kos-hidden-home {
 
 .navigation-sidebar separator,
 placessidebar separator {
-    margin: 6px 12px;
+    margin: 6px 14px;
     min-height: 1px;
-    background-color: rgba(255, 255, 255, 0.07);
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 .navigation-sidebar > row image {
@@ -187,8 +229,7 @@ placessidebar row:hover {
 .navigation-sidebar > row:selected:hover,
 placessidebar row:selected,
 placessidebar row:selected:hover {
-    background-color: rgba(56, 139, 253, 0.22);
-    border: 1px solid rgba(88, 166, 255, 0.42);
+    background-color: #0081ff;
     color: #ffffff;
 }
 
@@ -200,7 +241,7 @@ placessidebar row:selected label {
     color: #ffffff;
 }
 
-/* Clean grouped cards */
+/* Grouped lists: separate flat gray cards */
 list.boxed-list,
 list.boxed-list-separate {
     background-color: transparent;
@@ -213,39 +254,38 @@ list.boxed-list > row:first-child,
 list.boxed-list > row:last-child,
 list.boxed-list > row:only-child,
 list.boxed-list-separate > row {
-    background-color: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background-color: #2c2f38;
+    border: none;
     box-shadow: none;
     border-radius: 9px;
-    margin-bottom: 5px;
-    min-height: 42px;
+    margin-bottom: 6px;
+    min-height: 44px;
 }
 
 list.boxed-list > row:hover,
 list.boxed-list-separate > row:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.11);
+    background-color: #33363f;
 }
 
 list.boxed-list > row:selected {
-    background-color: rgba(56, 139, 253, 0.24);
-    border-color: rgba(88, 166, 255, 0.45);
+    background-color: #0081ff;
     color: #ffffff;
 }
 
 row .subtitle,
 row label.dim-label,
 row .dim-label {
-    color: rgba(255, 255, 255, 0.58);
+    color: rgba(255, 255, 255, 0.55);
 }
 
 .card {
-    background-color: rgba(255, 255, 255, 0.045);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background-color: #2c2f38;
+    border: none;
     border-radius: 10px;
     box-shadow: none;
 }
 
+/* Buttons and entries */
 button:not(.circular):not(.flat):not(.image-button) {
     border-radius: 8px;
 }
@@ -255,21 +295,28 @@ entry {
 }
 
 switch {
-    background-color: rgba(255, 255, 255, 0.20);
+    background-color: rgba(255, 255, 255, 0.18);
     border: none;
 }
 
 switch:checked {
-    background-color: #2f81f7;
+    background-color: #0081ff;
 }
 
 switch > slider {
     background-color: #ffffff;
+    box-shadow: none;
 }
 
+/* Menus and popovers: flat, no border */
 popover > contents {
-    background-color: #182030;
+    background-color: #2a2c34;
     border-radius: 12px;
-    border: 1px solid rgba(135, 175, 255, 0.16);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 16px 40px rgba(0, 0, 0, 0.55);
+    border: none;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.40);
+}
+
+popover > arrow {
+    background-color: #2a2c34;
+    border: none;
 }
