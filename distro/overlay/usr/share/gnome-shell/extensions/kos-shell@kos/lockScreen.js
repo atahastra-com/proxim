@@ -73,24 +73,17 @@ function centerPrompt(dialog) {
         const row = entry?.get_parent?.();
         if (!row)
             return;
-        row.x_align = Clutter.ActorAlign.CENTER;
-        entry.x_align = Clutter.ActorAlign.CENTER;
-        // Keep left and right flanking slots (cancelButton & spinner) equal
-        // width so the password pill stays dead-center under the avatar.
-        const children = row.get_children();
-        const idx = children.indexOf(entry);
-        const left = idx > 0 ? children[idx - 1] : null;
-        const right = idx >= 0 && idx + 1 < children.length ? children[idx + 1] : null;
-        if (left && right) {
-            left.visible = true;
-            right.visible = true;
-            left.set_width(40);
-            right.set_width(40);
-        } else if (right) {
-            right.set_width(0);
-        } else if (left) {
-            left.set_width(0);
+        // Hide all flanking children in the entry row (cancel button, spinner
+        // container, spacers) so the password pill is the sole visible child
+        // and sits dead-center directly beneath the avatar and username.
+        for (const child of row.get_children()) {
+            if (child !== entry)
+                child.visible = false;
         }
+        row.x_expand = false;
+        row.x_align = Clutter.ActorAlign.CENTER;
+        entry.x_expand = false;
+        entry.x_align = Clutter.ActorAlign.CENTER;
     } catch (_e) {
         // never interfere with UnlockDialog transitions
     }
