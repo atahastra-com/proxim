@@ -62,23 +62,37 @@ function liftClock(dialog) {
 }
 
 function centerPrompt(dialog) {
-    const prompt = dialog._authPrompt;
-    if (!prompt)
-        return;
-    prompt.x_align = Clutter.ActorAlign.CENTER;
-    if (prompt._userWell)
-        prompt._userWell.x_align = Clutter.ActorAlign.CENTER;
-    const entry = prompt._entry;
-    const row = entry?.get_parent?.();
-    if (!row)
-        return;
-    row.x_align = Clutter.ActorAlign.CENTER;
-    entry.x_align = Clutter.ActorAlign.CENTER;
-    // AuthPrompt keeps an invisible (opacity 0) button/spacer beside the entry,
-    // which pushes the password pill off-center relative to the avatar.
-    for (const child of row.get_children()) {
-        if (child !== entry && child.opacity === 0)
-            child.visible = false;
+    try {
+        const prompt = dialog._authPrompt;
+        if (!prompt)
+            return;
+        prompt.x_align = Clutter.ActorAlign.CENTER;
+        if (prompt._userWell)
+            prompt._userWell.x_align = Clutter.ActorAlign.CENTER;
+        const entry = prompt._entry;
+        const row = entry?.get_parent?.();
+        if (!row)
+            return;
+        row.x_align = Clutter.ActorAlign.CENTER;
+        entry.x_align = Clutter.ActorAlign.CENTER;
+        // Keep left and right flanking slots (cancelButton & spinner) equal
+        // width so the password pill stays dead-center under the avatar.
+        const children = row.get_children();
+        const idx = children.indexOf(entry);
+        const left = idx > 0 ? children[idx - 1] : null;
+        const right = idx >= 0 && idx + 1 < children.length ? children[idx + 1] : null;
+        if (left && right) {
+            left.visible = true;
+            right.visible = true;
+            left.set_width(40);
+            right.set_width(40);
+        } else if (right) {
+            right.set_width(0);
+        } else if (left) {
+            left.set_width(0);
+        }
+    } catch (_e) {
+        // never interfere with UnlockDialog transitions
     }
 }
 
